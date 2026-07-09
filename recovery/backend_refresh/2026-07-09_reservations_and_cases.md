@@ -1,0 +1,135 @@
+# Reservations and Case Lifecycle Backend Reference
+
+Date: 2026-07-09
+
+This document records the backend objects that already exist for reservations, transportation cases, case candidates, notes, and dependency/conflict handling.
+
+## Relevant tables
+- `reservations`
+  - Fields include `vehicle_id`, `start_date`, `expected_return_datetime`, `status`, `reservation_type`, `notes`, `cancellation_reason`, `start_mileage`, `end_mileage`, `condition_flag`, `requested_model`, `service_advisor`, `ro_number`, `pay_type`, `actual_return_datetime`, `billed_through_datetime`, `transportation_event_id`, and `customer_id`.
+- `quotes`
+- `transportation_events`
+  - Fields include `source_type`, `source_id`, `status`, `notes`, `customer_id`, `updated_at`, `closed_at`, `closed_by`, and `expected_return_at`.
+- `transportation_event_notes`
+  - Fields include `transportation_event_id`, `note_type`, `reason_code`, `note_text`, `old_estimated_return`, `new_estimated_return`, `entered_by_user_id`, `entered_at`, `source_context`.
+- `transportation_event_state_history`
+- `vehicle_events`
+- `contract_periods`
+- `reservation_conflicts`
+  - Fields include `reservation_id`, `vehicle_class`, `conflict_type`, `severity`, `message`, `is_resolved`, `resolved_at`, `created_by`, and `reservation_vehicle_dependency_id`.
+- `reservation_vehicle_dependencies`
+  - Fields include `reservation_id`, `vehicle_id`, `source_transportation_event_id`, `dependency_type`, `status`, `risk_level`, `expected_return_snapshot`, `resolution_type`, `notes`, `created_by_user_id`, `updated_by_user_id`, `resolved_at`, and `resolved_by_user_id`.
+- `active_vehicle_assignments`
+- `billing_lines`
+- `customers`
+- `vehicles`
+- `app_users`
+
+## Relevant views
+- `v_reservation_transportation_link_state`
+- `v_reservation_operational_state`
+- `v_reservation_current_billing_state`
+- `v_reservation_extension_candidate_state`
+- `v_reservation_assignment_state`
+- `v_reservation_vehicle_candidates`
+- `v_case_activation_state`
+- `v_case_completion_candidate_state`
+- `v_case_continuation_candidate_state`
+- `v_case_reassignment_candidate_state`
+- `v_live_active_case_state`
+- `v_transportation_event_state`
+- `v_transportation_event_operational_state`
+- `v_transportation_event_unified_operational_state`
+- `v_transportation_event_current_dependency_state`
+- `v_transportation_event_extension_candidate_state`
+- `v_transportation_event_note_history`
+- `v_current_vehicle_continuity`
+
+## Relevant frontend-callable functions
+- `create_reservation_with_transportation_event_state`
+- `create_reservation_for_tekion_customer_state`
+- `create_case_bootstrap_state`
+- `create_case_bootstrap_with_vehicle_by_vin_state`
+- `create_and_start_case_with_vehicle_by_vin_state`
+- `create_start_and_bill_case_with_vehicle_by_vin_state`
+- `create_transportation_event_state`
+- `assign_reservation_vehicle_state`
+- `assign_reservation_vehicle_with_hard_lock_state`
+- `clear_reservation_vehicle_assignment_state`
+- `clear_reservation_vehicle_assignment_with_dependency_state`
+- `create_or_update_reservation_conflict_state`
+- `accept_case_extension_and_get_unified_payload_state`
+- `continue_case_same_vehicle_and_get_unified_payload_state`
+- `complete_case_and_get_unified_payload_state`
+- `cancel_case_and_get_unified_payload_state`
+- `close_transportation_event_state`
+- `add_transportation_event_general_note_state`
+- `add_estimated_return_change_note_state`
+- `add_billing_context_note_state`
+- `get_unified_case_payload_state`
+- `get_transportation_event_operational_payload_state`
+- `get_reservation_operational_payload_state`
+- `get_reservation_lifecycle_state`
+- `get_reservation_lifecycle_list_state`
+- `get_transportation_event_state`
+- `get_transportation_event_operational_list_state`
+- `get_transportation_event_unified_operational_payload_state`
+
+## Important fields returned to the frontend
+- Reservation and case identity fields:
+  - `reservation_id`
+  - `transportation_event_id`
+  - `vehicle_id`
+  - `customer_id`
+- Reservation lifecycle fields:
+  - `start_date`
+  - `expected_return_datetime`
+  - `reservation_status`
+  - `reservation_type`
+  - `reservation_notes`
+  - `cancellation_reason`
+  - `start_mileage`
+  - `end_mileage`
+  - `condition_flag`
+  - `requested_model`
+  - `service_advisor`
+  - `ro_number`
+  - `pay_type`
+  - `actual_return_datetime`
+  - `billed_through_datetime`
+- Transportation event fields:
+  - `transportation_event_status`
+  - `transportation_event_notes`
+  - `expected_return_at`
+  - `closed_at`
+  - `closed_by`
+  - `source_type`
+  - `source_id`
+- Vehicle continuity fields:
+  - `vehicle_event_id`
+  - `contract_period_id`
+  - `actual_out_at`
+  - `actual_in_at`
+  - `contract_out_at`
+  - `contract_in_at`
+  - `renewal_sequence`
+  - `vehicle_event_is_open`
+  - `contract_period_is_open`
+- Dependency and conflict fields:
+  - `current_dependency_id`
+  - `current_dependency_type`
+  - `current_dependency_status`
+  - `current_dependency_risk_level`
+  - `current_dependency_expected_return_snapshot`
+  - `current_conflict_id`
+  - `current_conflict_severity`
+  - `current_conflict_message`
+- Note fields:
+  - `note_type`
+  - `reason_code`
+  - `note_text`
+  - `old_estimated_return`
+  - `new_estimated_return`
+  - `entered_by_user_id`
+  - `entered_at`
+  - `source_context`
