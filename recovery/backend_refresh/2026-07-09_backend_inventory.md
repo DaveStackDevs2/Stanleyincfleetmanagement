@@ -1,0 +1,302 @@
+# Backend Inventory
+
+Date: 2026-07-09
+
+## Transportation Case tables
+- `transportation_events`
+- `transportation_event_state_history`
+- `transportation_event_notes`
+- `active_vehicle_assignments`
+- `vehicle_swaps`
+- `vehicle_events`
+- `contract_periods`
+- `warranty_cases`
+- `warranty_alerts`
+
+## Reservation tables
+- `reservations`
+- `quotes`
+- `reservation_conflicts`
+- `reservation_vehicle_dependencies`
+- `lost_rentals`
+
+## Fleet/Vehicle tables
+- `vehicles`
+- `tags`
+- `vehicle_tags`
+- `vehicle_stock_history`
+- `vehicle_events`
+- `vehicle_qr_codes`
+- `vehicle_scan_sessions`
+- `vehicle_scan_events`
+- `vehicle_swaps`
+- `rental_model_limits`
+- `fleet_policies`
+
+## Billing/Revenue tables
+- `billing_lines`
+- `billing_event_totals`
+- `contract_periods`
+- `pay_type_rules`
+- `late_fee_rules`
+- `warranty_providers`
+- `extended_warranty_rules`
+- `gm_warranty_rates`
+- `warranty_day_ledger`
+
+## Customer tables
+- `customers`
+- `customer_preferences`
+
+## User/Permission tables
+- `app_users`
+- `roles`
+- `user_roles`
+- `permissions`
+- `role_permissions`
+- `app_user_security`
+- `approved_networks`
+- `app_user_reset_tokens`
+- `user_auth_security_events`
+- `notification_recipients`
+- `notification_delivery_queue`
+- `admin_setting_permissions`
+
+## Billing types
+- `reservations.pay_type` (`text`, default `customer`)
+- `billing_lines.pay_type` (`text`)
+- `billing_lines.line_type` allowed values:
+  - `initial_assignment`
+  - `same_vehicle_renewal`
+  - `pay_type_split`
+  - `new_vehicle_segment`
+  - `new_event_after_gap`
+  - `rental_extension`
+  - `tax`
+  - `late_fee`
+  - `loaner_overdue`
+- `pay_type_rules.pay_type` (`text`, unique)
+
+## Transportation case statuses
+- `transportation_events.status` default value: `active`
+
+## Reservation statuses
+- `reservations.status` default value: `quote`
+
+## Dashboard/reporting views
+- `v_active_approved_networks`
+- `v_active_extended_warranty_provider_rules`
+- `v_active_hard_lock_conflicts`
+- `v_active_late_fee_rules`
+- `v_active_usable_reset_tokens`
+- `v_admin_settings_catalog`
+- `v_app_users_with_roles`
+- `v_auth_security_policy_state`
+- `v_case_activation_state`
+- `v_case_completion_candidate_state`
+- `v_case_continuation_candidate_state`
+- `v_case_reassignment_candidate_state`
+- `v_contract_period_monitoring`
+- `v_ctp_monitoring_policy_state`
+- `v_current_extendable_billing_lines`
+- `v_current_open_billing_lines`
+- `v_current_pay_type_rules`
+- `v_current_vehicle_continuity`
+- `v_customer_operational_aggregate_state`
+- `v_customer_operational_state`
+- `v_email_outbound_message_state`
+- `v_email_webhook_event_history`
+- `v_extended_warranty_rule_catalog`
+- `v_extension_commit_candidates`
+- `v_late_fee_rule_catalog`
+- `v_live_active_case_state`
+- `v_operational_domain_counts`
+- `v_reservation_assignment_state`
+- `v_reservation_current_billing_state`
+- `v_reservation_extension_candidate_state`
+- `v_reservation_operational_state`
+- `v_reservation_transportation_link_state`
+- `v_reservation_vehicle_candidates`
+- `v_reservations_needing_vin_assignment`
+- `v_roles_with_permissions`
+- `v_security_admin_settings_state`
+- `v_service_action_contract_state`
+- `v_transportation_event_current_billing_state`
+- `v_transportation_event_current_dependency_state`
+- `v_transportation_event_extension_candidate_state`
+- `v_transportation_event_note_history`
+- `v_transportation_event_operational_state`
+- `v_transportation_event_state`
+- `v_transportation_event_unified_operational_state`
+- `v_unresolved_reservation_conflicts`
+- `v_unresolved_reservation_dependencies`
+- `v_upcoming_rental_dependency_feed`
+- `v_user_account_admin_status`
+- `v_user_admin_list_summary`
+- `v_user_auth_entry_orchestration_state`
+- `v_user_auth_entry_state`
+- `v_user_auth_security_event_history`
+- `v_user_effective_permissions`
+- `v_user_reset_artifact_state`
+- `v_users_requiring_password_reset`
+- `v_vehicle_ctp_monitoring_state`
+- `v_vehicle_operational_aggregate_state`
+- `v_vehicle_operational_state`
+- `v_vehicle_qr_action_entry_state`
+- `v_vehicle_scan_event_history`
+- `v_vehicle_scan_session_history`
+- `v_warning_center_critical_items`
+- `v_warning_center_review_items`
+- `v_warning_center_warning_items`
+- `v_warranty_provider_catalog`
+
+## Important frontend-callable functions
+- `accept_case_extension_and_get_unified_payload_state`
+- `accept_extension_commit_state`
+- `accept_reservation_extension_state`
+- `accept_transportation_event_extension_state`
+- `activate_case_billing_state`
+- `add_billing_context_note_state`
+- `add_estimated_return_change_note_state`
+- `add_transportation_event_general_note_state`
+- `add_user_role_state`
+- `assign_reservation_vehicle_state`
+- `assign_reservation_vehicle_with_hard_lock_state`
+- `assign_user_role_by_name_state`
+- `begin_admin_password_reset_state`
+- `cancel_case_and_get_unified_payload_state`
+- `cancel_reservation_with_transportation_event_state`
+- `clear_password_reset_pending_state`
+- `clear_reservation_vehicle_assignment_state`
+- `clear_reservation_vehicle_assignment_with_dependency_state`
+- `close_billing_line_at_paid_through_state`
+- `close_billing_line_state`
+- `close_current_reservation_billing_line_state`
+- `close_current_transportation_event_billing_line_state`
+- `close_transportation_event_state`
+- `close_vehicle_scan_session_state`
+- `complete_case_and_get_unified_payload_state`
+- `complete_case_return_and_close_state`
+- `complete_password_reset_db_state`
+- `consume_reset_token_state`
+- `continue_case_same_vehicle_and_get_unified_payload_state`
+- `continue_case_same_vehicle_state`
+- `create_and_start_case_with_vehicle_by_vin_state`
+- `create_app_user_state`
+- `create_app_user_with_role_state`
+- `create_approved_network_state`
+- `create_billing_parent_line_state`
+- `create_case_bootstrap_state`
+- `create_case_bootstrap_with_vehicle_by_vin_state`
+- `create_customer_state`
+- `create_extended_warranty_rule_state`
+- `create_extension_billing_line_state`
+- `create_hard_lock_state`
+- `create_late_fee_rule_state`
+- `create_or_update_reservation_conflict_state`
+- `create_reservation_billing_line_state`
+- `create_reservation_for_tekion_customer_state`
+- `create_reservation_with_transportation_event_state`
+- `create_reset_token_state`
+- `create_start_and_bill_case_with_vehicle_by_vin_state`
+- `create_transportation_event_billing_line_state`
+- `create_transportation_event_state`
+- `create_vehicle_state`
+- `create_warranty_provider_state`
+- `get_active_late_fee_rules_state`
+- `get_admin_setting_permission_requirement_state`
+- `get_admin_settings_catalog_state`
+- `get_approved_network_match_state`
+- `get_approved_networks_state`
+- `get_auth_security_policy_state`
+- `get_billing_dependency_banner_state`
+- `get_billing_rule_catalog_state`
+- `get_calendar_dependency_badges_state`
+- `get_case_activation_list_state`
+- `get_case_candidate_dashboard_state`
+- `get_case_completion_candidate_state`
+- `get_case_completion_list_state`
+- `get_case_continuation_candidate_state`
+- `get_case_continuation_list_state`
+- `get_case_reassignment_candidate_state`
+- `get_case_reassignment_list_state`
+- `get_ctp_monitoring_policy_state`
+- `get_current_reservation_dependency_state`
+- `get_customer_by_tekion_customer_number_state`
+- `get_customer_operational_aggregate_list_state`
+- `get_customer_operational_list_state`
+- `get_customer_operational_payload_state`
+- `get_customer_operational_state`
+- `get_dashboard_payload_state`
+- `get_dashboard_section_access_state`
+- `get_email_outbound_message_state`
+- `get_frontend_safe_service_action_contracts_state`
+- `get_live_active_case_list_state`
+- `get_login_network_gate_state_by_email`
+- `get_lost_rentals_summary_state`
+- `get_master_operational_dashboard_state`
+- `get_network_gate_state`
+- `get_operational_domain_counts_state`
+- `get_or_create_customer_state_by_tekion`
+- `get_or_create_vehicle_state_by_vin`
+- `get_permissions_catalog_state`
+- `get_reservation_assignment_state`
+- `get_reservation_current_billing_state`
+- `get_reservation_extension_candidate_state`
+- `get_reservation_lifecycle_list_state`
+- `get_reservation_lifecycle_state`
+- `get_reservation_operational_list_payload_state`
+- `get_reservation_operational_payload_state`
+- `get_reservation_transportation_link_payload_state`
+- `get_reservation_vehicle_candidates_state`
+- `get_reservation_vin_lock_lead_days_state`
+- `get_reservation_vin_lock_window_state`
+- `get_reservations_needing_vin_assignment_state`
+- `get_reset_link_network_gate_state`
+- `get_reset_token_validity_state`
+- `get_roles_with_permissions_state`
+- `get_security_admin_settings_state`
+- `get_service_action_contract_catalog_state`
+- `get_service_action_contract_state`
+- `get_transportation_event_current_billing_state`
+- `get_transportation_event_current_dependency_state`
+- `get_transportation_event_extension_candidate_state`
+- `get_transportation_event_note_history_state`
+- `get_transportation_event_operational_list_state`
+- `get_transportation_event_operational_payload_state`
+- `get_transportation_event_state`
+- `get_transportation_event_unified_operational_list_state`
+- `get_transportation_event_unified_operational_payload_state`
+- `get_unified_case_payload_state`
+- `get_upcoming_rental_dependency_feed_state`
+- `get_user_admin_detail_payload_state`
+- `get_user_admin_list_payload_state`
+- `get_user_admin_setting_access_state`
+- `get_user_admin_settings_access_matrix_state`
+- `get_user_auth_access_gate_state`
+- `get_user_auth_access_gate_state_by_email`
+- `get_user_auth_security_event_history_state`
+- `get_user_email_outbound_history_state`
+- `get_user_login_precheck_state_by_email`
+- `get_user_outside_network_access_state`
+- `get_user_reset_artifact_state`
+- `get_user_reset_entry_state_by_email`
+- `get_user_role_names_state`
+- `get_user_security_detail_state`
+- `get_utilization_snapshot_state`
+- `get_vehicle_by_vin_state`
+- `get_vehicle_ctp_monitoring_list_state`
+- `get_vehicle_ctp_monitoring_state`
+- `get_vehicle_operational_aggregate_list_state`
+- `get_vehicle_operational_payload_state`
+- `get_vehicle_operational_state`
+- `get_vehicle_qr_action_entry_state`
+- `get_vehicle_scan_session_state`
+- `get_warning_center_counts_state`
+- `get_warning_center_detail_state`
+- `update_approved_network_state`
+- `update_customer_state`
+- `update_extended_warranty_rule_state`
+- `update_late_fee_rule_state`
+- `update_vehicle_core_state`
+- `update_warranty_provider_state`
