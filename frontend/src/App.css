@@ -78,6 +78,11 @@
 .filter { padding: 7px 11px; border: 1px solid var(--border) !important; border-radius: 999px; background: var(--surface); color: var(--text); font-weight: 700; }
 .filter.active { border-color: #005eb8 !important; background: rgba(0, 94, 184, 0.12); color: #005eb8; }
 
+.data-message { display: grid; gap: 5px; margin-bottom: 18px; padding: 14px 16px; border-radius: 8px; }
+.error-message { border: 1px solid #c93535; background: rgba(201, 53, 53, 0.09); color: var(--text); }
+.error-message strong { color: #a52222; }
+.error-message span { overflow-wrap: anywhere; font-size: 13px; }
+
 .fleet-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
 .vehicle-table-card, .details-panel, .history-card { overflow: hidden; }
 .section-heading { padding: 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -88,11 +93,19 @@
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 13px 14px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
 th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .45px; }
+tbody tr:not(.empty-row) { cursor: pointer; }
+tbody tr:not(.empty-row):hover { background: rgba(0, 94, 184, 0.06); }
+.selected-row { background: rgba(0, 94, 184, 0.12); }
+.selected-row td:first-child { box-shadow: inset 4px 0 0 #005eb8; }
 .empty-row td { height: 170px; color: var(--muted); text-align: center; }
 .detail-placeholder, .history-placeholder { padding: 36px 20px; color: var(--muted); text-align: center; }
+.vehicle-details-list { margin: 0; padding: 8px 18px 18px; }
+.vehicle-details-list div { display: grid; grid-template-columns: minmax(105px, .8fr) minmax(0, 1.2fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.vehicle-details-list dt { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .35px; }
+.vehicle-details-list dd { min-width: 0; margin: 0; color: var(--heading); font-weight: 650; overflow-wrap: anywhere; text-align: right; }
 .details-actions { display: grid; gap: 8px; padding: 18px; border-top: 1px solid var(--border); }
-.details-actions button { padding: 9px 11px; border-radius: 7px; background: var(--page-bg); color: var(--muted); font-weight: 700; text-align: left; }
-.details-actions button:disabled { cursor: not-allowed; opacity: .65; }
+.details-actions button { padding: 9px 11px; border-radius: 7px; background: var(--page-bg); color: var(--heading); font-weight: 700; text-align: left; }
+.details-actions button:disabled { cursor: not-allowed; color: var(--muted); opacity: .65; }
 .history-card { margin-top: 18px; }
 
 @media (max-width: 1200px) {
