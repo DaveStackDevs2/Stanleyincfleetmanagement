@@ -1,19 +1,13 @@
 # Production Security Follow-Up
 
-Temporary development access was granted so the unauthenticated frontend could read:
+Temporary development access was granted so the unauthenticated frontend could read the Fleet Administration data.
+
+## Temporary development grants
 
 ```sql
 grant select on public.v_admin_vehicle_master_state to anon;
+grant select on public.vehicles to anon;
+grant select on public.tags to anon;
 ```
 
-Before production:
-
-- Enable Supabase authentication.
-- Grant SELECT only to the required authenticated roles.
-- Remove anonymous access:
-
-```sql
-revoke select on public.v_admin_vehicle_master_state from anon;
-```
-
-Do not ship to production with the anonymous SELECT grant still enabled.
+These grants are
