@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-type AdminFeature = {
-  title: string
-  description: string
-  status: 'Foundation' | 'Planned' | 'Coming Soon'
-}
-
 type Page = 'admin' | 'fleet'
 type FleetFilter = 'All' | 'Active' | 'Retired' | 'Loaner' | 'Rental' | 'Available' | 'Out' | 'Maintenance'
-
+type AdminFeature = { title: string; description: string; status: 'Foundation' | 'Planned' | 'Coming Soon' }
 type Vehicle = {
   vehicle_id: string
   vin: string | null
@@ -20,3 +14,8 @@ type Vehicle = {
   trim: string | null
   fleet_type: string | null
   vehicle_status: string | null
+  odometer: number | null
+  qualified_miles: number | null
+  ontrac_days_in_service: number | null
+  license_plate: string | null
+  plate_expiration_date: string | null
