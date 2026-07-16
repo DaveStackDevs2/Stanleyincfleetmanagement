@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { supabase } from './lib/supabase'
 
 type AdminFeature = {
   title: string
@@ -77,25 +78,21 @@ function App() {
     if (page !== 'fleet') return
 
     const loadVehicles = async () => {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-
-      if (!supabaseUrl || !anonKey) {
-        setLoadError('Supabase environment variables are not configured.')
-        return
-      }
-
       setLoading(true)
       setLoadError(null)
 
       try {
-        const response = await fetch(`${supabaseUrl}/rest/v1/v_admin_vehicle_master_state?select=*&order=model_year.desc,model.asc`, {
-          headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
-        })
-        if (!response.ok) throw new Error((await response.text()) || `Supabase returned ${response.status}`)
-        const data = await response.json() as Vehicle[]
-        setVehicles(data)
-        setSelectedVehicleId((current) => current && data.some((vehicle) => vehicle.vehicle_id === current) ? current : data[0]?.vehicle_id ?? null)
+        const { data, error } = await supabase
+          .from('v_admin_vehicle_master_state')
+          .select('*')
+          .order('model_year', { ascending: false })
+          .order('model', { ascending: true })
+        
+        if (error) throw new Error(error.message)
+        
+        const vehicles = (data ?? []) as Vehicle[]
+        setVehicles(vehicles)
+        setSelectedVehicleId((current) => current && vehicles.some((vehicle) => vehicle.vehicle_id === current) ? current : vehicles[0]?.vehicle_id ?? null)
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : 'Unable to load fleet vehicles.')
       } finally {
