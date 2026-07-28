@@ -1266,6 +1266,13 @@ Replace any “needs confirmation” items when the user provides missing extern
 •
 Update this Recovery Bible at the end of every significant work session.
 Change Log
+2026-07-28 - Phase 2 user and role management
+•
+Implemented the seven required system roles, one-role-per-user assignment, role default permissions, individual grants and denies, and effective permission calculation where denies take precedence.
+•
+Added permission-protected administration contracts and Users/Roles pages for assignment, permission editing, and effective access review.
+•
+Live Supabase migration application and authenticated browser testing remain unverified.
 2026-07-03 - Recovery Bible v1.0 Baseline
 •
 Added Universal AI Project Continuity Protocol.

@@ -108,22 +108,16 @@ function parseRoles(value: unknown, userId: string): string[] {
 
 function parsePermissions(value: unknown, userId: string): string[] {
   if (
-    !Array.isArray(value) ||
-    !value.every(
-      (row) =>
-        isRecord(row) &&
-        row.user_id === userId &&
-        isUuid(row.user_id) &&
-        typeof row.permission_key === 'string' &&
-        row.permission_key.length > 0 &&
-        row.permission_key.trim() === row.permission_key,
-    )
+    !isRecord(value) || value.status !== 'effective_permissions_ready' ||
+    value.user_id !== userId || !isUuid(value.user_id) ||
+    !Array.isArray(value.permission_keys) ||
+    !value.permission_keys.every((key) => typeof key === 'string' && key.length > 0 && key.trim() === key)
   ) {
     throw new Error('invalid-permissions')
   }
 
   return [
-    ...new Set(value.map((row) => (row as Record<string, unknown>).permission_key as string)),
+    ...new Set(value.permission_keys as string[]),
   ]
 }
 
@@ -178,10 +172,7 @@ export function AuthorizationProvider({ children }: { children: ReactNode }) {
             supabase.rpc('get_user_role_names_state', {
               p_user_id: applicationUser.id,
             }),
-            supabase
-              .from('v_user_effective_permissions')
-              .select('user_id, permission_key')
-              .eq('user_id', applicationUser.id),
+            supabase.rpc('get_current_user_effective_permissions_state'),
           ])
 
         if (gateResponse.error || rolesResponse.error || permissionsResponse.error) {
