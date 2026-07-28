@@ -200,12 +200,8 @@ function App() {
             ? current
             : loadedVehicles[0]?.vehicle_id ?? null,
         )
-      } catch (error) {
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : 'Unable to load fleet vehicles.',
-        )
+      } catch {
+        setLoadError('Unable to load fleet vehicles. Please try again later.')
       } finally {
         setLoading(false)
       }
