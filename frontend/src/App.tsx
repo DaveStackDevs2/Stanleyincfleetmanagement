@@ -3,6 +3,7 @@ import './App.css'
 import { UserRoleManagement } from './admin/UserRoleManagement'
 import { useAuthorization } from './authorization/useAuthorization'
 import { supabase } from './lib/supabase'
+import { VehicleCalendar } from './calendar/VehicleCalendar'
 
 type AdminFeature = {
   title: string
@@ -10,7 +11,7 @@ type AdminFeature = {
   status: 'Foundation' | 'Planned' | 'Coming Soon'
 }
 
-type Page = 'admin' | 'fleet' | 'access'
+type Page = 'admin' | 'fleet' | 'access' | 'calendar'
 type FleetFilter =
   | 'All'
   | 'Active'
@@ -156,6 +157,7 @@ const formatDate = (value: string | null) =>
 function App() {
   const { permissionKeys } = useAuthorization()
   const canManageUsers = permissionKeys.includes('user_admin.manage')
+  const canViewCalendar = permissionKeys.includes('calendar.view')
   const [page, setPage] = useState<Page>('admin')
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
@@ -292,6 +294,7 @@ function App() {
 
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <button type="button">Dashboard</button>
+          {canViewCalendar && <button type="button" className={page === 'calendar' ? 'active' : ''} onClick={() => setPage('calendar')}>Vehicle Calendar</button>}
           <button type="button">Reservations</button>
           <button type="button">Active Transportation</button>
 
@@ -327,6 +330,8 @@ function App() {
             <strong>
               {page === 'fleet'
                 ? 'Fleet Administration'
+                : page === 'calendar'
+                  ? 'Vehicle Calendar'
                 : page === 'access'
                   ? 'User & Role Management'
                 : 'Admin Console'}
@@ -335,6 +340,8 @@ function App() {
             <span>
               {page === 'fleet'
                 ? 'Connected to the vehicle master view'
+                : page === 'calendar'
+                  ? 'Visible-range fleet schedule'
                 : page === 'access'
                   ? 'Effective permission administration'
                 : 'Foundation and planned controls'}
@@ -348,7 +355,9 @@ function App() {
           </div>
         </header>
 
-        {page === 'access' ? (
+        {page === 'calendar' ? (
+          <VehicleCalendar onBack={() => setPage('admin')} />
+        ) : page === 'access' ? (
           <UserRoleManagement onBack={() => setPage('admin')} />
         ) : page === 'admin' ? (
           <main className="content">

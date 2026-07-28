@@ -53,3 +53,19 @@
 - No SQL, schema, migration, function, view, grant, policy, trigger, or seed changes were made.
 - Live database access for the authenticated browser role was not verified.
 - MFA, password reset, feature-level permission rules, navigation restrictions, and role-management UI were not implemented.
+
+## 2026-07-28 — Phase 3 Vehicle Calendar Foundation
+
+- Added a permission-gated vehicle calendar as the primary fleet workspace with Rental, Loaner, and combined collapsible sections.
+- Added day and seven-day week timelines, monthly navigation, frozen resource/date headers, current-time marker, visible-range loading, persisted controls, filters, dark mode, event details, hover summaries, confirmed drag moves, and vehicle action placeholders.
+- Added reusable reservation, quote, and maintenance event types and backend-configurable event/pay colors.
+- Added protected calendar read/create/update/delete/color RPC contracts with backend range, field, overlap, availability, and permission validation.
+- Repository build, lint, and diff checks were run; live migration and authenticated browser behavior remain unverified.
+
+### Phase 3 final defect review
+
+- Removed role-name-based calendar default assignment in favor of inheriting defaults from the existing `user_admin.manage` permission relationship.
+- Made calendar objects and seed operations safely repeatable where practical.
+- Closed concurrent overlap and edit-as-create gaps with per-vehicle transaction locks and existing-event validation.
+- Added audit-log records for event create/update/delete and color changes.
+- Corrected day-view event positioning, 15-minute snapping and resizing, empty/error presentation, and separately permission-gated deletion.

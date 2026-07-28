@@ -4,35 +4,25 @@ Last updated: 2026-07-28
 
 ## Current phase
 
-Phase 2 user and role management is implemented on top of the authentication and centralized authorization foundation.
+Phase 3 Vehicle Calendar Foundation is implemented in the repository on top of Phase 2 authentication and effective permissions.
 
 ## Completed
 
-- A single application-level `AuthProvider` initializes Supabase Auth session state, subscribes to auth changes, exposes the current session and user, and supports sign-out.
-- Unauthenticated entry is directed to the minimal `/sign-in` experience, which uses Supabase email/password authentication.
-- A read-only `AuthorizationProvider` resolves the signed-in identity to `public.app_users` by `auth_user_id`, then loads and validates the access gate, role names, and effective permission contracts.
-- Application content is rendered only when the verified access-gate status is exactly `auth_access_ready`.
-- Missing, malformed, mismatched, stale, inaccessible, failed, and non-ready authorization states deny access without exposing backend error details.
-- Authentication loading, authorization loading, sign-in, and denied-access states have separate minimal user interfaces.
-- A focused correctness review moved history updates into React effects, made authorization fail closed immediately across session changes, ensured authentication actions settle safely, and added accessible loading announcements.
-- Seven system roles are established: Dev Admin, Admin, CTP Staff, Service Manager, Sales Management, Service Advisor, and Sales Staff.
-- Every user is constrained to one role. Role defaults combine with individual grants and denies to produce effective permissions, with denies taking precedence.
-- Permission-gated Users and Roles pages allow administrators to assign roles, edit role defaults, set per-user grant/deny/inherit overrides, and inspect each user's effective permissions.
-- User administration reads and writes through authenticated, permission-checking RPC contracts. Backend errors are not exposed in the interface.
+- The calendar provides Rental, Loaner, and combined modes; combined mode orders Loaners above Rentals and provides distinct collapsible sections.
+- Day and seven-day week views, date navigation, a monthly picker, sticky stock/date headers, scrolling, row rendering containment, filters, persisted preferences, and optional dark mode are implemented.
+- Vehicle focus exposes Reserve, Quote, and Schedule Maintenance placeholders. Event blocks expose required schedule metadata, hover summaries, details, and permission-gated confirmed drag reassignment/date moves.
+- Calendar events, reusable event types, configurable colors, five calendar permissions, and protected visible-range/mutation RPCs are defined in the Phase 3 migration.
+- Direct frontend table writes are not used for calendar events; RLS is enabled and direct authenticated table access is revoked.
 
 ## Verification
 
 - `npm run build`: passed on 2026-07-28.
-- `npm run lint`: passed on 2026-07-28.
-- `git diff --check`: passed on 2026-07-28.
-- `rg -n 'createClient\(' frontend/src`: found one shared client creation.
-- Live authentication and authorization behavior was not browser-tested because no test account or verified live-database connection was used in this task.
-- `npm run build`, `npm run lint`, and `git diff --check` passed for Phase 2 on 2026-07-28.
+- Live migration application, live RLS behavior, authenticated calendar payloads, and browser interaction remain unverified.
 
-## Known issue
+## Known issues / next task
 
-The new migration has not been applied to or verified against a connected live Supabase project. Until it is applied, the Phase 2 RPC contracts and override table will not exist remotely. Existing Phase 1 access-gate grant and policy discrepancies also remain subject to live verification.
+Apply the Phase 2 and Phase 3 migrations to an approved Supabase environment. Then validate authenticated access for representative permission combinations, real vehicle status vocabulary, time-zone behavior, drag conflict rejection, color changes, and large-fleet scrolling in a browser.
 
-## Next recommended task
+## Phase 3 final defect review
 
-Apply the reviewed Phase 2 migration in the connected Supabase project, then browser-test role assignment and grant/deny precedence with approved Admin and non-admin test users.
+The repository implementation now uses 15-minute day-grid placement from 7:00 AM through 7:00 PM, records calendar mutations in `audit_log`, serializes overlap validation per vehicle, prevents edit permission from creating a missing event, exposes delete only with `calendar.delete`, and uses repeatable migration statements where practical. Static source review confirmed permission-key authorization and visible-range event loading. Live SQL execution, browser scrolling/dragging, visual dark-mode contrast, and authenticated behavior remain unverified without a connected test environment.
