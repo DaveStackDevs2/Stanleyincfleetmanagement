@@ -71,3 +71,84 @@ textarea:focus-visible {
 #root {
   min-height: 100vh;
 }
+
+.access-page,
+.access-status {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.access-status {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.access-card {
+  width: min(100%, 420px);
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.access-card h1 {
+  margin: 8px 0;
+  color: var(--heading);
+}
+
+.access-card p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.access-card .access-brand {
+  margin: 0;
+  color: #005eb8;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.sign-in-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.sign-in-form label {
+  color: var(--heading);
+  font-weight: 700;
+}
+
+.sign-in-form input {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+.access-card button {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: #005eb8;
+  color: #ffffff;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.access-card button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.access-error {
+  margin-top: 4px;
+  color: #a52222;
+  font-size: 14px;
+}
