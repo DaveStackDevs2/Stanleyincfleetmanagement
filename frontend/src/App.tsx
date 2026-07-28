@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { UserRoleManagement } from './admin/UserRoleManagement'
+import { useAuthorization } from './authorization/useAuthorization'
 import { supabase } from './lib/supabase'
 
 type AdminFeature = {
@@ -8,7 +10,7 @@ type AdminFeature = {
   status: 'Foundation' | 'Planned' | 'Coming Soon'
 }
 
-type Page = 'admin' | 'fleet'
+type Page = 'admin' | 'fleet' | 'access'
 type FleetFilter =
   | 'All'
   | 'Active'
@@ -152,6 +154,8 @@ const formatDate = (value: string | null) =>
   value ? new Date(value).toLocaleDateString() : '—'
 
 function App() {
+  const { permissionKeys } = useAuthorization()
+  const canManageUsers = permissionKeys.includes('user_admin.manage')
   const [page, setPage] = useState<Page>('admin')
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
@@ -165,6 +169,8 @@ function App() {
   const openFeature = (title: string) => {
     if (title === 'Fleet Administration') {
       setPage('fleet')
+    } else if (title === 'Users & Permissions' && canManageUsers) {
+      setPage('access')
     }
   }
 
@@ -297,6 +303,12 @@ function App() {
             Fleet
           </button>
 
+          {canManageUsers && <button
+            type="button"
+            className={page === 'access' ? 'active' : ''}
+            onClick={() => setPage('access')}
+          >Users &amp; Roles</button>}
+
           <button
             type="button"
             className={page === 'admin' ? 'active' : ''}
@@ -315,12 +327,16 @@ function App() {
             <strong>
               {page === 'fleet'
                 ? 'Fleet Administration'
+                : page === 'access'
+                  ? 'User & Role Management'
                 : 'Admin Console'}
             </strong>
 
             <span>
               {page === 'fleet'
                 ? 'Connected to the vehicle master view'
+                : page === 'access'
+                  ? 'Effective permission administration'
                 : 'Foundation and planned controls'}
             </span>
           </div>
@@ -332,7 +348,9 @@ function App() {
           </div>
         </header>
 
-        {page === 'admin' ? (
+        {page === 'access' ? (
+          <UserRoleManagement onBack={() => setPage('admin')} />
+        ) : page === 'admin' ? (
           <main className="content">
             <section className="page-heading">
               <div>
@@ -363,6 +381,7 @@ function App() {
                   className="feature-card"
                   type="button"
                   key={feature.title}
+                  disabled={feature.title === 'Users & Permissions' && !canManageUsers}
                   onClick={() => openFeature(feature.title)}
                 >
                   <span

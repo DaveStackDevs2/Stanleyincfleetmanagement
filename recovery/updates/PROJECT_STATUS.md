@@ -4,7 +4,7 @@ Last updated: 2026-07-28
 
 ## Current phase
 
-Authentication foundation and centralized authorization Phase 1 are implemented in the frontend.
+Phase 2 user and role management is implemented on top of the authentication and centralized authorization foundation.
 
 ## Completed
 
@@ -15,6 +15,10 @@ Authentication foundation and centralized authorization Phase 1 are implemented 
 - Missing, malformed, mismatched, stale, inaccessible, failed, and non-ready authorization states deny access without exposing backend error details.
 - Authentication loading, authorization loading, sign-in, and denied-access states have separate minimal user interfaces.
 - A focused correctness review moved history updates into React effects, made authorization fail closed immediately across session changes, ensured authentication actions settle safely, and added accessible loading announcements.
+- Seven system roles are established: Dev Admin, Admin, CTP Staff, Service Manager, Sales Management, Service Advisor, and Sales Staff.
+- Every user is constrained to one role. Role defaults combine with individual grants and denies to produce effective permissions, with denies taking precedence.
+- Permission-gated Users and Roles pages allow administrators to assign roles, edit role defaults, set per-user grant/deny/inherit overrides, and inspect each user's effective permissions.
+- User administration reads and writes through authenticated, permission-checking RPC contracts. Backend errors are not exposed in the interface.
 
 ## Verification
 
@@ -23,11 +27,12 @@ Authentication foundation and centralized authorization Phase 1 are implemented 
 - `git diff --check`: passed on 2026-07-28.
 - `rg -n 'createClient\(' frontend/src`: found one shared client creation.
 - Live authentication and authorization behavior was not browser-tested because no test account or verified live-database connection was used in this task.
+- `npm run build`, `npm run lint`, and `git diff --check` passed for Phase 2 on 2026-07-28.
 
 ## Known issue
 
-The repository migration snapshot grants `get_user_auth_access_gate_state` and `v_user_effective_permissions` only to `service_role`. This is not proof of live-database state, but an authenticated browser may be unable to access these required contracts. The frontend intentionally denies access if that occurs. Required authenticated-role grants and policies remain unresolved live-database work; no database objects or credentials were changed.
+The new migration has not been applied to or verified against a connected live Supabase project. Until it is applied, the Phase 2 RPC contracts and override table will not exist remotely. Existing Phase 1 access-gate grant and policy discrepancies also remain subject to live verification.
 
 ## Next recommended task
 
-Verify the authentication and authorization contracts in the connected Supabase project with an approved test user, then separately review the authenticated-role grants and row-level security policies through an authorized database change process.
+Apply the reviewed Phase 2 migration in the connected Supabase project, then browser-test role assignment and grant/deny precedence with approved Admin and non-admin test users.

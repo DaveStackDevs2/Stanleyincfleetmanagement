@@ -2,6 +2,23 @@
 
 ## 2026-07-28
 
+### Phase 2 — User and role management
+
+- Added the seven required system roles and the minimal `user_admin.manage` administration permission.
+- Added a single-role constraint and per-user permission overrides with `grant` and `deny` effects.
+- Replaced effective-permission calculation with role defaults plus grants minus denies.
+- Added permission-checking authenticated RPCs for management payloads, role assignment, user overrides, and role default permissions.
+- Switched current-user permission loading to a scoped RPC rather than direct effective-permission view access.
+- Added Users and Roles administration pages, permission editing, role assignment, override editing, and effective-permission inspection.
+- Kept role names out of frontend authorization decisions; navigation and management access use the effective `user_admin.manage` permission.
+
+### Phase 2 verification
+
+- `npm run build`: passed.
+- `npm run lint`: passed.
+- `git diff --check`: passed.
+- Live migration application and authenticated browser behavior were not verified.
+
 ### Hardened after focused review
 
 - Moved pathname/history synchronization out of `AuthGate` render and into an effect.
