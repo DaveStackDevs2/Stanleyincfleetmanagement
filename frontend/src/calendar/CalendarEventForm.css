@@ -1,0 +1,11 @@
+.calendar-event-form{width:min(760px,100%);max-height:90vh;overflow:auto;display:grid;gap:14px;padding:26px;background:var(--surface);color:var(--text);border-radius:10px;box-shadow:0 24px 80px rgba(0,0,0,.35)}
+.calendar-event-form h2{margin:0;color:var(--heading)}
+.calendar-event-form label{display:grid;gap:6px;color:var(--heading);font-weight:700}
+.calendar-event-form input,.calendar-event-form select{width:100%;cursor:text}
+.calendar-event-form select{cursor:pointer}
+.form-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.form-columns.vehicle-description{grid-template-columns:120px minmax(0,1fr) minmax(0,1fr)}
+.form-actions{display:flex;justify-content:flex-end;gap:8px}
+.form-actions .danger-action{margin-top:0!important}
+.calendar-event-form button:disabled{cursor:wait;opacity:.65}
+@media(max-width:760px){.form-columns,.form-columns.vehicle-description{grid-template-columns:1fr}}
