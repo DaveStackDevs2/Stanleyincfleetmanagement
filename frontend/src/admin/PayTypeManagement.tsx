@@ -81,10 +81,11 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [dirtyColorKeys, setDirtyColorKeys] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [form, setForm] = useState({ payType: '', taxable: false, amount: '', sortOrder: '0', description: '' })
 
   const load = useCallback(async () => {
-    setBusy(true); setMessage(null)
+    setBusy(true); setMessage(null); setSuccessMessage(null)
     const [rules, palette] = await Promise.all([
       supabase.rpc('get_admin_pay_type_rules_state'),
       supabase.rpc('get_fleet_board_pay_type_colors_state'),
@@ -98,16 +99,18 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
         item.payType, colors[item.payType] ?? FALLBACK_COLORS,
       ])))
       setDirtyColorKeys(new Set())
+      return true
     } catch {
       setState(null)
       setMessage('Pay-type settings could not be loaded. Confirm your access and try again.')
+      return false
     } finally { setBusy(false) }
   }, [])
 
   useEffect(() => { void load() }, [load])
 
   const mutate = async (request: PromiseLike<{ error: unknown }>, failure: string) => {
-    setBusy(true); setMessage(null)
+    setBusy(true); setMessage(null); setSuccessMessage(null)
     const { error } = await request
     if (error) { setMessage(failure); setBusy(false); return false }
     await load()
@@ -134,7 +137,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
 
   const saveColors = async () => {
     if (!state) return
-    setBusy(true); setMessage(null)
+    setBusy(true); setMessage(null); setSuccessMessage(null)
     const authoritative = await supabase.rpc('get_fleet_board_pay_type_colors_state')
     try {
       if (authoritative.error) throw new Error('request-failed')
@@ -147,7 +150,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       }))
       const saved = await supabase.rpc('set_fleet_board_pay_type_colors_state', { p_colors: merged })
       if (saved.error) throw new Error('request-failed')
-      await load()
+      if (await load()) setSuccessMessage('Fleet Board colors saved successfully.')
     } catch {
       setMessage('The Fleet Board colors could not be saved. No color changes were applied.')
       setBusy(false)
@@ -160,6 +163,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       <div className="page-actions"><button className="secondary-action" type="button" onClick={onBack}>Back to Admin Console</button></div>
     </section>
     {message && <div className="data-message error-message" role="alert">{message}</div>}
+    {successMessage && <div className="data-message success-message" role="status" aria-live="polite">{successMessage}</div>}
     {busy && !state && <p role="status">Loading pay types…</p>}
     {state && <>
       <section className="vehicle-table-card"><div className="section-heading"><div><h2>Pay Types</h2><p>Disabled pay types remain available to historical billing records.</p></div><button type="button" onClick={() => void load()} disabled={busy}>Refresh</button></div>

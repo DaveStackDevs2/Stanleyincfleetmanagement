@@ -83,6 +83,7 @@
 .error-message { border: 1px solid #c93535; background: rgba(201, 53, 53, 0.09); color: var(--text); }
 .error-message strong { color: #a52222; }
 .error-message span { overflow-wrap: anywhere; font-size: 13px; }
+.success-message { border: 1px solid #2e7d32; background: rgba(46, 125, 50, 0.09); color: var(--text); }
 
 .fleet-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 18px; align-items: start; }
 .vehicle-table-card, .details-panel, .history-card { overflow: hidden; }

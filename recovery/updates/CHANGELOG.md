@@ -7,6 +7,7 @@
 - Added explicit Fleet Board palette editing for active pay types with native color inputs, six-digit hex validation, and one neutral fallback pair.
 - Added the idempotent repository migration for the three already-live Admin pay-type functions and their verified execution grants.
 - Recorded the verified unique normalized pay-type index so case-insensitive uniqueness is enforced atomically.
+- Added an accessible inline confirmation after Fleet Board colors save and reload successfully.
 
 ## 2026-07-29 — Fleet Board live read contracts
 
