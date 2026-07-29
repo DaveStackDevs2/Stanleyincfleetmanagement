@@ -3,6 +3,7 @@ import './App.css'
 import { UserRoleManagement } from './admin/UserRoleManagement'
 import { useAuthorization } from './authorization/useAuthorization'
 import { supabase } from './lib/supabase'
+import { FleetBoard } from './fleet-board/FleetBoard'
 
 type AdminFeature = {
   title: string
@@ -10,7 +11,7 @@ type AdminFeature = {
   status: 'Foundation' | 'Planned' | 'Coming Soon'
 }
 
-type Page = 'admin' | 'fleet' | 'access'
+type Page = 'admin' | 'fleet' | 'access' | 'fleet-board'
 type FleetFilter =
   | 'All'
   | 'Active'
@@ -292,6 +293,7 @@ function App() {
 
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <button type="button">Dashboard</button>
+          <button type="button" className={page === 'fleet-board' ? 'active' : ''} onClick={() => setPage('fleet-board')}>Fleet Board</button>
           <button type="button">Reservations</button>
           <button type="button">Active Transportation</button>
 
@@ -327,6 +329,8 @@ function App() {
             <strong>
               {page === 'fleet'
                 ? 'Fleet Administration'
+                : page === 'fleet-board'
+                  ? 'Fleet Board'
                 : page === 'access'
                   ? 'User & Role Management'
                 : 'Admin Console'}
@@ -335,6 +339,8 @@ function App() {
             <span>
               {page === 'fleet'
                 ? 'Connected to the vehicle master view'
+                : page === 'fleet-board'
+                  ? 'Operational fleet availability'
                 : page === 'access'
                   ? 'Effective permission administration'
                 : 'Foundation and planned controls'}
@@ -348,7 +354,9 @@ function App() {
           </div>
         </header>
 
-        {page === 'access' ? (
+        {page === 'fleet-board' ? (
+          <FleetBoard onBack={() => setPage('admin')} />
+        ) : page === 'access' ? (
           <UserRoleManagement onBack={() => setPage('admin')} />
         ) : page === 'admin' ? (
           <main className="content">

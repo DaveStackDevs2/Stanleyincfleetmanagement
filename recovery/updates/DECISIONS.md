@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-07-29 — Replace the abandoned calendar model with a read-only Fleet Board
+
+**Decision:** Remove the branch-only Vehicle Calendar implementation and migration, then place the Fleet Board behind the existing authenticated application boundary without a new feature permission.
+
+**Reason:** The repository proves that vehicles, reservations, rental capacity, transportation events, assignments, billing state, and conflicts already provide the operational source of truth. A separate calendar-event model and invented permission set would duplicate that state.
+
+**Impact:** The Fleet Board foundation visualizes existing backend state only. Workflow handoffs and any least-privileged feature permission remain intentionally unresolved until existing backend contracts or an approved database change prove the correct enforcement boundary.
+
 ## 2026-07-28 — Calculate access from one role and explicit user overrides
 
 **Decision:** Constrain each user to one role and calculate effective permissions as role defaults plus individual grants minus individual denies. A deny wins when the same permission is inherited or granted.
@@ -36,3 +44,11 @@
 **Decision:** Do not change database files as part of the frontend authentication task. Document the snapshot discrepancy and fail closed if the browser cannot read the contracts.
 
 **Reason:** The snapshot is not verified live-database state, and database changes are explicitly outside this task. Frontend access must not be obtained by weakening security.
+
+## 2026-07-28 — Use a protected calendar projection and mutation boundary
+
+**Decision:** Add dedicated calendar event/type/color objects and expose them through visible-range and permission-protected RPCs. Revoke direct authenticated writes and keep all field, time-range, overlap, vehicle-availability, and permission validation in the backend.
+
+**Reason:** The calendar must remain reusable across reservation, quote, and maintenance foundations without coupling the UI to future business workflows or allowing the browser to bypass conflict rules.
+
+**Impact:** The UI loads no more than 32 days per request and reads configured block colors from the payload. Full reservation, quote, and maintenance workflows remain intentionally deferred. The migration must be applied and tested against the connected database before production use.
