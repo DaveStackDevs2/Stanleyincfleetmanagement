@@ -1,38 +1,41 @@
 # Project Status
 
-Last updated: 2026-07-28
+## Fleet Board contract follow-up — 2026-07-29
+
+- Authenticated operational reads are resolved through `get_fleet_board_state(timestamptz, timestamptz)`.
+- Assignment and reservation loading is bounded to the visible day/week period on the backend.
+- Saved pay-type colors are read and validated; the Admin color-palette UI is the next Fleet Board task.
+
+Last updated: 2026-07-29
 
 ## Current phase
 
-Phase 2 user and role management is implemented on top of the authentication and centralized authorization foundation.
+The abandoned Vehicle Calendar has been removed and replaced by the Fleet Board foundation on top of Phase 2 authentication and effective permissions.
 
 ## Completed
 
-- A single application-level `AuthProvider` initializes Supabase Auth session state, subscribes to auth changes, exposes the current session and user, and supports sign-out.
-- Unauthenticated entry is directed to the minimal `/sign-in` experience, which uses Supabase email/password authentication.
-- A read-only `AuthorizationProvider` resolves the signed-in identity to `public.app_users` by `auth_user_id`, then loads and validates the access gate, role names, and effective permission contracts.
-- Application content is rendered only when the verified access-gate status is exactly `auth_access_ready`.
-- Missing, malformed, mismatched, stale, inaccessible, failed, and non-ready authorization states deny access without exposing backend error details.
-- Authentication loading, authorization loading, sign-in, and denied-access states have separate minimal user interfaces.
-- A focused correctness review moved history updates into React effects, made authorization fail closed immediately across session changes, ensured authentication actions settle safely, and added accessible loading announcements.
-- Seven system roles are established: Dev Admin, Admin, CTP Staff, Service Manager, Sales Management, Service Advisor, and Sales Staff.
-- Every user is constrained to one role. Role defaults combine with individual grants and denies to produce effective permissions, with denies taking precedence.
-- Permission-gated Users and Roles pages allow administrators to assign roles, edit role defaults, set per-user grant/deny/inherit overrides, and inspect each user's effective permissions.
-- User administration reads and writes through authenticated, permission-checking RPC contracts. Backend errors are not exposed in the interface.
+- The authenticated application exposes a read-only Fleet Board with day/week navigation and rental/loaner filtering.
+- Day and seven-day week views, date navigation, sticky resource/date headers, scrolling, rental/loaner filters, daily reservation-capacity counts, and assignment blocks are implemented.
+- The Fleet Board reads existing vehicles, model-level reservations, reservation capacity, and unified transportation-event operational state with explicit field lists.
+- Fleet Board date navigation uses local calendar dates, invalid date-picker values are ignored, cancelled reservations do not count toward displayed capacity, and resolved conflicts are not shown as active.
+- No scheduling tables, views, RPCs, migrations, permissions, or frontend-only workflow rules were added. The branch-only calendar-foundation migration was removed.
 
 ## Verification
 
-- `npm run build`: passed on 2026-07-28.
-- `npm run lint`: passed on 2026-07-28.
-- `git diff --check`: passed on 2026-07-28.
-- `rg -n 'createClient\(' frontend/src`: found one shared client creation.
-- Live authentication and authorization behavior was not browser-tested because no test account or verified live-database connection was used in this task.
-- `npm run build`, `npm run lint`, and `git diff --check` passed for Phase 2 on 2026-07-28.
+- `npm run build`: passed on 2026-07-29.
+- `npm run lint`: passed on 2026-07-29.
+- `git diff --check`: passed on 2026-07-29.
+- Live RLS/grant behavior, authenticated Fleet Board payloads, and browser interaction remain unverified.
 
-## Known issue
+## Blocked backend requirements
 
-The new migration has not been applied to or verified against a connected live Supabase project. Until it is applied, the Phase 2 RPC contracts and override table will not exist remotely. Existing Phase 1 access-gate grant and policy discrepancies also remain subject to live verification.
+- **BLOCKED:** authenticated read access is missing for required Fleet Board sources. This needs a reviewed backend grant/RLS change; it is not addressed in frontend code.
+- **BLOCKED:** the unified operational assignment source does not provide a backend-supported visible-period boundary. Frontend pagination or filtering was intentionally not added because it could silently omit assignments.
 
-## Next recommended task
+## Next verification
 
-Apply the reviewed Phase 2 migration in the connected Supabase project, then browser-test role assignment and grant/deny precedence with approved Admin and non-admin test users.
+After the backend blockers are resolved, browser-test real vehicle status vocabulary, daylight-saving and day-boundary behavior, capacity counts, conflict resolution display, and large-fleet scrolling before connecting existing workflow handoffs.
+
+## Phase 3 final defect review
+
+The Fleet Board foundation is intentionally read-only. Operational changes remain in the existing reservation, transportation-event, vehicle assignment, billing, and conflict workflows. Live browser behavior and access to every board read source remain unverified without an approved authenticated test environment.

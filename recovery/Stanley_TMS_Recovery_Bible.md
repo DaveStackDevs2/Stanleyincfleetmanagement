@@ -1266,6 +1266,13 @@ Replace any “needs confirmation” items when the user provides missing extern
 •
 Update this Recovery Bible at the end of every significant work session.
 Change Log
+2026-07-29 - Fleet Board foundation replaces Vehicle Calendar
+•
+Removed the abandoned Vehicle Calendar frontend, calendar-only permission references, and the unmerged calendar-foundation migration with its separate scheduling model.
+•
+Added an authenticated, read-only Fleet Board foundation that visualizes existing vehicle, reservation-capacity, reservation, transportation-event, assignment, billing, and conflict state.
+•
+No new database object, migration, production value, permission, or frontend business rule was introduced. Live authenticated browser behavior remains unverified.
 2026-07-28 - Phase 2 user and role management
 •
 Implemented the seven required system roles, one-role-per-user assignment, role default permissions, individual grants and denies, and effective permission calculation where denies take precedence.

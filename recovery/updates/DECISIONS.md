@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-07-29 — Fleet Board data and palette boundaries
+
+**Decision:** Load all operational Fleet Board data through `get_fleet_board_state(timestamptz, timestamptz)` so authenticated access and visible-period filtering remain backend-owned. Store pay-type colors in the existing Admin settings system, protect writes with `user_admin.manage`, and render only valid six-digit hex values with one neutral fallback. The Admin palette editor is the next task.
+
+## 2026-07-29 — Replace the abandoned calendar model with a read-only Fleet Board
+
+**Decision:** Remove the branch-only Vehicle Calendar implementation and migration, then place the Fleet Board behind the existing authenticated application boundary without a new feature permission.
+
+**Reason:** The repository proves that vehicles, reservations, rental capacity, transportation events, assignments, billing state, and conflicts already provide the operational source of truth. A separate calendar-event model and invented permission set would duplicate that state.
+
+**Impact:** The Fleet Board foundation visualizes existing backend state only. Workflow handoffs and any least-privileged feature permission remain intentionally unresolved until existing backend contracts or an approved database change prove the correct enforcement boundary.
+
 ## 2026-07-28 — Calculate access from one role and explicit user overrides
 
 **Decision:** Constrain each user to one role and calculate effective permissions as role defaults plus individual grants minus individual denies. A deny wins when the same permission is inherited or granted.
