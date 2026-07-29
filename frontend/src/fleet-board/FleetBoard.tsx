@@ -34,6 +34,10 @@ type Reservation = {
 }
 
 type Capacity = { model: string; dailyLimit: number }
+type PayTypeColors = Record<string, { backgroundColor: string; textColor: string }>
+
+const NEUTRAL_PAY_TYPE_COLORS = { backgroundColor: '#E4E7ED', textColor: '#29313D' }
+const isHexColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
 const addDays = (date: Date, days: number) => {
@@ -109,6 +113,39 @@ function capacityFrom(value: unknown): Capacity | null {
   return model ? { model, dailyLimit: row.daily_limit } : null
 }
 
+function arrayFrom<T>(value: unknown, parse: (item: unknown) => T | null): T[] | null {
+  if (!Array.isArray(value)) return null
+  const parsed = value.map(parse)
+  return parsed.every((item): item is T => item !== null) ? parsed : null
+}
+
+function boardPayloadFrom(value: unknown) {
+  const payload = recordValue(value)
+  if (!payload) return null
+  const vehicles = arrayFrom(payload.vehicles, vehicleFrom)
+  const assignments = arrayFrom(payload.assignments, assignmentFrom)
+  const reservations = arrayFrom(payload.reservations, reservationFrom)
+  const capacities = arrayFrom(payload.capacities, capacityFrom)
+  return vehicles && assignments && reservations && capacities
+    ? { vehicles, assignments, reservations, capacities }
+    : null
+}
+
+function payTypeColorsFrom(value: unknown): PayTypeColors | null {
+  const payload = recordValue(value)
+  const colors = recordValue(payload?.pay_type_colors)
+  if (!colors) return null
+  const parsed: PayTypeColors = {}
+  for (const [payType, value] of Object.entries(colors)) {
+    const color = recordValue(value)
+    if (!color) return null
+    parsed[payType] = isHexColor(color.background_color) && isHexColor(color.text_color)
+      ? { backgroundColor: color.background_color, textColor: color.text_color }
+      : NEUTRAL_PAY_TYPE_COLORS
+  }
+  return parsed
+}
+
 export function FleetBoard({ onBack }: { onBack: () => void }) {
   const [view, setView] = useState<ViewMode>('day')
   const [date, setDate] = useState(() => startOfDay(new Date()))
@@ -117,6 +154,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [reservations, setReservations] = useState<Reservation[]>([])
   const [capacities, setCapacities] = useState<Capacity[]>([])
+  const [payTypeColors, setPayTypeColors] = useState<PayTypeColors>({})
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
 
@@ -131,24 +169,26 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
     async function loadBoard() {
       setLoading(true)
       setLoadFailed(false)
-      const [vehicleResult, assignmentResult, reservationResult, capacityResult] = await Promise.all([
-        supabase.from('vehicles').select('id,stock_number,model,fleet_type,status,location').order('fleet_type').order('model').order('stock_number'),
-        supabase.from('v_transportation_event_unified_operational_state').select('transportation_event_id,vehicle_id,source_type,transportation_event_status,actual_out_at,actual_in_at,expected_return_at,current_billing_start_time,current_billing_end_time,current_billing_pay_type,current_conflict_id,current_conflict_is_resolved'),
-        supabase.from('reservations').select('id,vehicle_id,start_date,expected_return_datetime,status,requested_model').lt('start_date', rangeEndIso).gt('expected_return_datetime', rangeStartIso),
-        supabase.from('rental_model_limits').select('vehicle_class,daily_limit').order('vehicle_class'),
+      const [boardResult, colorResult] = await Promise.all([
+        supabase.rpc('get_fleet_board_state', { p_range_start: rangeStartIso, p_range_end: rangeEndIso }),
+        supabase.rpc('get_fleet_board_pay_type_colors_state'),
       ])
       if (!current) return
-      if (vehicleResult.error || assignmentResult.error || reservationResult.error || capacityResult.error) {
+      const board = boardPayloadFrom(boardResult.data)
+      const colors = payTypeColorsFrom(colorResult.data)
+      if (boardResult.error || colorResult.error || !board || !colors) {
         setLoadFailed(true)
         setVehicles([])
         setAssignments([])
         setReservations([])
         setCapacities([])
+        setPayTypeColors({})
       } else {
-        setVehicles((vehicleResult.data ?? []).map(vehicleFrom).filter((item): item is Vehicle => item !== null))
-        setAssignments((assignmentResult.data ?? []).map(assignmentFrom).filter((item): item is Assignment => item !== null))
-        setReservations((reservationResult.data ?? []).map(reservationFrom).filter((item): item is Reservation => item !== null))
-        setCapacities((capacityResult.data ?? []).map(capacityFrom).filter((item): item is Capacity => item !== null))
+        setVehicles(board.vehicles)
+        setAssignments(board.assignments)
+        setReservations(board.reservations)
+        setCapacities(board.capacities)
+        setPayTypeColors(colors)
       }
       setLoading(false)
     }
@@ -195,7 +235,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
           <h2 className="board-group-title">{label}</h2>
           {groupVehicles.map(vehicle => <div className="board-row" key={vehicle.id}>
             <div className="board-resource"><strong>{vehicle.stockNumber}</strong><span>{vehicle.model}</span><small>{vehicle.status}{vehicle.location ? ` · ${vehicle.location}` : ''}</small></div>
-            <div className="board-days">{days.map(day => <div className="board-day" key={dayKey(day)}>{assignments.filter(item => item.vehicleId === vehicle.id && overlaps(item.startsAt, item.endsAt, day)).map(item => <article className={`assignment-block${item.hasConflict ? ' conflict' : ''}`} title={`${item.sourceType} · ${item.status}`} key={item.id}><strong>{item.payType}</strong><span>{new Date(item.startsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}–{new Date(item.endsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></article>)}</div>)}</div>
+            <div className="board-days">{days.map(day => <div className="board-day" key={dayKey(day)}>{assignments.filter(item => item.vehicleId === vehicle.id && overlaps(item.startsAt, item.endsAt, day)).map(item => { const colors = payTypeColors[item.payType] ?? NEUTRAL_PAY_TYPE_COLORS; return <article className={`assignment-block${item.hasConflict ? ' conflict' : ''}`} style={{ backgroundColor: colors.backgroundColor, color: colors.textColor }} title={`${item.sourceType} · ${item.status}`} key={item.id}><strong>{item.payType}</strong><span>{new Date(item.startsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}–{new Date(item.endsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></article> })}</div>)}</div>
           </div>)}
         </section>)}
       </div>

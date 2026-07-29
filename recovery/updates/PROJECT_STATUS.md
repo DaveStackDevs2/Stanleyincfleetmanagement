@@ -1,5 +1,11 @@
 # Project Status
 
+## Fleet Board contract follow-up — 2026-07-29
+
+- Authenticated operational reads are resolved through `get_fleet_board_state(timestamptz, timestamptz)`.
+- Assignment and reservation loading is bounded to the visible day/week period on the backend.
+- Saved pay-type colors are read and validated; the Admin color-palette UI is the next Fleet Board task.
+
 Last updated: 2026-07-29
 
 ## Current phase

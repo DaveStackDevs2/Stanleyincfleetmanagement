@@ -1,5 +1,9 @@
 # Decisions
 
+## 2026-07-29 — Fleet Board data and palette boundaries
+
+**Decision:** Load all operational Fleet Board data through `get_fleet_board_state(timestamptz, timestamptz)` so authenticated access and visible-period filtering remain backend-owned. Store pay-type colors in the existing Admin settings system, protect writes with `user_admin.manage`, and render only valid six-digit hex values with one neutral fallback. The Admin palette editor is the next task.
+
 ## 2026-07-29 — Replace the abandoned calendar model with a read-only Fleet Board
 
 **Decision:** Remove the branch-only Vehicle Calendar implementation and migration, then place the Fleet Board behind the existing authenticated application boundary without a new feature permission.

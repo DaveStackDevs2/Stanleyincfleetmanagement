@@ -339,14 +339,11 @@ Legend:
 
 ### Database-accurate reads
 
-- [x] Read `public.vehicles` using existing exact columns.
-- [x] Read `public.v_transportation_event_unified_operational_state` for operational events.
-- [x] Read `public.reservations` separately for model-level scheduled reservations.
-- [x] Read `public.rental_model_limits` for capacity display values.
+- [x] Read vehicles, assignments, reservations, and capacity through the authenticated `get_fleet_board_state(timestamptz, timestamptz)` contract.
 - [ ] Join/display customer names from `public.customers` through safe view/RPC or relation.
-- [!] **BLOCKED:** authenticated read access is missing for required Fleet Board sources. This requires a reviewed backend grant/RLS change and must not be worked around in frontend code.
+- [x] Resolve authenticated Fleet Board reads through a permission-boundary RPC without adding browser table policies.
 - [x] Replace broad `select('*')` with explicit stable field lists.
-- [!] **BLOCKED:** the unified operational assignment query has no backend-supported visible-period boundary. Do not add frontend pagination or filters that could silently omit assignments; resolve the read contract in a separately reviewed backend change.
+- [x] Bound assignment and reservation loading to the RPC's requested visible period.
 
 ### Reservation capacity
 
@@ -377,12 +374,12 @@ Legend:
 
 ### Pay-type colors
 
-- [!] Add backend persistence for Admin-configured pay-type background/text colors.
-- [!] Decide whether colors extend `pay_type_rules` or use a related configuration table.
-- [ ] Add migration and grants/RLS.
+- [x] Persist Admin-configured pay-type background/text colors in `fleet_board.pay_type_colors`.
+- [x] Keep the palette in the existing Admin setting system rather than extending operational pay-type rows.
+- [x] Add the verified live functions, grants, setting, and `user_admin.manage` mapping as one idempotent migration.
 - [ ] Add Admin UI.
-- [ ] Read configured colors on Fleet Board.
-- [ ] Remove temporary display color fallback from frontend.
+- [x] Read configured colors on Fleet Board and validate each six-digit hex value.
+- [x] Use one neutral fallback when a saved pair is absent or invalid; do not encode pay-type-specific colors.
 
 ### Workflow handoffs
 
@@ -427,6 +424,8 @@ Legend:
 - Removed the abandoned Vehicle Calendar implementation and its unmerged calendar-foundation migration.
 - Added the authenticated, read-only Fleet Board foundation using existing vehicles, reservations, rental capacity, and unified transportation-event state.
 - Renamed the application navigation, page state, imports, and component to Fleet Board without inventing a feature permission.
+- Replaced direct browser reads with the live `get_fleet_board_state` RPC, including backend-visible-period filtering and complete payload validation.
+- Integrated the live pay-type color read contract with a neutral validated fallback. The Admin palette editor remains the next task.
 
 ## Continuation rule
 

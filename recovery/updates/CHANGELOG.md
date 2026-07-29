@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-29 — Fleet Board live read contracts
+
+- Replaced Fleet Board table/view reads with the authenticated, visible-period `get_fleet_board_state` RPC.
+- Added the idempotent repository migration for the already-live Fleet Board state and pay-type color functions, grants, Admin setting, and `user_admin.manage` mapping.
+- Applied validated saved pay-type colors with a single neutral fallback; the Admin palette UI remains future work.
+
 ## 2026-07-29 — Fleet Board foundation
 
 - Removed the Vehicle Calendar navigation, page state, component imports, calendar components, calendar-only CSS, and calendar permission references.
