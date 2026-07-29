@@ -87,7 +87,13 @@ The schema exports are context snapshots. Database changes must be created as mi
 
 ### `public.vehicles`
 
-Exact relevant columns:
+#### Verified live database
+
+The live `public.vehicles` table contains `model_year integer`. It does not contain `year`, `make`, or `is_active`.
+
+#### Older repository snapshot
+
+The older schema export predates the later vehicle-administration migration and records these relevant columns:
 
 - `id uuid`
 - `vin text`
@@ -106,7 +112,7 @@ Exact relevant columns:
 - `ctp_entry_mileage integer`
 - `ctp_monitoring_notes text`
 
-Important: this table does **not** currently contain `year`, `make`, or `is_active` columns.
+The repository migration `20260713090000_add_ontrac_vehicle_admin_support.sql` adds `model_year integer`. Repository snapshots remain reference artifacts and are not evidence of current live-database state.
 
 ### `public.reservations`
 
@@ -319,7 +325,7 @@ Legend:
 
 ### Foundation
 
-- [x] Stop using missing `get_vehicle_calendar_state()` RPC.
+- [x] Stop using the missing calendar-state RPC.
 - [x] Replace old calendar component foundation with backend-driven availability board.
 - [x] Add day/week switching.
 - [x] Add previous/next navigation, Today, and native date picker.

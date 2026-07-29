@@ -1979,11 +1979,3 @@ Read this Project Bible. Do not summarize it. Treat it as the current source of 
 Then provide the current task.
 Appendix E - Strong Warning to Future AI
 Do not flatten this system. Do not convert it into a generic CRM. Do not move backend business rules into the frontend. Do not assume reservations own lifecycle. Do not identify vehicles primarily by VIN in the UI. Do not hide conflicts. Do not remove billing/warranty logic just because the app does not collect payments. Do not ignore admin/security/MFA/roles. Do not use builder prompts for discovery. Do not begin by criticizing or redesigning previous work before understanding the business reasons, backend constraints, and historical decisions captured in this Recovery Bible.
-
-## Phase 3 Vehicle Calendar Foundation — 2026-07-28
-
-The repository now defines the calendar-first operating foundation. The frontend provides Rental, Loaner, and combined schedule modes; the combined display keeps Loaners above Rentals in distinct collapsible sections. It includes day and seven-day week views, a monthly date picker, frozen stock/date headers, two-axis scrolling, current-time indication, filtering, stored preferences, dark mode, vehicle action placeholders, event details/hover summaries, and confirmation before permission-gated drag moves.
-
-The Phase 3 migration introduces `calendar_events`, `calendar_event_types`, and `calendar_colors`; the permissions `calendar.view`, `calendar.create`, `calendar.edit`, `calendar.delete`, and `calendar.configure_colors`; and protected RPCs for visible-range reads, validated create/update, delete, and color configuration. Direct authenticated writes are revoked. Backend mutations validate required values, start-before-end, overlaps, vehicle availability, and effective permissions. Reservation, Quote, and Maintenance are reusable event types, not completed business workflows.
-
-Repository build verification passed. The Phase 3 migration, authenticated browser behavior, time-zone presentation, live RLS/grants, and production-scale interaction have not been verified against a connected Supabase project. These items must be verified before production readiness.

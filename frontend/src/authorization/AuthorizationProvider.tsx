@@ -121,11 +121,6 @@ function parsePermissions(value: unknown, userId: string): string[] {
   ]
 }
 
-function authorizationErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : 'unknown-authorization-error'
-  return `Access could not be verified (${message}). Please contact an administrator.`
-}
-
 export function AuthorizationProvider({ children }: { children: ReactNode }) {
   const { session, user, loading: authenticationLoading } = useAuth()
   const [state, setState] = useState<AuthorizationState>(signedOutState)
@@ -164,34 +159,24 @@ export function AuthorizationProvider({ children }: { children: ReactNode }) {
           .eq('auth_user_id', user.id)
           .maybeSingle()
 
-        if (appUserError) {
-          throw new Error(`application-user-query: ${appUserError.message}`)
-        }
-        if (!appUserData) {
-          throw new Error('application-user-not-found')
+        if (appUserError || !appUserData) {
+          throw new Error('application-user-unavailable')
         }
 
         const applicationUser = parseApplicationUser(appUserData, user.id)
+        const [gateResponse, rolesResponse, permissionsResponse] =
+          await Promise.all([
+            supabase.rpc('get_user_auth_access_gate_state', {
+              p_user_id: applicationUser.id,
+            }),
+            supabase.rpc('get_user_role_names_state', {
+              p_user_id: applicationUser.id,
+            }),
+            supabase.rpc('get_current_user_effective_permissions_state'),
+          ])
 
-        const gateResponse = await supabase.rpc('get_user_auth_access_gate_state', {
-          p_user_id: applicationUser.id,
-        })
-        if (gateResponse.error) {
-          throw new Error(`access-gate-rpc: ${gateResponse.error.message}`)
-        }
-
-        const rolesResponse = await supabase.rpc('get_user_role_names_state', {
-          p_user_id: applicationUser.id,
-        })
-        if (rolesResponse.error) {
-          throw new Error(`roles-rpc: ${rolesResponse.error.message}`)
-        }
-
-        const permissionsResponse = await supabase.rpc(
-          'get_current_user_effective_permissions_state',
-        )
-        if (permissionsResponse.error) {
-          throw new Error(`permissions-rpc: ${permissionsResponse.error.message}`)
+        if (gateResponse.error || rolesResponse.error || permissionsResponse.error) {
+          throw new Error('authorization-contract-unavailable')
         }
 
         const accessGate = parseGate(gateResponse.data, applicationUser)
@@ -216,13 +201,13 @@ export function AuthorizationProvider({ children }: { children: ReactNode }) {
             : 'Your account is not currently authorized to use this application.',
           status: isAuthorized ? 'authorized' : 'denied',
         })
-      } catch (error) {
+      } catch {
         if (currentRequest !== requestId.current) return
 
         setState({
           ...signedOutState,
           sessionToken: currentSessionToken,
-          error: authorizationErrorMessage(error),
+          error: 'Access could not be verified. Please contact an administrator.',
           status: 'denied',
         })
       }
