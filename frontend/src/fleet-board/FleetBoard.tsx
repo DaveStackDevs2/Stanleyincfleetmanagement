@@ -9,6 +9,7 @@ type Vehicle = {
   id: string
   stockNumber: string
   model: string
+  modelYear: number | null
   fleetType: string
   status: string
   location: string
@@ -31,6 +32,7 @@ type Reservation = {
   startsAt: string
   endsAt: string
   status: string
+  reservationType: string
 }
 
 type Capacity = { model: string; dailyLimit: number }
@@ -59,6 +61,10 @@ const dateFromInput = (value: string): Date | null => {
 }
 const textValue = (value: unknown, fallback = '') => typeof value === 'string' ? value : fallback
 const dateValue = (value: unknown) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null
+const sameInstant = (value: unknown, expected: string) => {
+  const parsed = dateValue(value)
+  return parsed !== null && Date.parse(parsed) === Date.parse(expected)
+}
 const recordValue = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 
 function vehicleFrom(value: unknown): Vehicle | null {
@@ -70,19 +76,20 @@ function vehicleFrom(value: unknown): Vehicle | null {
     id,
     stockNumber: textValue(row.stock_number, 'Unnumbered'),
     model: textValue(row.model, 'Unknown model'),
+    modelYear: typeof row.model_year === 'number' ? row.model_year : null,
     fleetType: textValue(row.fleet_type, 'Unassigned'),
     status: textValue(row.status, 'Unknown'),
     location: textValue(row.location),
   }
 }
 
-function assignmentFrom(value: unknown): Assignment | null {
+function assignmentFrom(value: unknown, rangeEnd: string): Assignment | null {
   const row = recordValue(value)
   if (!row) return null
   const id = textValue(row.transportation_event_id)
   const vehicleId = textValue(row.vehicle_id)
   const startsAt = dateValue(row.actual_out_at) ?? dateValue(row.current_billing_start_time)
-  const endsAt = dateValue(row.actual_in_at) ?? dateValue(row.expected_return_at) ?? dateValue(row.current_billing_end_time)
+  const endsAt = dateValue(row.actual_in_at) ?? dateValue(row.expected_return_at) ?? dateValue(row.current_billing_end_time) ?? rangeEnd
   if (!id || !vehicleId || !startsAt || !endsAt) return null
   return {
     id,
@@ -103,7 +110,9 @@ function reservationFrom(value: unknown): Reservation | null {
   const startsAt = dateValue(row.start_date)
   const endsAt = dateValue(row.expected_return_datetime)
   if (!id || !startsAt || !endsAt || textValue(row.vehicle_id)) return null
-  return { id, startsAt, endsAt, requestedModel: textValue(row.requested_model, 'Model not set'), status: textValue(row.status, 'Unknown') }
+  const reservationType = textValue(row.reservation_type)
+  if (reservationType !== 'rental') return null
+  return { id, startsAt, endsAt, requestedModel: textValue(row.requested_model, 'Model not set'), status: textValue(row.status, 'Unknown'), reservationType }
 }
 
 function capacityFrom(value: unknown): Capacity | null {
@@ -119,31 +128,31 @@ function arrayFrom<T>(value: unknown, parse: (item: unknown) => T | null): T[] |
   return parsed.every((item): item is T => item !== null) ? parsed : null
 }
 
-function boardPayloadFrom(value: unknown) {
-  const payload = recordValue(value)
-  if (!payload) return null
-  const vehicles = arrayFrom(payload.vehicles, vehicleFrom)
-  const assignments = arrayFrom(payload.assignments, assignmentFrom)
-  const reservations = arrayFrom(payload.reservations, reservationFrom)
-  const capacities = arrayFrom(payload.capacities, capacityFrom)
-  return vehicles && assignments && reservations && capacities
-    ? { vehicles, assignments, reservations, capacities }
-    : null
-}
-
-function payTypeColorsFrom(value: unknown): PayTypeColors | null {
-  const payload = recordValue(value)
-  const colors = recordValue(payload?.pay_type_colors)
+function colorsFrom(value: unknown): PayTypeColors | null {
+  const colors = recordValue(value)
   if (!colors) return null
   const parsed: PayTypeColors = {}
   for (const [payType, value] of Object.entries(colors)) {
     const color = recordValue(value)
-    if (!color) return null
-    parsed[payType] = isHexColor(color.background_color) && isHexColor(color.text_color)
+    parsed[payType] = color && isHexColor(color.background_color) && isHexColor(color.text_color)
       ? { backgroundColor: color.background_color, textColor: color.text_color }
       : NEUTRAL_PAY_TYPE_COLORS
   }
   return parsed
+}
+
+function boardPayloadFrom(value: unknown, requestedStart: string, requestedEnd: string) {
+  const payload = recordValue(value)
+  if (!payload) return null
+  if (payload.status !== 'fleet_board_ready' || !sameInstant(payload.range_start, requestedStart) || !sameInstant(payload.range_end, requestedEnd)) return null
+  const vehicles = arrayFrom(payload.vehicles, vehicleFrom)
+  const assignments = arrayFrom(payload.assignments, item => assignmentFrom(item, requestedEnd))
+  const reservations = arrayFrom(payload.reservations, reservationFrom)
+  const capacities = arrayFrom(payload.capacities, capacityFrom)
+  const payTypeColors = colorsFrom(payload.pay_type_colors)
+  return vehicles && assignments && reservations && capacities && payTypeColors
+    ? { vehicles, assignments, reservations, capacities, payTypeColors }
+    : null
 }
 
 export function FleetBoard({ onBack }: { onBack: () => void }) {
@@ -169,14 +178,10 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
     async function loadBoard() {
       setLoading(true)
       setLoadFailed(false)
-      const [boardResult, colorResult] = await Promise.all([
-        supabase.rpc('get_fleet_board_state', { p_range_start: rangeStartIso, p_range_end: rangeEndIso }),
-        supabase.rpc('get_fleet_board_pay_type_colors_state'),
-      ])
+      const boardResult = await supabase.rpc('get_fleet_board_state', { p_range_start: rangeStartIso, p_range_end: rangeEndIso })
       if (!current) return
-      const board = boardPayloadFrom(boardResult.data)
-      const colors = payTypeColorsFrom(colorResult.data)
-      if (boardResult.error || colorResult.error || !board || !colors) {
+      const board = boardPayloadFrom(boardResult.data, rangeStartIso, rangeEndIso)
+      if (boardResult.error || !board) {
         setLoadFailed(true)
         setVehicles([])
         setAssignments([])
@@ -188,7 +193,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
         setAssignments(board.assignments)
         setReservations(board.reservations)
         setCapacities(board.capacities)
-        setPayTypeColors(colors)
+        setPayTypeColors(board.payTypeColors)
       }
       setLoading(false)
     }
