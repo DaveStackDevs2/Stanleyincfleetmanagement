@@ -111,7 +111,7 @@ function reservationFrom(value: unknown): Reservation | null {
   const endsAt = dateValue(row.expected_return_datetime)
   if (!id || !startsAt || !endsAt || textValue(row.vehicle_id)) return null
   const reservationType = textValue(row.reservation_type)
-  if (reservationType !== 'rental') return null
+  if (reservationType.toLowerCase() !== 'rental') return null
   return { id, startsAt, endsAt, requestedModel: textValue(row.requested_model, 'Model not set'), status: textValue(row.status, 'Unknown'), reservationType }
 }
 
