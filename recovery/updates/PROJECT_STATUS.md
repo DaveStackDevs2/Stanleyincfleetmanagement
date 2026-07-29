@@ -5,6 +5,7 @@
 - **VERIFIED:** The Rates, Fees & Billing Rules Admin card now opens RPC-only pay-type management for listing, creating, disabling, and reactivating pay types.
 - **VERIFIED:** Active Fleet Board pay-type colors use native color inputs, one neutral fallback pair, strict six-digit hex validation, and an explicit save that excludes disabled pay-type keys.
 - **VERIFIED:** Every successful mutation reloads authoritative backend state, errors shown to users are sanitized, and no pay-type deletion workflow was introduced.
+- **VERIFIED:** Saving Fleet Board colors shows an accessible inline success confirmation only after the save succeeds and the authoritative reload completes.
 - **VERIFIED:** A unique index on `lower(btrim(pay_type))` atomically protects pay types from case- and whitespace-variant duplicates.
 - **NOT VERIFIED:** Live authenticated payloads and browser interaction still require an approved Admin test account.
 
