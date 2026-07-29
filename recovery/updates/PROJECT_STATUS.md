@@ -1,10 +1,17 @@
 # Project Status
 
+## Admin pay-type management — 2026-07-29
+
+- **VERIFIED:** The Rates, Fees & Billing Rules Admin card now opens RPC-only pay-type management for listing, creating, disabling, and reactivating pay types.
+- **VERIFIED:** Active Fleet Board pay-type colors use native color inputs, one neutral fallback pair, strict six-digit hex validation, and an explicit save that excludes disabled pay-type keys.
+- **VERIFIED:** Every successful mutation reloads authoritative backend state, errors shown to users are sanitized, and no pay-type deletion workflow was introduced.
+- **NOT VERIFIED:** Live authenticated payloads and browser interaction still require an approved Admin test account.
+
 ## Fleet Board contract follow-up — 2026-07-29
 
 - Authenticated operational reads are resolved through `get_fleet_board_state(timestamptz, timestamptz)`.
 - Assignment and reservation loading is bounded to the visible day/week period on the backend.
-- Saved pay-type colors are read and validated; the Admin color-palette UI is the next Fleet Board task.
+- Saved pay-type colors are read and validated; the Admin color-palette UI is implemented.
 
 Last updated: 2026-07-29
 

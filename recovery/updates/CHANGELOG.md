@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-29 — Admin pay-type management
+
+- Connected Rates, Fees & Billing Rules to the live Admin pay-type RPC contracts.
+- Added strict payload validation, pay-type creation, disable/reactivate actions, and authoritative reloads after successful mutations.
+- Added explicit Fleet Board palette editing for active pay types with native color inputs, six-digit hex validation, and one neutral fallback pair.
+- Added the idempotent repository migration for the three already-live Admin pay-type functions and their verified execution grants.
+
 ## 2026-07-29 — Fleet Board live read contracts
 
 - Replaced Fleet Board table/view reads with the authenticated, visible-period `get_fleet_board_state` RPC.

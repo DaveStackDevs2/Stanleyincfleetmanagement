@@ -377,7 +377,7 @@ Legend:
 - [x] Persist Admin-configured pay-type background/text colors in `fleet_board.pay_type_colors`.
 - [x] Keep the palette in the existing Admin setting system rather than extending operational pay-type rows.
 - [x] Add the verified live functions, grants, setting, and `user_admin.manage` mapping as one idempotent migration.
-- [ ] Add Admin UI.
+- [x] Add Admin UI for active/inactive pay types and explicit Fleet Board palette saving.
 - [x] Read configured colors on Fleet Board and validate each six-digit hex value.
 - [x] Use one neutral fallback when a saved pair is absent or invalid; do not encode pay-type-specific colors.
 
@@ -426,6 +426,7 @@ Legend:
 - Renamed the application navigation, page state, imports, and component to Fleet Board without inventing a feature permission.
 - Replaced direct browser reads with the live `get_fleet_board_state` RPC, including backend-visible-period filtering and complete payload validation.
 - Integrated the live pay-type color read contract with a neutral validated fallback. The Admin palette editor remains the next task.
+- Connected the existing Rates, Fees & Billing Rules card to RPC-only pay-type management. Admins can add, disable, and reactivate pay types without deleting billing history, and can explicitly save validated colors for active pay types.
 
 ## Continuation rule
 

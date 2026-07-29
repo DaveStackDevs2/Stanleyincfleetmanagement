@@ -4,6 +4,7 @@ import { UserRoleManagement } from './admin/UserRoleManagement'
 import { useAuthorization } from './authorization/useAuthorization'
 import { supabase } from './lib/supabase'
 import { FleetBoard } from './fleet-board/FleetBoard'
+import { PayTypeManagement } from './admin/PayTypeManagement'
 
 type AdminFeature = {
   title: string
@@ -11,7 +12,7 @@ type AdminFeature = {
   status: 'Foundation' | 'Planned' | 'Coming Soon'
 }
 
-type Page = 'admin' | 'fleet' | 'access' | 'fleet-board'
+type Page = 'admin' | 'fleet' | 'access' | 'fleet-board' | 'pay-types'
 type FleetFilter =
   | 'All'
   | 'Active'
@@ -104,7 +105,7 @@ const adminFeatures: AdminFeature[] = [
     title: 'Rates, Fees & Billing Rules',
     description:
       'Manage rental rates, pay types, taxes, late-fee rules, and billing defaults.',
-    status: 'Planned',
+    status: 'Foundation',
   },
   {
     title: 'Notifications',
@@ -172,6 +173,8 @@ function App() {
       setPage('fleet')
     } else if (title === 'Users & Permissions' && canManageUsers) {
       setPage('access')
+    } else if (title === 'Rates, Fees & Billing Rules' && canManageUsers) {
+      setPage('pay-types')
     }
   }
 
@@ -333,6 +336,8 @@ function App() {
                   ? 'Fleet Board'
                 : page === 'access'
                   ? 'User & Role Management'
+                : page === 'pay-types'
+                  ? 'Rates, Fees & Billing Rules'
                 : 'Admin Console'}
             </strong>
 
@@ -343,6 +348,8 @@ function App() {
                   ? 'Operational fleet availability'
                 : page === 'access'
                   ? 'Effective permission administration'
+                : page === 'pay-types'
+                  ? 'Pay-type administration'
                 : 'Foundation and planned controls'}
             </span>
           </div>
@@ -358,6 +365,8 @@ function App() {
           <FleetBoard onBack={() => setPage('admin')} />
         ) : page === 'access' ? (
           <UserRoleManagement onBack={() => setPage('admin')} />
+        ) : page === 'pay-types' ? (
+          <PayTypeManagement onBack={() => setPage('admin')} />
         ) : page === 'admin' ? (
           <main className="content">
             <section className="page-heading">
@@ -389,7 +398,7 @@ function App() {
                   className="feature-card"
                   type="button"
                   key={feature.title}
-                  disabled={feature.title === 'Users & Permissions' && !canManageUsers}
+                  disabled={(feature.title === 'Users & Permissions' || feature.title === 'Rates, Fees & Billing Rules') && !canManageUsers}
                   onClick={() => openFeature(feature.title)}
                 >
                   <span
