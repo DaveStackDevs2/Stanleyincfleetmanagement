@@ -35,10 +35,24 @@ type Reservation = {
 
 type Capacity = { model: string; dailyLimit: number }
 
-const DAY_MS = 86_400_000
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
-const addDays = (date: Date, days: number) => new Date(date.getTime() + days * DAY_MS)
+const addDays = (date: Date, days: number) => {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
 const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+const dateFromInput = (value: string): Date | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2]) - 1
+  const day = Number(match[3])
+  const result = new Date(year, month, day)
+  return result.getFullYear() === year && result.getMonth() === month && result.getDate() === day
+    ? result
+    : null
+}
 const textValue = (value: unknown, fallback = '') => typeof value === 'string' ? value : fallback
 const dateValue = (value: unknown) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null
 const recordValue = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
@@ -74,7 +88,7 @@ function assignmentFrom(value: unknown): Assignment | null {
     startsAt,
     endsAt,
     payType: textValue(row.current_billing_pay_type, 'Pay type not set'),
-    hasConflict: Boolean(row.current_conflict_id),
+    hasConflict: Boolean(row.current_conflict_id) && row.current_conflict_is_resolved === false,
   }
 }
 
@@ -119,7 +133,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
       setLoadFailed(false)
       const [vehicleResult, assignmentResult, reservationResult, capacityResult] = await Promise.all([
         supabase.from('vehicles').select('id,stock_number,model,fleet_type,status,location').order('fleet_type').order('model').order('stock_number'),
-        supabase.from('v_transportation_event_unified_operational_state').select('transportation_event_id,vehicle_id,source_type,transportation_event_status,actual_out_at,actual_in_at,expected_return_at,current_billing_start_time,current_billing_end_time,current_billing_pay_type,current_conflict_id'),
+        supabase.from('v_transportation_event_unified_operational_state').select('transportation_event_id,vehicle_id,source_type,transportation_event_status,actual_out_at,actual_in_at,expected_return_at,current_billing_start_time,current_billing_end_time,current_billing_pay_type,current_conflict_id,current_conflict_is_resolved'),
         supabase.from('reservations').select('id,vehicle_id,start_date,expected_return_datetime,status,requested_model').lt('start_date', rangeEndIso).gt('expected_return_datetime', rangeStartIso),
         supabase.from('rental_model_limits').select('vehicle_class,daily_limit').order('vehicle_class'),
       ])
@@ -162,7 +176,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
       <div className="board-segmented">{(['all', 'rental', 'loaner'] as FleetFilter[]).map(item => <button type="button" className={filter === item ? 'active' : ''} onClick={() => setFilter(item)} key={item}>{item === 'all' ? 'All vehicles' : `${item[0].toUpperCase()}${item.slice(1)}s`}</button>)}</div>
       <div className="board-segmented"><button type="button" className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Day</button><button type="button" className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Week</button></div>
       <button type="button" aria-label="Previous period" onClick={() => setDate(addDays(date, view === 'day' ? -1 : -7))}>‹</button>
-      <input aria-label="Jump to date" type="date" value={dayKey(date)} onChange={event => setDate(startOfDay(new Date(`${event.target.value}T12:00:00`)))} />
+      <input aria-label="Jump to date" type="date" value={dayKey(date)} onChange={event => { const selectedDate = dateFromInput(event.target.value); if (selectedDate) setDate(selectedDate) }} />
       <button type="button" aria-label="Next period" onClick={() => setDate(addDays(date, view === 'day' ? 1 : 7))}>›</button>
       <button type="button" className="primary-action" onClick={() => setDate(startOfDay(new Date()))}>Today</button>
     </section>
@@ -174,7 +188,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
         <div className="board-group-title">Reservation Capacity</div>
         {capacities.map(capacity => <div className="board-row capacity-row" key={capacity.model}>
           <div className="board-resource"><strong>{capacity.model}</strong><small>Daily limit {capacity.dailyLimit}</small></div>
-          <div className="board-days">{days.map(day => { const booked = reservations.filter(item => item.requestedModel === capacity.model && overlaps(item.startsAt, item.endsAt, day)); return <div className="board-day" key={dayKey(day)}><strong>{booked.length} / {capacity.dailyLimit}</strong>{booked.map(item => <span className="reservation-block" title={`Reservation · ${item.status}`} key={item.id}>{item.status}</span>)}</div> })}</div>
+          <div className="board-days">{days.map(day => { const booked = reservations.filter(item => item.status !== 'cancelled' && item.requestedModel === capacity.model && overlaps(item.startsAt, item.endsAt, day)); return <div className="board-day" key={dayKey(day)}><strong>{booked.length} / {capacity.dailyLimit}</strong>{booked.map(item => <span className="reservation-block" title={`Reservation · ${item.status}`} key={item.id}>{item.status}</span>)}</div> })}</div>
         </div>)}
         {capacities.length === 0 && <div className="board-empty">No reservation capacity records are available.</div>}
         {vehicleGroups.map(([label, groupVehicles]) => <section className="board-group" key={label}>

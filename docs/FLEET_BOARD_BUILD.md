@@ -344,9 +344,9 @@ Legend:
 - [x] Read `public.reservations` separately for model-level scheduled reservations.
 - [x] Read `public.rental_model_limits` for capacity display values.
 - [ ] Join/display customer names from `public.customers` through safe view/RPC or relation.
-- [ ] Confirm RLS/GRANT access for all board read objects.
+- [!] **BLOCKED:** authenticated read access is missing for required Fleet Board sources. This requires a reviewed backend grant/RLS change and must not be worked around in frontend code.
 - [x] Replace broad `select('*')` with explicit stable field lists.
-- [ ] Create a board-state RPC/view only if required for permissions, performance, or consistent overlap logic.
+- [!] **BLOCKED:** the unified operational assignment query has no backend-supported visible-period boundary. Do not add frontend pagination or filters that could silently omit assignments; resolve the read contract in a separately reviewed backend change.
 
 ### Reservation capacity
 
@@ -408,6 +408,13 @@ Legend:
 - [ ] Test with no transportation events and no reservations.
 - [ ] Test with reservations over capacity.
 - [ ] Test with active rental/loaner events and returns spanning date ranges.
+
+### Verified review corrections
+
+- [x] Use local calendar-date arithmetic for navigation across daylight-saving transitions.
+- [x] Ignore empty or invalid native date-picker values before updating board state.
+- [x] Exclude reservations with the verified `cancelled` status from capacity usage.
+- [x] Read `current_conflict_is_resolved` and show a conflict only when it is explicitly unresolved.
 
 ## Work log
 
