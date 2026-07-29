@@ -1,5 +1,7 @@
 -- Reproduces the Admin pay-type contracts already applied to the live project.
 
+create unique index if not exists ux_pay_type_rules_pay_type_normalized on public.pay_type_rules (lower(btrim(pay_type)));
+
 CREATE OR REPLACE FUNCTION public.get_admin_pay_type_rules_state()
  RETURNS jsonb
  LANGUAGE plpgsql
