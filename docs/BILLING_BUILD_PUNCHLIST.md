@@ -12,7 +12,7 @@ Every billing implementation commit must update this file. An item is marked com
 - Reservations remain model/class-level until VIN assignment at pickup.
 - Reuse the existing billing-line, contract-period, vehicle-event, extension, return, renewal, and swap workflows.
 - Business calculations and authorization remain in Supabase, not the React frontend.
-- Use the existing shared Supabase client and existing `user_admin.manage` permission until a verified requirement justifies another permission.
+- Use the existing shared Supabase client. Normal operational case-write RPCs require an active authenticated application user and AAL2, with no separate permission key; `user_admin.manage` remains required for the Admin/configuration workflows that use it.
 - Do not expose low-level mutation functions directly to the frontend.
 - Do not hardcode rates, taxes, pay types, or production values.
 - Do not repurpose `rental_model_limits`; it controls reservation capacity, not pricing.
@@ -30,6 +30,7 @@ Every billing implementation commit must update this file. An item is marked com
 ## Verified baseline — 2026-07-30
 
 - [x] Confirmed current GitHub `main` begins at `322de950314078c3c12e0f34397a64b3afe80bea`.
+- [x] Confirmed the current checkpoint baseline is GitHub `main` at `0cb1ec43d50512500bbbe36382e33149d183c873`; the preceding SHA remains above as historical context.
 - [x] Confirmed the Admin Console routes Rates, Fees & Billing Rules to the existing `PayTypeManagement` page.
 - [x] Confirmed the frontend can list, create, disable/reactivate, and color pay types.
 - [x] Confirmed the Add Pay Type form accepts `default_daily_amount`, but existing pay types cannot be edited.
@@ -58,6 +59,8 @@ The core billing release is complete when an authorized user can configure norma
 - [ ] Update this punchlist, `PROJECT_STATUS.md`, `CHANGELOG.md`, and `DECISIONS.md` if a security boundary decision changes.
 
 **Phase 1 exit:** The frontend has a verified secure boundary for existing billing workflows; no rates or billing UI are added prematurely.
+
+Remaining Phase 1 operational contracts are same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Checkout and return mileage are optional; excess-mile calculation remains future work.
 
 ## Phase 2 — Complete existing pay-type administration
 
@@ -216,3 +219,13 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - Live Supabase billing configuration and current GitHub `main` were inspected.
 - No production SQL, schema, data, frontend code, or billing behavior was changed.
 - Next implementation phase: **Phase 1 — Reconcile and secure existing billing contracts**.
+
+### 2026-07-30 — Operational RPC security checkpoint
+
+- VERIFIED: Secured the extension, completion/return, and cancellation top-level operational RPC contracts with active application-user lookup, AAL2 enforcement, authenticated actor validation/stamping, and restricted grants.
+- VERIFIED: Revoked browser-role execution from the listed internal helpers while retaining `service_role` execution.
+- VERIFIED: Return mileage remains optional; omission preserves the reservation's existing `end_mileage`.
+- VERIFIED: Production SQL for this checkpoint was applied and verified manually before this repository migration was recorded.
+- NOT VERIFIED: Same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap remain Phase 1 work.
+- NOT VERIFIED: No live Ontrac function or trigger applying staging odometer rows has been verified. Checkout and return mileage remain optional, and excess-mile calculation is future work.
+- No broad Phase 1 item is marked complete by this granular checkpoint.
