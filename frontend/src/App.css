@@ -5,6 +5,7 @@
   background: var(--page-bg);
   color: var(--text);
 }
+.app-shell.sidebar-collapsed { grid-template-columns: 1fr; }
 
 .sidebar {
   position: fixed;
@@ -18,6 +19,7 @@
   flex-direction: column;
   gap: 30px;
 }
+.sidebar[hidden] { display: none; }
 
 .brand-block {
   padding: 8px 10px 22px;
@@ -33,7 +35,11 @@
 .sidebar-nav button:hover, .sidebar-nav button.active { background: rgba(255, 255, 255, 0.18); }
 
 .workspace { grid-column: 2; min-width: 0; }
+.sidebar-collapsed .workspace { grid-column: 1; }
 .topbar { position: sticky; top: 0; z-index: 10; min-height: 72px; box-sizing: border-box; padding: 14px 28px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.topbar-heading { display: flex; align-items: center; gap: 14px; }
+.sidebar-toggle { width: 38px; height: 38px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--heading); font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.sidebar-toggle span { margin: 0; color: inherit; font-size: inherit; }
 .topbar strong, .topbar span { display: block; }
 .topbar strong { color: var(--heading); font-size: 18px; }
 .topbar span { margin-top: 2px; color: var(--muted); font-size: 13px; }
@@ -152,6 +158,7 @@ tbody tr:not(.empty-row):hover { background: rgba(0, 94, 184, 0.06); }
   .sidebar { position: static; width: 100%; }
   .workspace { width: 100%; }
   .topbar, .page-heading, .fleet-header { display: block; }
+  .topbar-heading { display: flex; }
   .topbar-actions, .page-actions { margin-top: 12px; flex-wrap: wrap; }
   .content { padding: 20px; }
   .sync-card { margin-top: 20px; }

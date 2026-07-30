@@ -159,6 +159,7 @@ function App() {
   const { permissionKeys } = useAuthorization()
   const canManageUsers = permissionKeys.includes('user_admin.manage')
   const [page, setPage] = useState<Page>('admin')
+  const [sidebarExpanded, setSidebarExpanded] = useState(true)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
     null,
@@ -284,8 +285,8 @@ function App() {
   ]
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={`app-shell${sidebarExpanded ? '' : ' sidebar-collapsed'}`}>
+      <aside className="sidebar" id="primary-sidebar" hidden={!sidebarExpanded}>
         <div className="brand-block">
           <div className="brand-mark">STANLEY</div>
           <div className="brand-name">Chevrolet Belfast</div>
@@ -328,30 +329,42 @@ function App() {
 
       <div className="workspace">
         <header className="topbar">
-          <div>
-            <strong>
-              {page === 'fleet'
-                ? 'Fleet Administration'
-                : page === 'fleet-board'
-                  ? 'Fleet Board'
-                : page === 'access'
-                  ? 'User & Role Management'
-                : page === 'pay-types'
-                  ? 'Rates, Fees & Billing Rules'
-                : 'Admin Console'}
-            </strong>
+          <div className="topbar-heading">
+            <button
+              type="button"
+              className="sidebar-toggle"
+              aria-expanded={sidebarExpanded}
+              aria-controls="primary-sidebar"
+              aria-label={sidebarExpanded ? 'Collapse navigation sidebar' : 'Expand navigation sidebar'}
+              onClick={() => setSidebarExpanded(expanded => !expanded)}
+            >
+              <span aria-hidden="true">☰</span>
+            </button>
+            <div>
+              <strong>
+                {page === 'fleet'
+                  ? 'Fleet Administration'
+                  : page === 'fleet-board'
+                    ? 'Fleet Board'
+                  : page === 'access'
+                    ? 'User & Role Management'
+                  : page === 'pay-types'
+                    ? 'Rates, Fees & Billing Rules'
+                    : 'Admin Console'}
+              </strong>
 
-            <span>
-              {page === 'fleet'
-                ? 'Connected to the vehicle master view'
-                : page === 'fleet-board'
-                  ? 'Operational fleet availability'
-                : page === 'access'
-                  ? 'Effective permission administration'
-                : page === 'pay-types'
-                  ? 'Pay-type administration'
-                : 'Foundation and planned controls'}
-            </span>
+              <span>
+                {page === 'fleet'
+                  ? 'Connected to the vehicle master view'
+                  : page === 'fleet-board'
+                    ? 'Operational fleet availability'
+                  : page === 'access'
+                    ? 'Effective permission administration'
+                  : page === 'pay-types'
+                    ? 'Pay-type administration'
+                    : 'Foundation and planned controls'}
+              </span>
+            </div>
           </div>
 
           <div className="topbar-actions">
@@ -362,7 +375,7 @@ function App() {
         </header>
 
         {page === 'fleet-board' ? (
-          <FleetBoard onBack={() => setPage('admin')} />
+          <FleetBoard />
         ) : page === 'access' ? (
           <UserRoleManagement onBack={() => setPage('admin')} />
         ) : page === 'pay-types' ? (

@@ -18,6 +18,16 @@ The Fleet Board is the operational workspace for:
 - conflicts;
 - later extensions, swaps, returns, and completion.
 
+### Operational context
+
+- The Fleet Board display window is **7:00 AM–7:00 PM**.
+- Normal rental staffing is **8:00 AM–4:00 PM Monday–Friday**.
+- Service handles activity from **7:00–8:00 AM** and approximately **4:00–6:00 PM**.
+- Saturday rentals and loaners may occur by special arrangement.
+- After-hours rental drop-offs may create actual return timestamps outside the display window.
+- Scheduled rental return times remain inside the 7:00 AM–7:00 PM display window.
+- These facts document operating context only. They do not add frontend validation, scheduling, or booking rules.
+
 The board must visualize backend state. It must not create a separate calendar-only business model.
 
 ## Visual direction
@@ -368,7 +378,10 @@ Legend:
 - [ ] Add status text: Available / Out / Return time.
 - [ ] Add search and model/location/status filters.
 - [ ] Add conflict-only filter.
-- [ ] Improve day row density to match operational scheduler style.
+- [x] Render Day view as a horizontally scrollable 7:00 AM–7:00 PM operating timeline with twelve one-hour intervals, including the final 7:00 PM boundary, and a fixed VIN column. Keep the RPC range on the complete calendar day.
+- [x] Position and clamp assignments by their actual timestamps, lane overlapping assignments deterministically, and expand VIN rows for those lanes.
+- [x] Show the current-time marker only for today's Day view between 7:00 AM and 7:00 PM, updating it once per minute without reloading board data, while preserving dense sticky scheduler headers.
+- [x] Improve day row density to match operational scheduler style.
 - [ ] Improve week blocks for multi-day spans.
 - [ ] Clicking week day header switches to that day.
 
@@ -414,6 +427,12 @@ Legend:
 - [x] Read `current_conflict_is_resolved` and show a conflict only when it is explicitly unresolved.
 
 ## Work log
+
+### 2026-07-30
+
+- Replaced the Day view's single undifferentiated date cell with a fixed 7:00 AM–7:00 PM horizontal operating timeline while leaving the complete-calendar-day RPC request and Week view behavior intact.
+- Added boundary-clamped timestamp positioning, deterministic overlap lanes, adaptive assignment detail, and a today-only current-time marker.
+- Continued to load the read-only board exclusively through the verified live `get_fleet_board_state(timestamptz, timestamptz)` contract; no backend objects or workflows changed.
 
 ### 2026-07-29
 
