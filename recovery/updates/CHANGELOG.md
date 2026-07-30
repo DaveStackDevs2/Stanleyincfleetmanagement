@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-30 — Fleet Board Day timeline
+
+- Added a full 24-hour, horizontally scrollable Day timeline with sticky hourly and VIN headers.
+- Positioned and clamped assignments from actual operational timestamps, added deterministic overlap lanes, and expanded VIN rows when assignments overlap.
+- Added adaptive pay type, transportation-event status, source type, and time details while preserving Admin-configured colors, neutral fallback colors, and conflict indicators.
+- Added a today-only current-time marker and preserved Reservation Capacity and Week view behavior.
+- Made no database, authorization, Supabase configuration, or workflow changes.
+
 ## 2026-07-29 — Admin pay-type management
 
 - Connected Rates, Fees & Billing Rules to the live Admin pay-type RPC contracts.

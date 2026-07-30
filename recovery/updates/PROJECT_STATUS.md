@@ -1,5 +1,14 @@
 # Project Status
 
+## Fleet Board Day timeline — 2026-07-30
+
+- **VERIFIED:** Day view renders a horizontally scrollable full-day timeline with 24 hourly headers and a fixed VIN/resource column.
+- **VERIFIED:** VIN assignment blocks use their operational start/end timestamps, clamp to day boundaries, retain pay-type colors and conflict treatment, and expose pay type, event status, source type, and formatted times as width permits.
+- **VERIFIED:** Same-vehicle overlaps use deterministic vertical lanes and expand the row instead of covering one another.
+- **VERIFIED:** The current-time marker appears only when today's date is selected; Reservation Capacity remains above vehicle rows and Week view behavior is unchanged.
+- **VERIFIED:** Data continues to load exclusively through `get_fleet_board_state(timestamptz, timestamptz)` with no SQL, migration, authorization, Supabase configuration, or backend business-logic changes.
+- **NOT VERIFIED:** Live authenticated payload rendering and browser interaction still require an approved test account and configured browser environment.
+
 ## Admin pay-type management — 2026-07-29
 
 - **VERIFIED:** The Rates, Fees & Billing Rules Admin card now opens RPC-only pay-type management for listing, creating, disabling, and reactivating pay types.
@@ -15,7 +24,7 @@
 - Assignment and reservation loading is bounded to the visible day/week period on the backend.
 - Saved pay-type colors are read and validated; the Admin color-palette UI is implemented.
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ## Current phase
 
