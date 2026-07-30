@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type PointerEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import './FleetBoard.css'
 
@@ -38,6 +38,7 @@ type Reservation = {
 type Capacity = { model: string; dailyLimit: number }
 type PayTypeColors = Record<string, { backgroundColor: string; textColor: string }>
 type AssignmentLane = Assignment & { lane: number; left: number; width: number }
+type TimelineHover = { target: string; quarter: number }
 
 const NEUTRAL_PAY_TYPE_COLORS = { backgroundColor: '#E4E7ED', textColor: '#29313D' }
 const DAY_TIMELINE_START_HOUR = 7
@@ -70,6 +71,7 @@ const sameInstant = (value: unknown, expected: string) => {
 }
 const recordValue = (value: unknown): Record<string, unknown> | null => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
 const formatAssignmentTime = (value: string) => new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+const formatTimelineQuarter = (quarter: number) => new Date(2000, 0, 1, DAY_TIMELINE_START_HOUR, quarter * 15).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
 function assignmentLanes(items: Assignment[], dayStart: Date, dayEnd: Date): { items: AssignmentLane[]; laneCount: number } {
   const start = dayStart.getTime()
@@ -194,6 +196,7 @@ export function FleetBoard() {
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
+  const [timelineHover, setTimelineHover] = useState<TimelineHover | null>(null)
 
   const rangeStart = view === 'day' ? date : addDays(date, -date.getDay())
   const rangeEnd = addDays(rangeStart, view === 'day' ? 1 : 7)
@@ -252,6 +255,18 @@ export function FleetBoard() {
     && currentTime >= timelineStart
     && currentTime <= timelineEnd
   const currentTimePosition = ((currentTime.getTime() - timelineStart.getTime()) / (timelineEnd.getTime() - timelineStart.getTime())) * 100
+  const updateTimelineHover = (event: PointerEvent<HTMLElement>, target: string) => {
+    if ((event.target as HTMLElement).closest('.assignment-block')) {
+      setTimelineHover(null)
+      return
+    }
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const quarter = Math.max(0, Math.min(48, Math.round(((event.clientX - bounds.left) / bounds.width) * 48)))
+    setTimelineHover({ target, quarter })
+  }
+  const timelineHoverIndicator = (target: string) => timelineHover?.target === target
+    ? <div className={`timeline-hover-indicator${timelineHover.quarter === 0 ? ' at-start' : timelineHover.quarter === 48 ? ' at-end' : ''}`} style={{ left: `${(timelineHover.quarter / 48) * 100}%` }} aria-hidden="true"><span>{formatTimelineQuarter(timelineHover.quarter)}</span></div>
+    : null
 
   return <main className="fleet-board">
     <section className="fleet-board-toolbar" aria-label="Fleet Board controls">
@@ -266,9 +281,10 @@ export function FleetBoard() {
     {loading ? <div className="board-message" role="status">Loading Fleet Board…</div> : !loadFailed && <div className="fleet-board-scroll">
       <div className={`fleet-board-grid ${isDayView ? 'day-timeline-grid' : ''}`} style={{ '--board-days': days.length } as CSSProperties}>
         <div className="board-corner">Resource</div>
-        {isDayView ? <div className="day-timeline-head" aria-label={`${date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}, 7 AM to 7 PM timeline`}>
+        {isDayView ? <div className="day-timeline-head" aria-label={`${date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}, 7 AM to 7 PM timeline`} onPointerMove={event => updateTimelineHover(event, 'header')} onPointerLeave={() => setTimelineHover(null)}>
           {Array.from({ length: 12 }, (_, index) => { const hour = DAY_TIMELINE_START_HOUR + index; return <div key={hour}><span>{new Date(2000, 0, 1, hour).toLocaleTimeString([], { hour: 'numeric' })}</span></div> })}
           <span className="day-timeline-final-boundary">{new Date(2000, 0, 1, DAY_TIMELINE_END_HOUR).toLocaleTimeString([], { hour: 'numeric' })}</span>
+          {timelineHoverIndicator('header')}
         </div> : <div className="board-day-head">{days.map(day => <button type="button" key={dayKey(day)} onClick={() => { setDate(day); setView('day') }}>{day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</button>)}</div>}
         <div className="board-group-title">Reservation Capacity</div>
         {capacities.map(capacity => <div className="board-row capacity-row" key={capacity.model}>
@@ -283,8 +299,9 @@ export function FleetBoard() {
             const laneLayout = isDayView ? assignmentLanes(vehicleAssignments, timelineStart, timelineEnd) : null
             return <div className="board-row" style={isDayView ? { '--assignment-lanes': laneLayout?.laneCount } as CSSProperties : undefined} key={vehicle.id}>
               <div className="board-resource"><strong>{vehicle.stockNumber}</strong><span>{vehicle.model}</span><small>{vehicle.status}{vehicle.location ? ` · ${vehicle.location}` : ''}</small></div>
-              {isDayView && laneLayout ? <div className="day-timeline-row">
+              {isDayView && laneLayout ? <div className="day-timeline-row" onPointerMove={event => updateTimelineHover(event, vehicle.id)} onPointerLeave={() => setTimelineHover(null)}>
                 {showCurrentTime && <div className="current-time-marker" style={{ left: `${currentTimePosition}%` }} aria-label="Current time" />}
+                {timelineHoverIndicator(vehicle.id)}
                 {laneLayout.items.map(item => { const colors = payTypeColors[item.payType] ?? NEUTRAL_PAY_TYPE_COLORS; return <article className={`assignment-block day-assignment${item.hasConflict ? ' conflict' : ''}`} style={{ backgroundColor: colors.backgroundColor, color: colors.textColor, left: `${item.left}%`, width: `${item.width}%`, top: `calc(5px + ${item.lane} * 46px)` }} title={`${item.payType} · ${item.status} · ${item.sourceType} · ${formatAssignmentTime(item.startsAt)}–${formatAssignmentTime(item.endsAt)}`} key={item.id}><strong>{item.payType}</strong><span className="assignment-status">{item.status}</span><span className="assignment-source">{item.sourceType}</span><span className="assignment-times">{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)}</span></article> })}
               </div> : <div className="board-days">{days.map(day => <div className="board-day" key={dayKey(day)}>{vehicleAssignments.filter(item => overlaps(item.startsAt, item.endsAt, day)).map(item => { const colors = payTypeColors[item.payType] ?? NEUTRAL_PAY_TYPE_COLORS; return <article className={`assignment-block${item.hasConflict ? ' conflict' : ''}`} style={{ backgroundColor: colors.backgroundColor, color: colors.textColor }} title={`${item.sourceType} · ${item.status}`} key={item.id}><strong>{item.payType}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)}</span></article> })}</div>)}</div>}
             </div>
