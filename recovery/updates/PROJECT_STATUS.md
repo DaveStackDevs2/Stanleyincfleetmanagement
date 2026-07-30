@@ -2,10 +2,10 @@
 
 ## Fleet Board Day timeline — 2026-07-30
 
-- **VERIFIED:** Day view renders a horizontally scrollable full-day timeline with 24 hourly headers and a fixed VIN/resource column.
-- **VERIFIED:** VIN assignment blocks use their operational start/end timestamps, clamp to day boundaries, retain pay-type colors and conflict treatment, and expose pay type, event status, source type, and formatted times as width permits.
+- **VERIFIED:** Day view renders a horizontally scrollable 7:00 AM–7:00 PM operating timeline with twelve hourly intervals, a final 7:00 PM boundary, and a fixed VIN/resource column.
+- **VERIFIED:** VIN assignment blocks use their operational start/end timestamps, clamp to the displayed operating-window boundaries, omit assignments wholly outside that window, retain pay-type colors and conflict treatment, and expose pay type, event status, source type, and formatted times as width permits.
 - **VERIFIED:** Same-vehicle overlaps use deterministic vertical lanes and expand the row instead of covering one another.
-- **VERIFIED:** The current-time marker appears only when today's date is selected; Reservation Capacity remains above vehicle rows and Week view behavior is unchanged.
+- **VERIFIED:** The current-time marker updates once per minute and appears only when today's date is selected between 7:00 AM and 7:00 PM; Reservation Capacity remains above vehicle rows and Week view behavior is unchanged.
 - **VERIFIED:** Data continues to load exclusively through `get_fleet_board_state(timestamptz, timestamptz)` with no SQL, migration, authorization, Supabase configuration, or backend business-logic changes.
 - **NOT VERIFIED:** Live authenticated payload rendering and browser interaction still require an approved test account and configured browser environment.
 

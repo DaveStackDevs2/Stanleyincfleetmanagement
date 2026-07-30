@@ -40,6 +40,8 @@ type PayTypeColors = Record<string, { backgroundColor: string; textColor: string
 type AssignmentLane = Assignment & { lane: number; left: number; width: number }
 
 const NEUTRAL_PAY_TYPE_COLORS = { backgroundColor: '#E4E7ED', textColor: '#29313D' }
+const DAY_TIMELINE_START_HOUR = 7
+const DAY_TIMELINE_END_HOUR = 19
 const isHexColor = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -191,6 +193,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
   const [payTypeColors, setPayTypeColors] = useState<PayTypeColors>({})
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [currentTime, setCurrentTime] = useState(() => new Date())
 
   const rangeStart = view === 'day' ? date : addDays(date, -date.getDay())
   const rangeEnd = addDays(rangeStart, view === 'day' ? 1 : 7)
@@ -226,6 +229,11 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
     return () => { current = false }
   }, [rangeStartIso, rangeEndIso])
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
   const visibleVehicles = useMemo(() => vehicles.filter(vehicle => filter === 'all' || vehicle.fleetType.toLowerCase().includes(filter)), [filter, vehicles])
   const vehicleGroups = useMemo(() => {
     const groups = new Map<string, Vehicle[]>()
@@ -237,9 +245,13 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
   }, [visibleVehicles])
   const overlaps = (startsAt: string, endsAt: string, day: Date) => new Date(startsAt) < addDays(day, 1) && new Date(endsAt) > day
   const isDayView = view === 'day'
-  const currentTime = new Date()
-  const showCurrentTime = isDayView && dayKey(date) === dayKey(currentTime)
-  const currentTimePosition = ((currentTime.getTime() - rangeStart.getTime()) / (rangeEnd.getTime() - rangeStart.getTime())) * 100
+  const timelineStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), DAY_TIMELINE_START_HOUR)
+  const timelineEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), DAY_TIMELINE_END_HOUR)
+  const showCurrentTime = isDayView
+    && dayKey(date) === dayKey(currentTime)
+    && currentTime >= timelineStart
+    && currentTime <= timelineEnd
+  const currentTimePosition = ((currentTime.getTime() - timelineStart.getTime()) / (timelineEnd.getTime() - timelineStart.getTime())) * 100
 
   return <main className="fleet-board">
     <header className="fleet-board-title">
@@ -258,8 +270,9 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
     {loading ? <div className="board-message" role="status">Loading Fleet Board…</div> : !loadFailed && <div className="fleet-board-scroll">
       <div className={`fleet-board-grid ${isDayView ? 'day-timeline-grid' : ''}`} style={{ '--board-days': days.length } as CSSProperties}>
         <div className="board-corner">Resource</div>
-        {isDayView ? <div className="day-timeline-head" aria-label={`${date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}, 24 hour timeline`}>
-          {Array.from({ length: 24 }, (_, hour) => <div key={hour}><span>{new Date(2000, 0, 1, hour).toLocaleTimeString([], { hour: 'numeric' })}</span></div>)}
+        {isDayView ? <div className="day-timeline-head" aria-label={`${date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}, 7 AM to 7 PM timeline`}>
+          {Array.from({ length: 12 }, (_, index) => { const hour = DAY_TIMELINE_START_HOUR + index; return <div key={hour}><span>{new Date(2000, 0, 1, hour).toLocaleTimeString([], { hour: 'numeric' })}</span></div> })}
+          <span className="day-timeline-final-boundary">{new Date(2000, 0, 1, DAY_TIMELINE_END_HOUR).toLocaleTimeString([], { hour: 'numeric' })}</span>
         </div> : <div className="board-day-head">{days.map(day => <button type="button" key={dayKey(day)} onClick={() => { setDate(day); setView('day') }}>{day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</button>)}</div>}
         <div className="board-group-title">Reservation Capacity</div>
         {capacities.map(capacity => <div className="board-row capacity-row" key={capacity.model}>
@@ -271,7 +284,7 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
           <h2 className="board-group-title">{label}</h2>
           {groupVehicles.map(vehicle => {
             const vehicleAssignments = assignments.filter(item => item.vehicleId === vehicle.id)
-            const laneLayout = isDayView ? assignmentLanes(vehicleAssignments, rangeStart, rangeEnd) : null
+            const laneLayout = isDayView ? assignmentLanes(vehicleAssignments, timelineStart, timelineEnd) : null
             return <div className="board-row" style={isDayView ? { '--assignment-lanes': laneLayout?.laneCount } as CSSProperties : undefined} key={vehicle.id}>
               <div className="board-resource"><strong>{vehicle.stockNumber}</strong><span>{vehicle.model}</span><small>{vehicle.status}{vehicle.location ? ` · ${vehicle.location}` : ''}</small></div>
               {isDayView && laneLayout ? <div className="day-timeline-row">

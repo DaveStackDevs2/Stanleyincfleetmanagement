@@ -368,9 +368,9 @@ Legend:
 - [ ] Add status text: Available / Out / Return time.
 - [ ] Add search and model/location/status filters.
 - [ ] Add conflict-only filter.
-- [x] Render Day view as a horizontally scrollable, full-calendar-day hourly timeline with a fixed VIN column.
+- [x] Render Day view as a horizontally scrollable 7:00 AM–7:00 PM operating timeline with twelve one-hour intervals, including the final 7:00 PM boundary, and a fixed VIN column. Keep the RPC range on the complete calendar day.
 - [x] Position and clamp assignments by their actual timestamps, lane overlapping assignments deterministically, and expand VIN rows for those lanes.
-- [x] Show the current-time marker only for today's Day view while preserving dense sticky scheduler headers.
+- [x] Show the current-time marker only for today's Day view between 7:00 AM and 7:00 PM, updating it once per minute without reloading board data, while preserving dense sticky scheduler headers.
 - [x] Improve day row density to match operational scheduler style.
 - [ ] Improve week blocks for multi-day spans.
 - [ ] Clicking week day header switches to that day.
@@ -420,7 +420,7 @@ Legend:
 
 ### 2026-07-30
 
-- Replaced the Day view's single undifferentiated date cell with a complete 24-hour horizontal timeline while leaving Week view behavior intact.
+- Replaced the Day view's single undifferentiated date cell with a fixed 7:00 AM–7:00 PM horizontal operating timeline while leaving the complete-calendar-day RPC request and Week view behavior intact.
 - Added boundary-clamped timestamp positioning, deterministic overlap lanes, adaptive assignment detail, and a today-only current-time marker.
 - Continued to load the read-only board exclusively through the verified live `get_fleet_board_state(timestamptz, timestamptz)` contract; no backend objects or workflows changed.
 
