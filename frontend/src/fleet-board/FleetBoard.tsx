@@ -182,7 +182,7 @@ function boardPayloadFrom(value: unknown, requestedStart: string, requestedEnd: 
     : null
 }
 
-export function FleetBoard({ onBack }: { onBack: () => void }) {
+export function FleetBoard() {
   const [view, setView] = useState<ViewMode>('day')
   const [date, setDate] = useState(() => startOfDay(new Date()))
   const [filter, setFilter] = useState<FleetFilter>('all')
@@ -254,10 +254,6 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
   const currentTimePosition = ((currentTime.getTime() - timelineStart.getTime()) / (timelineEnd.getTime() - timelineStart.getTime())) * 100
 
   return <main className="fleet-board">
-    <header className="fleet-board-title">
-      <div><p className="eyebrow">PRIMARY WORKSPACE</p><h1>Fleet Board</h1><p>Existing model-level reservations and VIN-level transportation assignments.</p></div>
-      <button type="button" onClick={onBack}>Admin Console</button>
-    </header>
     <section className="fleet-board-toolbar" aria-label="Fleet Board controls">
       <div className="board-segmented">{(['all', 'rental', 'loaner'] as FleetFilter[]).map(item => <button type="button" className={filter === item ? 'active' : ''} onClick={() => setFilter(item)} key={item}>{item === 'all' ? 'All vehicles' : `${item[0].toUpperCase()}${item.slice(1)}s`}</button>)}</div>
       <div className="board-segmented"><button type="button" className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Day</button><button type="button" className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Week</button></div>
@@ -296,6 +292,5 @@ export function FleetBoard({ onBack }: { onBack: () => void }) {
         </section>)}
       </div>
     </div>}
-    <p className="fleet-board-note">Read-only foundation: operational changes continue through existing reservation, transportation-event, assignment, billing, and conflict workflows.</p>
   </main>
 }

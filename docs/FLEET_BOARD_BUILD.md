@@ -18,6 +18,16 @@ The Fleet Board is the operational workspace for:
 - conflicts;
 - later extensions, swaps, returns, and completion.
 
+### Operational context
+
+- The Fleet Board display window is **7:00 AM–7:00 PM**.
+- Normal rental staffing is **8:00 AM–4:00 PM Monday–Friday**.
+- Service handles activity from **7:00–8:00 AM** and approximately **4:00–6:00 PM**.
+- Saturday rentals and loaners may occur by special arrangement.
+- After-hours rental drop-offs may create actual return timestamps outside the display window.
+- Scheduled rental return times remain inside the 7:00 AM–7:00 PM display window.
+- These facts document operating context only. They do not add frontend validation, scheduling, or booking rules.
+
 The board must visualize backend state. It must not create a separate calendar-only business model.
 
 ## Visual direction
