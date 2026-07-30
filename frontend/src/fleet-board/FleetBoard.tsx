@@ -282,7 +282,7 @@ export function FleetBoard() {
       <div className={`fleet-board-grid ${isDayView ? 'day-timeline-grid' : ''}`} style={{ '--board-days': days.length } as CSSProperties}>
         <div className="board-corner">Resource</div>
         {isDayView ? <div className="day-timeline-head" aria-label={`${date.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}, 7 AM to 7 PM timeline`} onPointerMove={event => updateTimelineHover(event, 'header')} onPointerLeave={() => setTimelineHover(null)}>
-          {Array.from({ length: 12 }, (_, index) => { const hour = DAY_TIMELINE_START_HOUR + index; return <div key={hour}><span>{new Date(2000, 0, 1, hour).toLocaleTimeString([], { hour: 'numeric' })}</span></div> })}
+          {Array.from({ length: 12 }, (_, index) => { const hour = DAY_TIMELINE_START_HOUR + index; return <div key={hour}><span className="day-timeline-hour-label">{new Date(2000, 0, 1, hour).toLocaleTimeString([], { hour: 'numeric' })}</span></div> })}
           <span className="day-timeline-final-boundary">{new Date(2000, 0, 1, DAY_TIMELINE_END_HOUR).toLocaleTimeString([], { hour: 'numeric' })}</span>
           {timelineHoverIndicator('header')}
         </div> : <div className="board-day-head">{days.map(day => <button type="button" key={dayKey(day)} onClick={() => { setDate(day); setView('day') }}>{day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</button>)}</div>}
