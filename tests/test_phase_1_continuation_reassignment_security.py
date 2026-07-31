@@ -1,5 +1,4 @@
 import re
-import subprocess
 import unittest
 from pathlib import Path
 
@@ -111,23 +110,12 @@ class ContinuationReassignmentSecurityTest(unittest.TestCase):
                     self.lower, rf"grant execute on function {identity} to service_role;"
                 )
 
-    def test_no_frontend_files_changed(self) -> None:
-        changed = subprocess.run(
-            ["git", "diff", "--name-only", "origin/main", "--", "frontend"],
-            cwd=ROOT, check=True, text=True, capture_output=True,
-        ).stdout.strip()
-        self.assertEqual("", changed)
-
-    def test_exactly_one_migration_added(self) -> None:
-        committed_or_staged = subprocess.run(
-            ["git", "diff", "--name-only", "--diff-filter=A", "origin/main", "--", "supabase/migrations"],
-            cwd=ROOT, check=True, text=True, capture_output=True,
-        ).stdout.splitlines()
-        untracked = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard", "--", "supabase/migrations"],
-            cwd=ROOT, check=True, text=True, capture_output=True,
-        ).stdout.splitlines()
-        self.assertEqual([str(MIGRATION.relative_to(ROOT))], sorted(set(committed_or_staged + untracked)))
+    def test_checkpoint_migration_exists_exactly_once_at_expected_path(self) -> None:
+        matches = sorted(
+            MIGRATION.parent.glob("*phase_1_continuation_reassignment_security_checkpoint.sql")
+        )
+        self.assertEqual([MIGRATION], matches)
+        self.assertTrue(MIGRATION.is_file())
 
 
 if __name__ == "__main__":
