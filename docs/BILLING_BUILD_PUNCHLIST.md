@@ -18,7 +18,7 @@ Every billing implementation commit must update this file. An item is marked com
 - Do not repurpose `rental_model_limits`; it controls reservation capacity, not pricing.
 - Do not build against `billing_event_totals`, warranty ledgers, or other unused scaffolding unless live workflow usage is first proven.
 - Execute live SQL one statement at a time, verify its result, then record the exact repository migration.
-- Late fees remain disabled and deferred. They will eventually be discretionary, staff-applied, and waivable—not an automatic penalty engine.
+- Late fees remain disabled and deferred. Applicable dollar amounts must eventually be editable in Admin Rates, Fees & Billing Rules from `public.late_fee_rules.fee_amount`, but configuring an amount must not charge it automatically. Fees remain discretionary, staff-applied, waivable/reversible, and must preserve actor, reason, timestamp, and audit history.
 
 ## Status legend
 
@@ -37,7 +37,7 @@ Every billing implementation commit must update this file. An item is marked com
 - [x] Confirmed all eight live pay types are active and all eight `default_daily_amount` values are null.
 - [x] Confirmed `billing_lines` and `contract_periods` currently contain no production rows.
 - [x] Confirmed the live GM warranty rate, warranty provider, and extended-warranty rule tables are empty.
-- [x] Confirmed late fees are disabled and the three active late-fee rows are zero-dollar/null placeholders.
+- [x] Confirmed late fees are disabled and the live placeholders are `grace_period` = null, `fixed_fee` = 0, and `full_day_trigger` = 0 in `public.late_fee_rules.fee_amount`.
 - [x] Confirmed existing billing functions store parent lines, tax child lines, paid-through state, extensions, returns, renewals, and swaps.
 - [x] Confirmed current billing functions accept amount and tax inputs; they do not calculate authoritative amounts from pay-type defaults.
 - [x] Confirmed frontend-safe/AAL2 metadata is not itself an enforcement layer. Backend authorization and grants must be verified before frontend writes are enabled.
@@ -204,6 +204,7 @@ Remaining Phase 1 operational contracts are same-vehicle continuation, start/ass
 ## Deferred follow-up — not part of the core release
 
 - [ ] `DEFERRED` Discretionary late-fee entry.
+- [ ] `DEFERRED` Make applicable `public.late_fee_rules.fee_amount` dollar amounts editable in Admin Rates, Fees & Billing Rules; configuration must not automatically apply a charge.
 - [ ] `DEFERRED` Explicit late-fee waiver/reversal with actor, reason, timestamp, and preserved audit history.
 - [ ] `DEFERRED` GM warranty rate administration and calculation.
 - [ ] `DEFERRED` Extended-warranty provider/rule administration and calculation.

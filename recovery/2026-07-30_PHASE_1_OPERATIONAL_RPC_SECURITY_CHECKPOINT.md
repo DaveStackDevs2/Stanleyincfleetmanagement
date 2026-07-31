@@ -13,7 +13,7 @@ Production SQL was applied and verified manually before this repository checkpoi
 2. `public.complete_case_and_get_unified_payload_state`
 3. `public.cancel_case_and_get_unified_payload_state`
 
-They enforce an active authenticated application user and AAL2, validate any supplied actor ID, stamp the authenticated application-user ID, and expose only the top-level wrappers to `authenticated` and `service_role`. Listed internal helpers remain denied to browser roles and executable by `service_role`.
+They enforce an active authenticated application user and AAL2, validate any supplied actor ID, and stamp the authenticated application-user ID. The top-level operational wrappers grant execution to `authenticated` only, plus owner `postgres`. Listed internal helpers remain denied to browser roles and retain `service_role` execution.
 
 **VERIFIED:** Return mileage is optional. When `p_end_mileage` is omitted, completion preserves the existing `reservations.end_mileage`.
 
@@ -28,6 +28,10 @@ They enforce an active authenticated application user and AAL2, validate any sup
 ## Ontrac limitation
 
 **NOT VERIFIED:** No live function or trigger applying Ontrac staging odometer rows has been verified, so the mileage application/import path remains unresolved.
+
+## Deferred late-fee requirement
+
+Applicable late-fee dollar amounts must eventually be editable in the Admin Rates, Fees & Billing Rules area using the existing `public.late_fee_rules.fee_amount` source. Verified live placeholders are `grace_period` = null, `fixed_fee` = 0, and `full_day_trigger` = 0. Configuring an amount must not automatically charge it. Late fees remain deferred, discretionary, staff-applied, waivable/reversible, and must preserve actor, reason, timestamp, and audit history.
 
 ## Frontend impact
 

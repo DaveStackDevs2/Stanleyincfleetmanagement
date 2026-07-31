@@ -205,13 +205,13 @@ ALTER FUNCTION public.accept_case_extension_and_get_unified_payload_state(uuid, 
 ALTER FUNCTION public.complete_case_and_get_unified_payload_state(uuid, timestamp with time zone, integer, boolean, text, uuid) OWNER TO postgres;
 ALTER FUNCTION public.cancel_case_and_get_unified_payload_state(uuid, text, uuid, timestamp with time zone, text) OWNER TO postgres;
 
-REVOKE ALL ON FUNCTION public.accept_case_extension_and_get_unified_payload_state(uuid, timestamp with time zone, numeric, numeric, text, text, uuid, boolean) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.complete_case_and_get_unified_payload_state(uuid, timestamp with time zone, integer, boolean, text, uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.cancel_case_and_get_unified_payload_state(uuid, text, uuid, timestamp with time zone, text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.accept_case_extension_and_get_unified_payload_state(uuid, timestamp with time zone, numeric, numeric, text, text, uuid, boolean) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.complete_case_and_get_unified_payload_state(uuid, timestamp with time zone, integer, boolean, text, uuid) FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.cancel_case_and_get_unified_payload_state(uuid, text, uuid, timestamp with time zone, text) FROM PUBLIC, anon, authenticated, service_role;
 
-GRANT EXECUTE ON FUNCTION public.accept_case_extension_and_get_unified_payload_state(uuid, timestamp with time zone, numeric, numeric, text, text, uuid, boolean) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.complete_case_and_get_unified_payload_state(uuid, timestamp with time zone, integer, boolean, text, uuid) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.cancel_case_and_get_unified_payload_state(uuid, text, uuid, timestamp with time zone, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.accept_case_extension_and_get_unified_payload_state(uuid, timestamp with time zone, numeric, numeric, text, text, uuid, boolean) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_case_and_get_unified_payload_state(uuid, timestamp with time zone, integer, boolean, text, uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cancel_case_and_get_unified_payload_state(uuid, text, uuid, timestamp with time zone, text) TO authenticated;
 
 REVOKE ALL ON FUNCTION public.accept_reservation_extension_state(uuid, timestamp with time zone, numeric, numeric, text, text, uuid, boolean) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.accept_extension_commit_state(uuid, uuid, timestamp with time zone, numeric, numeric, text, text, uuid, uuid) FROM PUBLIC, anon, authenticated;
