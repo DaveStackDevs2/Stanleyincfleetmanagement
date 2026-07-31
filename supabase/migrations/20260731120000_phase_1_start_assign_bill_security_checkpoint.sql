@@ -161,20 +161,20 @@ alter function public.create_start_bill_case_and_get_payload_state(
   text, text, timestamptz, timestamptz, text, text, text, text, text,
   integer, text, text, timestamptz, numeric, numeric, timestamptz,
   timestamptz, text, text, jsonb, text, text, text, text, text, text,
-  text, text, text, text, text, text, integer, uuid
+  text, text, text, text, text, text, text, integer, uuid
 ) owner to postgres;
 
 revoke all on function public.create_start_bill_case_and_get_payload_state(
   text, text, timestamptz, timestamptz, text, text, text, text, text,
   integer, text, text, timestamptz, numeric, numeric, timestamptz,
   timestamptz, text, text, jsonb, text, text, text, text, text, text,
-  text, text, text, text, text, text, integer, uuid
+  text, text, text, text, text, text, text, integer, uuid
 ) from public, anon, service_role;
 grant execute on function public.create_start_bill_case_and_get_payload_state(
   text, text, timestamptz, timestamptz, text, text, text, text, text,
   integer, text, text, timestamptz, numeric, numeric, timestamptz,
   timestamptz, text, text, jsonb, text, text, text, text, text, text,
-  text, text, text, text, text, text, integer, uuid
+  text, text, text, text, text, text, text, integer, uuid
 ) to authenticated;
 
 insert into public.service_action_contracts (
