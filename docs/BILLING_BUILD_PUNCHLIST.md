@@ -60,7 +60,7 @@ The core billing release is complete when an authorized user can configure norma
 
 **Phase 1 exit:** The frontend has a verified secure boundary for existing billing workflows; no rates or billing UI are added prematurely.
 
-Remaining Phase 1 operational contracts are same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Checkout and return mileage are optional; excess-mile calculation remains future work.
+Remaining Phase 1 operational contracts are same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Optional return mileage is verified: omitting `p_end_mileage` preserves the reservation's existing `end_mileage`. Checkout mileage is required to remain optional, but its handling is part of the unverified start/assign/bill work. Excess-mile calculation remains future work.
 
 ## Phase 2 — Complete existing pay-type administration
 
@@ -227,5 +227,5 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - VERIFIED: Return mileage remains optional; omission preserves the reservation's existing `end_mileage`.
 - VERIFIED: Production SQL for this checkpoint was applied and verified manually before this repository migration was recorded.
 - NOT VERIFIED: Same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap remain Phase 1 work.
-- NOT VERIFIED: No live Ontrac function or trigger applying staging odometer rows has been verified. Checkout and return mileage remain optional, and excess-mile calculation is future work.
+- NOT VERIFIED: No live Ontrac function or trigger applying staging odometer rows has been verified. Checkout mileage is required to remain optional, but its handling remains part of the unverified start/assign/bill work. Return mileage is verified as optional, with omitted `p_end_mileage` preserving the existing `end_mileage`. Excess-mile calculation is future work.
 - No broad Phase 1 item is marked complete by this granular checkpoint.

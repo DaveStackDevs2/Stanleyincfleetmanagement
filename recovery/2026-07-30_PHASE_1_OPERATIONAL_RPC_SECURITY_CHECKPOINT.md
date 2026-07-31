@@ -15,7 +15,9 @@ Production SQL was applied and verified manually before this repository checkpoi
 
 They enforce an active authenticated application user and AAL2, validate any supplied actor ID, stamp the authenticated application-user ID, and expose only the top-level wrappers to `authenticated` and `service_role`. Listed internal helpers remain denied to browser roles and executable by `service_role`.
 
-Return mileage is optional. When `p_end_mileage` is omitted, completion preserves the existing `reservations.end_mileage`. Checkout mileage is also optional, and excess-mile calculation remains future work.
+**VERIFIED:** Return mileage is optional. When `p_end_mileage` is omitted, completion preserves the existing `reservations.end_mileage`.
+
+**NOT VERIFIED / REQUIRED:** Checkout mileage must remain optional, but its implementation has not yet been verified because start/assign/bill remains outstanding. Excess-mile calculation remains future work.
 
 ## Remaining Phase 1 operational contracts
 
