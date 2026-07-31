@@ -230,3 +230,11 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - NOT VERIFIED: Same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap remain Phase 1 work.
 - NOT VERIFIED: No live Ontrac function or trigger applying staging odometer rows has been verified. Checkout mileage is required to remain optional, but its handling remains part of the unverified start/assign/bill work. Return mileage is verified as optional, with omitted `p_end_mileage` preserving the existing `end_mileage`. Excess-mile calculation is future work.
 - No broad Phase 1 item is marked complete by this granular checkpoint.
+
+### 2026-07-31 — Start/assign/bill security checkpoint
+
+- [x] Added the stable browser RPC `create_start_bill_case_and_get_payload_state` to replace the 68-character service contract name that PostgreSQL stored as the truncated 63-character `create_start_and_bill_case_with_vehicle_by_vin_and_get_payload_`.
+- [x] Preserved inventory/create `p_vehicle_mileage`; checkout `p_start_mileage` is separate, optional, non-negative when supplied, and does not overwrite `reservations.start_mileage` when omitted.
+- [x] Added active-app-user/AAL2 enforcement, actor stamping for the exact created vehicle event and contract period, one-open-use-per-vehicle enforcement, and restricted internal helper/direct-table mutations.
+- [ ] Authoritative billing amount and tax calculation remains unresolved future work; this legacy boundary continues to accept trusted amount and tax inputs.
+- **VERIFIED baseline:** live verification found no frontend or deployed `fleet-constraint-engine` caller and zero rows in `reservations`, `vehicle_events`, `contract_periods`, and `billing_lines`. This migration was not applied to live Supabase.
