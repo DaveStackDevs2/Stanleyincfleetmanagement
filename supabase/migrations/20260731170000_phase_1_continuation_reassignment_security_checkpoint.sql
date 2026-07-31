@@ -16,7 +16,7 @@ begin
     p_vehicle_id,
     p_new_actual_out_at
   );
-end
+end;
 $function$;
 
 alter function public.restart_same_vehicle_after_gap(uuid, uuid, timestamptz) owner to postgres;
@@ -117,7 +117,7 @@ begin
     'status', 'case_continued_and_loaded', 'reservation_id', p_reservation_id,
     'action_result', v_action_result, 'unified_case_payload', v_unified_payload
   );
-end
+end;
 $function$;
 
 alter function public.continue_case_same_vehicle_and_get_unified_payload_state(uuid, timestamptz) owner to postgres;
@@ -211,7 +211,7 @@ begin
     'status', 'case_reassigned_and_loaded', 'reservation_id', p_reservation_id,
     'action_result', v_action_result, 'unified_case_payload', v_unified_payload
   );
-end
+end;
 $function$;
 
 alter function public.reassign_active_case_to_vehicle_and_get_unified_payload_state(uuid, uuid, timestamptz, uuid, boolean) owner to postgres;

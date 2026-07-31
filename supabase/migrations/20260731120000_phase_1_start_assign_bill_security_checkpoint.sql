@@ -14,7 +14,7 @@ begin
       errcode = '23505',
       message = 'Cannot enforce one open vehicle event per vehicle: conflicting open vehicle_events rows exist';
   end if;
-end
+end;
 $precondition$;
 
 create unique index if not exists ux_vehicle_events_one_open_per_vehicle
@@ -154,7 +154,7 @@ begin
     'execution_result', v_execution_result,
     'unified_case_payload', v_unified_payload
   );
-end
+end;
 $function$;
 
 alter function public.create_start_bill_case_and_get_payload_state(
@@ -237,7 +237,7 @@ begin
     execute format('grant execute on function %I.%I(%s) to service_role',
       v_function.nspname, v_function.proname, v_function.args);
   end loop;
-end
+end;
 $grants$;
 
 revoke insert, update, delete on table
