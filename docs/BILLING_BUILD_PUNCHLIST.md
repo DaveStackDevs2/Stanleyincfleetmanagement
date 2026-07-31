@@ -60,7 +60,7 @@ The core billing release is complete when an authorized user can configure norma
 
 **Phase 1 exit:** The frontend has a verified secure boundary for existing billing workflows; no rates or billing UI are added prematurely.
 
-Remaining Phase 1 operational contracts are same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Optional return mileage is verified: omitting `p_end_mileage` preserves the reservation's existing `end_mileage`. Checkout mileage is required to remain optional, but its handling is part of the unverified start/assign/bill work. Excess-mile calculation remains future work.
+The repository checkpoints now cover start/assign/bill plus the already-existing same-vehicle continuation and active-case reassignment engines. The continuation/reassignment migration is pending manual live application and verification, so broad Phase 1 and Phase 10 remain open. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Optional return and checkout mileage behavior is preserved. Excess-mile calculation remains future work.
 
 ## Phase 2 — Complete existing pay-type administration
 
@@ -218,6 +218,14 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 ### 2026-07-30 — Punchlist established
 
 - Live Supabase billing configuration and current GitHub `main` were inspected.
+
+### 2026-07-31 — Continuation/reassignment security checkpoint prepared
+
+- **VERIFIED:** Dave manually applied PR #11's preceding start/assign/bill migration after its repository checkpoint, and all six live verification checks passed.
+- **VERIFIED baseline:** continuation and reassignment engines already existed; no React or deployed Edge Function caller existed; and `reservations`, `vehicle_events`, `contract_periods`, `reservation_vehicle_dependencies`, `reservation_conflicts`, `vehicle_swaps`, and `billing_lines` were empty.
+- **VERIFIED gap:** `restart_same_vehicle_after_gap` was absent live and in the repository even though the existing reservation restart workflow called it. The pending migration repairs that dependency by delegating to the existing `start_vehicle_use_state` engine.
+- **NOT APPLICABLE:** Codex made no frontend change and applied no live SQL. The migration remains pending Dave's manual statement-by-statement review, application, and verification; do not mark broad Phase 1 or Phase 10 complete beforehand.
+- **UNRESOLVED / NEXT:** authoritative amount/tax calculation remains unresolved. Pay-type administration Phase 2 is next after Phase 1 closes. Late fees remain disabled and deferred; eventual Admin-editable dollar amounts must not automatically charge a fee.
 - No production SQL, schema, data, frontend code, or billing behavior was changed.
 - Next implementation phase: **Phase 1 — Reconcile and secure existing billing contracts**.
 

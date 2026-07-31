@@ -17,3 +17,12 @@ Top-level browser-callable wrappers are `SECURITY DEFINER`, owned by `postgres`,
 - **Decision:** Enforce at most one open `vehicle_events` row per vehicle, with an explicit migration precondition failure for existing conflicts, and remove browser mutation access to the internal helper chain and its operational tables. Preserve reads and service-role access.
 - **Evidence:** the service action held a 68-character name while PostgreSQL stored `create_start_and_bill_case_with_vehicle_by_vin_and_get_payload_`; live verification found no frontend or deployed `fleet-constraint-engine` caller and zero rows in the four continuity/billing tables.
 - **Deferred:** authoritative amount and tax calculation is unresolved future work; this checkpoint does not redesign trusted legacy inputs.
+
+## 2026-07-31 — Continuation and reassignment security boundary
+
+- **Decision:** Preserve the existing same-vehicle continuation and active-case reassignment/swap engines behind their existing service-action contracts; secure and reconcile them rather than introduce replacement workflows.
+- **Decision:** Both browser wrappers resolve the active application user from `auth.uid()`, require AAL2, use security-definer execution with an empty search path, and alone grant browser execution to `authenticated`. Reassignment rejects actor disagreement and propagates the resolved actor into dependency resolution.
+- **Decision:** Repair the verified missing `restart_same_vehicle_after_gap` dependency only by delegating to the existing `start_vehicle_use_state` engine. Keep the repair and the full mutation chain service-role-only.
+- **Decision:** Preserve old-row `created_by`, stamp exact closed and new continuity rows, and load the unified payload only after validation and stamping. Do not add billing segmentation or a `vehicle_swaps` insert.
+- **Evidence:** No frontend or deployed Edge caller exists, and all seven relevant live operational tables were empty. Dave separately applied PR #11's earlier migration and passed all six checks; this Codex task applied no live SQL.
+- **Pending:** Manual application and verification are required before broad Phase 1 or Phase 10 can close. Authoritative amount/tax calculation remains unresolved; pay-type administration Phase 2 follows Phase 1. Late fees remain disabled/deferred, and future editable Admin amounts must never auto-charge.
