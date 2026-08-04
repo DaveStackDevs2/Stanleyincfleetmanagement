@@ -64,6 +64,8 @@ The repository and live Supabase now match for extension, completion/return, can
 
 ## Phase 2 — Complete existing pay-type administration
 
+**2026-08-04 checkpoint:** **VERIFIED live Supabase** contains `update_admin_pay_type_rule_state(uuid, boolean, numeric, integer, text)` owned by `postgres`, with `SECURITY DEFINER`, an empty `search_path`, no `PUBLIC`/`anon` execution, and execution for `authenticated` and `service_role`. Authorization uses the active app-user and existing `user_admin.manage` path through `fleet_board.pay_type_colors`. **IMPLEMENTED / NOT YET MERGED OR DEPLOYED:** the matching idempotent repository migration, focused contract tests, and existing-page edit workflow. Real-session/browser verification and the Phase 2 exit remain open.
+
 - [ ] Add an authorized backend mutation for editing an existing pay type's description, taxable flag, default daily amount, and sort order.
 - [ ] Preserve pay-type identity and historical references; do not rename or delete pay types through an unsafe replacement workflow.
 - [ ] Keep Disable/Reactivate behavior and Fleet Board color behavior intact.

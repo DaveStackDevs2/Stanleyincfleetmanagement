@@ -6,7 +6,14 @@ Last updated: 2026-08-04
 
 Billing is the active build track. The authoritative implementation sequence is maintained in `docs/BILLING_BUILD_PUNCHLIST.md`.
 
-Phase 1's repository and live-database security checkpoints are reconciled. Phase 2—editing existing pay-type configuration in Rates, Fees & Billing Rules—is the next implementation step.
+Phase 1's repository and live-database security checkpoints are reconciled. Billing Phase 2 pay-type editing is implemented in the current repository work but is not yet merged, deployed, or browser-verified.
+
+## Billing Phase 2 — pay-type editing status
+
+- **VERIFIED live Supabase:** `update_admin_pay_type_rule_state(uuid, boolean, numeric, integer, text)` is owned by `postgres`, is `SECURITY DEFINER` with an empty `search_path`, denies `PUBLIC` and `anon`, and grants execution to `authenticated` and `service_role`.
+- **VERIFIED live Supabase:** authorization follows the active app-user and existing `user_admin.manage` access path through `get_user_admin_setting_access_state(user_id, 'fleet_board.pay_type_colors')`.
+- **IMPLEMENTED / NOT YET MERGED OR DEPLOYED:** the repository migration reproduces the live RPC, and Rates, Fees & Billing Rules adds validated editing for description, taxable status, nullable default daily amount, and sort order without rename/delete behavior.
+- **NOT VERIFIED:** real-session authorization, browser behavior, deployed frontend behavior, and the overall Phase 2 exit remain open.
 
 ## Billing Phase 1 — live deployment status
 
@@ -25,7 +32,7 @@ Phase 1's repository and live-database security checkpoints are reconciled. Phas
 - Day view uses the 7:00 AM–7:00 PM operating window with 15-minute grid guidance, and Week view remains available.
 - Fleet Board data loads through `get_fleet_board_state(timestamptz, timestamptz)`.
 - Rates, Fees & Billing Rules supports pay-type creation, Disable/Reactivate, and Fleet Board colors.
-- Existing pay types still cannot be edited. That is the next implementation step.
+- Existing pay-type editing is implemented in the current repository work but is not yet merged, deployed, or browser-verified.
 - Drag/drop and resize mutations remain intentionally disabled until extension, return, continuation, swap, conflict, and permission workflows are fully verified.
 
 ## Next implementation

@@ -14,6 +14,7 @@ type PayType = {
 type ColorPair = { background_color: string; text_color: string }
 type PayTypeState = { payTypes: PayType[]; colors: Record<string, ColorPair> }
 type ColorState = { payTypes: string[]; colors: Record<string, ColorPair> }
+type EditForm = { id: string; payType: string; taxable: boolean; amount: string; sortOrder: string; description: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const HEX = /^#[0-9a-f]{6}$/i
@@ -75,6 +76,22 @@ function parseColors(value: unknown): ColorState {
   return { payTypes, colors: parseColorMap(value.colors) }
 }
 
+function parseUpdatedPayType(value: unknown, expectedId: string): void {
+  if (!isRecord(value) || value.status !== 'admin_pay_type_rule_updated' || !isRecord(value.pay_type_rule)) {
+    throw new Error('invalid-update')
+  }
+  const rule = value.pay_type_rule
+  if (rule.pay_type_rule_id !== expectedId || typeof rule.pay_type !== 'string' || !rule.pay_type.trim() ||
+    typeof rule.is_enabled !== 'boolean' || typeof rule.is_active !== 'boolean' || typeof rule.active !== 'boolean' ||
+    typeof rule.is_taxable !== 'boolean' || typeof rule.tax_applicable !== 'boolean' ||
+    rule.is_taxable !== rule.tax_applicable ||
+    !(rule.default_daily_amount === null || (typeof rule.default_daily_amount === 'number' && Number.isFinite(rule.default_daily_amount) && rule.default_daily_amount >= 0)) ||
+    typeof rule.sort_order !== 'number' || !Number.isInteger(rule.sort_order) || rule.sort_order < 0 ||
+    !(rule.description === null || typeof rule.description === 'string')) {
+    throw new Error('invalid-updated-pay-type')
+  }
+}
+
 export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [state, setState] = useState<PayTypeState | null>(null)
   const [draftColors, setDraftColors] = useState<Record<string, ColorPair>>({})
@@ -83,6 +100,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [message, setMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [form, setForm] = useState({ payType: '', taxable: false, amount: '', sortOrder: '0', description: '' })
+  const [editForm, setEditForm] = useState<EditForm | null>(null)
 
   const load = useCallback(async () => {
     setBusy(true); setMessage(null); setSuccessMessage(null)
@@ -135,6 +153,50 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     })
   }
 
+  const editPayType = (item: PayType) => {
+    setMessage(null); setSuccessMessage(null)
+    setEditForm({ id: item.id, payType: item.payType, taxable: item.taxable,
+      amount: item.defaultDailyAmount === null ? '' : String(item.defaultDailyAmount),
+      sortOrder: String(item.sortOrder), description: item.description ?? '' })
+  }
+
+  const savePayType = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!editForm || busy) return
+    const amount = editForm.amount.trim() === '' ? null : Number(editForm.amount)
+    const sortOrder = Number(editForm.sortOrder)
+    if ((amount !== null && (!Number.isFinite(amount) || amount < 0)) || !Number.isInteger(sortOrder) || sortOrder < 0) {
+      setMessage('Enter an optional non-negative daily amount and a non-negative whole-number sort order.')
+      return
+    }
+    setBusy(true); setMessage(null); setSuccessMessage(null)
+    const result = await supabase.rpc('update_admin_pay_type_rule_state', {
+      p_pay_type_rule_id: editForm.id, p_is_taxable: editForm.taxable,
+      p_default_daily_amount: amount, p_sort_order: sortOrder,
+      p_description: editForm.description.trim() || null,
+    })
+    if (result.error) {
+      setMessage('The pay type could not be updated. Review the values and try again. No update was confirmed.')
+      setBusy(false)
+      return
+    }
+    try {
+      parseUpdatedPayType(result.data, editForm.id)
+    } catch {
+      setMessage('The update request completed, but its result could not be verified. The pay type may have changed; refresh before trying again.')
+      setBusy(false)
+      return
+    }
+    const name = editForm.payType
+    const reloaded = await load()
+    if (reloaded) {
+      setEditForm(null)
+      setSuccessMessage(`${name} was updated successfully.`)
+    } else {
+      setMessage('The pay type was updated, but the authoritative settings could not be reloaded. Refresh before making another change.')
+    }
+  }
+
   const saveColors = async () => {
     if (!state) return
     setBusy(true); setMessage(null); setSuccessMessage(null)
@@ -170,11 +232,20 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
         <div className="table-wrap"><table><thead><tr><th>Pay type</th><th>Description</th><th>Taxable</th><th>Daily amount</th><th>Sort order</th><th>Status</th><th>Action</th></tr></thead><tbody>
           {state.payTypes.map((item) => <tr key={item.id}><td><strong>{item.payType}</strong></td><td>{item.description || '—'}</td><td>{item.taxable ? 'Yes' : 'No'}</td>
             <td>{item.defaultDailyAmount == null ? '—' : item.defaultDailyAmount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td>{item.sortOrder}</td><td>{item.enabled ? 'Enabled' : 'Disabled'}</td><td>
+              <button type="button" disabled={busy} onClick={() => editPayType(item)}>Edit</button>{' '}
               <button type="button" disabled={busy} onClick={() => void mutate(supabase.rpc('set_admin_pay_type_rule_enabled_state', { p_pay_type_rule_id: item.id, p_is_enabled: !item.enabled }),
                 `The pay type could not be ${item.enabled ? 'disabled' : 'reactivated'}. No changes were applied.`)}>{item.enabled ? 'Disable' : 'Reactivate'}</button>
             </td></tr>)}
         </tbody></table></div></section>
       <div className="pay-type-grid">
+        {editForm && <form className="details-panel editor-body" onSubmit={savePayType}><div><h2>Edit Pay Type</h2><p>Update billing defaults without changing this pay type's identity.</p></div>
+          <label>Pay-type name<input value={editForm.payType} readOnly aria-readonly="true" /></label>
+          <label>Description<textarea value={editForm.description} disabled={busy} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })}/></label>
+          <label>Default daily amount<input min="0" step="0.01" type="number" value={editForm.amount} disabled={busy} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })}/></label>
+          <label>Sort order<input required min="0" step="1" type="number" value={editForm.sortOrder} disabled={busy} onChange={(event) => setEditForm({ ...editForm, sortOrder: event.target.value })}/></label>
+          <label className="checkbox-field"><input type="checkbox" checked={editForm.taxable} disabled={busy} onChange={(event) => setEditForm({ ...editForm, taxable: event.target.checked })}/> Taxable</label>
+          <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">Save Pay Type</button><button type="button" disabled={busy} onClick={() => setEditForm(null)}>Cancel</button></div>
+        </form>}
         <form className="details-panel editor-body" onSubmit={addPayType}><div><h2>Add Pay Type</h2><p>New pay types are enabled immediately. Existing pay types are never deleted.</p></div>
           <label>Pay-type name<input required value={form.payType} onChange={(event) => setForm({ ...form, payType: event.target.value })}/></label>
           <label>Description<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })}/></label>
