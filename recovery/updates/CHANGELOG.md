@@ -5,7 +5,7 @@
 - Recorded the verified live ownership, security-definer/search-path configuration, authorization path, and restricted execution grants for `update_admin_pay_type_rule_state(uuid, boolean, numeric, integer, text)` in an idempotent repository migration.
 - Added editing for existing enabled and disabled pay types to Rates, Fees & Billing Rules, limited to description, taxable status, nullable default daily amount, and sort order; pay-type identity remains read-only.
 - Added strict mutation-response validation, authoritative rules-and-colors reload, sanitized success/failure states, uncertain-result guidance, cancellation, and duplicate-submission prevention.
-- Added focused repository-native contract tests. Real-session/browser verification, merge, deployment, and the overall Phase 2 exit remain **NOT VERIFIED**.
+- Added focused repository-native contract tests. Deployment, real-session/browser verification, and the overall Phase 2 exit remain **NOT VERIFIED**.
 
 ## 2026-08-04 — Phase 1 live deployment reconciliation
 

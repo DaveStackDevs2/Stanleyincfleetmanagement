@@ -6,13 +6,13 @@ Last updated: 2026-08-04
 
 Billing is the active build track. The authoritative implementation sequence is maintained in `docs/BILLING_BUILD_PUNCHLIST.md`.
 
-Phase 1's repository and live-database security checkpoints are reconciled. Billing Phase 2 pay-type editing is implemented in the current repository work but is not yet merged, deployed, or browser-verified.
+Phase 1's repository and live-database security checkpoints are reconciled. Billing Phase 2 pay-type editing is implemented in the repository and its live RPC is verified, but frontend deployment and real-session/browser behavior are not yet verified.
 
 ## Billing Phase 2 — pay-type editing status
 
 - **VERIFIED live Supabase:** `update_admin_pay_type_rule_state(uuid, boolean, numeric, integer, text)` is owned by `postgres`, is `SECURITY DEFINER` with an empty `search_path`, denies `PUBLIC` and `anon`, and grants execution to `authenticated` and `service_role`.
 - **VERIFIED live Supabase:** authorization follows the active app-user and existing `user_admin.manage` access path through `get_user_admin_setting_access_state(user_id, 'fleet_board.pay_type_colors')`.
-- **IMPLEMENTED / NOT YET MERGED OR DEPLOYED:** the repository migration reproduces the live RPC, and Rates, Fees & Billing Rules adds validated editing for description, taxable status, nullable default daily amount, and sort order without rename/delete behavior.
+- **IMPLEMENTED IN THE REPOSITORY / LIVE RPC VERIFIED:** the repository migration reproduces the live RPC, and Rates, Fees & Billing Rules adds validated editing for description, taxable status, nullable default daily amount, and sort order without rename/delete behavior.
 - **NOT VERIFIED:** real-session authorization, browser behavior, deployed frontend behavior, and the overall Phase 2 exit remain open.
 
 ## Billing Phase 1 — live deployment status
@@ -32,16 +32,16 @@ Phase 1's repository and live-database security checkpoints are reconciled. Bill
 - Day view uses the 7:00 AM–7:00 PM operating window with 15-minute grid guidance, and Week view remains available.
 - Fleet Board data loads through `get_fleet_board_state(timestamptz, timestamptz)`.
 - Rates, Fees & Billing Rules supports pay-type creation, Disable/Reactivate, and Fleet Board colors.
-- Existing pay-type editing is implemented in the current repository work but is not yet merged, deployed, or browser-verified.
+- Existing pay-type editing is implemented in the repository and its live RPC is verified, but frontend deployment and real-session/browser behavior are not yet verified.
 - Drag/drop and resize mutations remain intentionally disabled until extension, return, continuation, swap, conflict, and permission workflows are fully verified.
 
-## Next implementation
+## Next step
 
-Phase 2 — Complete existing pay-type administration:
+Deploy and verify Phase 2 without advancing into Phase 3:
 
-- Add the authorized backend mutation for description, taxable status, default daily amount, and sort order.
-- Add editing controls to the existing Rates, Fees & Billing Rules page.
-- Preserve pay-type identity, historical references, Disable/Reactivate behavior, and Fleet Board colors.
-- Validate and reload authoritative state through existing Supabase contracts.
+- Exercise authorized and unauthorized real application-user sessions.
+- Verify editing, nullable default daily amounts, and backend/frontend validation failures in the browser.
+- Verify Disable/Reactivate preserves pay-type identity and historical references.
+- Verify Fleet Board color behavior is preserved.
 
 Late fees, warranty-specific calculation, excess-mile billing, and broader reporting remain deferred until the normal billing workflow is complete.
