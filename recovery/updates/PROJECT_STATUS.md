@@ -45,3 +45,10 @@ Deploy and verify Phase 2 without advancing into Phase 3:
 - Verify Fleet Board color behavior is preserved.
 
 Late fees, warranty-specific calculation, excess-mile billing, and broader reporting remain deferred until the normal billing workflow is complete.
+
+## Billing Phase 3 — rental rate administration status
+
+- **VERIFIED live Supabase before repository implementation:** Project `ycwejunodgnnkickjvsk` passed table ownership/RLS/grants checks, exact RPC ownership/security/search-path/grants checks, anon resolver denial, unauthorized authenticated Admin denial, authorized create/edit/Disable/Reactivate/Admin reload/resolver flow, duplicate/current-rate protection, and rollback left zero persisted test rows.
+- **IMPLEMENTED IN THE REPOSITORY / LIVE CONTRACT VERIFIED:** An idempotent migration now records `public.rental_rate_rules`, its constraints, indexes, updated-at trigger, RLS/table grants, Admin RPCs, and service-role-only resolver. The frontend uses RPCs only and validates payloads and mutation confirmations before rendering success.
+- **VERIFIED live data state:** Live currently contains zero actual rental-rate rows. No vehicle classes, model identifiers, daily rates, taxes, or other business values were invented or seeded.
+- **NOT VERIFIED:** Frontend deployment, browser verification after merge, and Vercel production verification remain open.

@@ -81,13 +81,13 @@ The repository and live Supabase now match for extension, completion/return, can
 
 - [ ] Verify the exact model/class keys already used by `reservations.requested_model`, `quotes.vehicle_class`, vehicles, and rental-capacity configuration.
 - [ ] Document the required rate precedence: explicit authorized override, model/class rate, pay-type default, or a safe missing-rate failure.
-- [ ] Determine the smallest backend object needed for model/class pricing because no live model/class rate source currently exists.
-- [ ] Do not hardcode Chevrolet model prices; rates must be entered and maintained in Admin.
-- [ ] Add effective status and historical preservation so changing a rate does not rewrite prior billing lines.
-- [ ] Add an authorized read/write RPC contract rather than direct frontend table writes.
-- [ ] Extend the existing Rates, Fees & Billing Rules page with model/class rate administration.
-- [ ] Verify rate creation, update, disable/reactivate, missing-rate behavior, historical snapshots, and duplicate-key protection.
-- [ ] Update this punchlist and recovery documentation in the same commit.
+- [x] Determine the smallest backend object needed for model/class pricing because no live model/class rate source currently exists.
+- [x] Do not hardcode Chevrolet model prices; rates must be entered and maintained in Admin.
+- [x] Add effective status and historical preservation so changing a rate does not rewrite prior billing lines.
+- [x] Add an authorized read/write RPC contract rather than direct frontend table writes.
+- [x] Extend the existing Rates, Fees & Billing Rules page with model/class rate administration.
+- [x] Verify rate creation, update, disable/reactivate, missing-rate behavior, historical snapshots, and duplicate-key protection in the pre-existing live Phase 3 backend verification; browser verification remains open.
+- [x] Update this punchlist and recovery documentation in the same commit.
 
 **Phase 3 exit:** The database can resolve the correct configurable daily rate for a requested model/class and pay type without frontend business rules.
 
@@ -259,3 +259,12 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - [x] Added active-app-user/AAL2 enforcement, actor stamping for the exact created vehicle event and contract period, one-open-use-per-vehicle enforcement, and restricted internal helper/direct-table mutations.
 - [ ] Authoritative billing amount and tax calculation remains unresolved future work; this legacy boundary continues to accept trusted amount and tax inputs.
 - **VERIFIED historical baseline:** At this checkpoint, no frontend or deployed `fleet-constraint-engine` caller existed and `reservations`, `vehicle_events`, `contract_periods`, and `billing_lines` were empty. **SUPERSEDED 2026-08-04:** The migration was subsequently applied and verified live.
+
+
+### 2026-08-04 — Phase 3 rental-rate source-of-truth implementation
+
+- **VERIFIED live Supabase before repository implementation:** Project `ycwejunodgnnkickjvsk` passed table ownership/RLS/grants checks, exact RPC ownership/security/search-path/grants checks, anon resolver denial, unauthorized authenticated Admin denial, authorized create/edit/Disable/Reactivate/Admin reload/resolver flow, duplicate/current-rate protection, and rollback left zero persisted test rows.
+- **IMPLEMENTED IN THE REPOSITORY:** Added an idempotent Phase 3 migration for `public.rental_rate_rules`, exact constraints/indexes/trigger/RLS/grants, Admin RPCs, and the service-role-only resolver.
+- **IMPLEMENTED IN THE FRONTEND:** Rates, Fees & Billing Rules now includes Rental Rates with empty-state handling, Admin free-text vehicle class/model identifiers, enabled pay-type options from the RPC, Add/Edit/Disable/Reactivate controls, mutation-response validation, authoritative reloads, and sanitized messages. Delete is not provided.
+- **VERIFIED live data state:** Live currently contains zero actual rate rows. No business rates, vehicle classes, taxes, or billing rules were invented or seeded.
+- **NOT VERIFIED:** Frontend deployment, browser verification after merge, Vercel verification, and integration of this resolver into future billing preview/pickup workflows remain open.
