@@ -60,16 +60,18 @@ The core billing release is complete when an authorized user can configure norma
 
 **Phase 1 exit:** The frontend has a verified secure boundary for existing billing workflows; no rates or billing UI are added prematurely.
 
-The repository and live Supabase now match for extension, completion/return, cancellation, start/assign/bill, same-vehicle continuation, and active-case reassignment. All six top-level case-write RPCs have verified ownership, security-definer/search-path settings, and role grants; internal helpers and direct workflow-table mutations remain unavailable to browser roles. Broad Phase 1 remains open only until anonymous, unauthorized authenticated, authorized success, and RLS behavior are exercised end to end with real application-user sessions. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Optional return and checkout mileage behavior is preserved. Excess-mile calculation remains future work. Phase 2 pay-type editing is the next implementation step.
+The repository and live Supabase now match for extension, completion/return, cancellation, start/assign/bill, same-vehicle continuation, and active-case reassignment. All six top-level case-write RPCs have verified ownership, security-definer/search-path settings, and role grants; internal helpers and direct workflow-table mutations remain unavailable to browser roles. Broad Phase 1 remains open only until anonymous, unauthorized authenticated, authorized success, and RLS behavior are exercised end to end with real application-user sessions. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Optional return and checkout mileage behavior is preserved. Excess-mile calculation remains future work.
 
 ## Phase 2 — Complete existing pay-type administration
 
-- [ ] Add an authorized backend mutation for editing an existing pay type's description, taxable flag, default daily amount, and sort order.
-- [ ] Preserve pay-type identity and historical references; do not rename or delete pay types through an unsafe replacement workflow.
+**2026-08-04 checkpoint:** The live RPC and grants are verified. The repository migration, focused contract tests, and frontend editing workflow are implemented. Deployment and real-session/browser verification remain open.
+
+- [x] Add an authorized backend mutation for editing an existing pay type's description, taxable flag, default daily amount, and sort order.
+- [x] Preserve pay-type identity and historical references; do not rename or delete pay types through an unsafe replacement workflow.
 - [ ] Keep Disable/Reactivate behavior and Fleet Board color behavior intact.
-- [ ] Add editing controls to the existing Rates, Fees & Billing Rules page.
-- [ ] Validate nonnegative currency and whole-number sort order in the backend; frontend validation is only user guidance.
-- [ ] Reload authoritative state after every successful mutation and show explicit success/failure feedback.
+- [x] Add editing controls to the existing Rates, Fees & Billing Rules page.
+- [x] Validate nonnegative currency and whole-number sort order in the backend; frontend validation is only user guidance.
+- [x] Reload authoritative state after every successful mutation and show explicit success/failure feedback.
 - [ ] Verify editing, disabling, reactivating, duplicate-name protection, invalid input rejection, and historical retention.
 - [ ] Update this punchlist and recovery documentation in the same commit.
 
