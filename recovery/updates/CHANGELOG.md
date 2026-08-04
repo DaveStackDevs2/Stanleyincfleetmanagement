@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-08-04 — Phase 1 live deployment reconciliation
+
+- Verified that GitHub `main` includes the start/assign/bill, continuation/reassignment, and PL/pgSQL terminator checkpoint merges from PRs #11–#13.
+- Verified that live Supabase contains the six secured top-level case-write RPCs and the expected browser-role, internal-helper, service-role, direct-table, unique-index, and same-vehicle restart boundaries.
+- Removed stale documentation claiming the continuation/reassignment and start/assign/bill migrations were still waiting for live application.
+- Kept broad Phase 1 open for real-session anonymous, unauthorized, authorized, RLS, and browser workflow tests.
+- Recorded Phase 2 pay-type editing as the next implementation step and preserved the unresolved Ontrac import-path verification.
+- Changed documentation only; no SQL, production data, frontend code, authorization behavior, or billing behavior changed.
+
 ## 2026-07-30 — Fleet Board Day timeline
 
 - Added a horizontally scrollable Day timeline for the fixed 7:00 AM–7:00 PM operating window, with twelve hourly intervals, a final 7:00 PM boundary, and sticky hourly and VIN headers.
