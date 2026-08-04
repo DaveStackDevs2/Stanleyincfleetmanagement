@@ -1,59 +1,40 @@
 # Project Status
 
-## Fleet Board Day timeline — 2026-07-30
+Last updated: 2026-08-04
 
-- **VERIFIED:** Day view renders a horizontally scrollable 7:00 AM–7:00 PM operating timeline with twelve hourly intervals, a final 7:00 PM boundary, and a fixed VIN/resource column.
-- **VERIFIED:** VIN assignment blocks use their operational start/end timestamps, clamp to the displayed operating-window boundaries, omit assignments wholly outside that window, retain pay-type colors and conflict treatment, and expose pay type, event status, source type, and formatted times as width permits.
-- **VERIFIED:** Same-vehicle overlaps use deterministic vertical lanes and expand the row instead of covering one another.
-- **VERIFIED:** The current-time marker updates once per minute and appears only when today's date is selected between 7:00 AM and 7:00 PM; Reservation Capacity remains above vehicle rows and Week view behavior is unchanged.
-- **VERIFIED:** Data continues to load exclusively through `get_fleet_board_state(timestamptz, timestamptz)` with no SQL, migration, authorization, Supabase configuration, or backend business-logic changes.
-- **NOT VERIFIED:** Live authenticated payload rendering and browser interaction still require an approved test account and configured browser environment.
+## Current focus
 
-## Admin pay-type management — 2026-07-29
+Billing is the active build track. The authoritative implementation sequence is maintained in `docs/BILLING_BUILD_PUNCHLIST.md`.
 
-- **VERIFIED:** The Rates, Fees & Billing Rules Admin card now opens RPC-only pay-type management for listing, creating, disabling, and reactivating pay types.
-- **VERIFIED:** Active Fleet Board pay-type colors use native color inputs, one neutral fallback pair, strict six-digit hex validation, and an explicit save that excludes disabled pay-type keys.
-- **VERIFIED:** Every successful mutation reloads authoritative backend state, errors shown to users are sanitized, and no pay-type deletion workflow was introduced.
-- **VERIFIED:** Saving Fleet Board colors shows an accessible inline success confirmation only after the save succeeds and the authoritative reload completes.
-- **VERIFIED:** A unique index on `lower(btrim(pay_type))` atomically protects pay types from case- and whitespace-variant duplicates.
-- **NOT VERIFIED:** Live authenticated payloads and browser interaction still require an approved Admin test account.
+Phase 1's repository and live-database security checkpoints are reconciled. Phase 2—editing existing pay-type configuration in Rates, Fees & Billing Rules—is the next implementation step.
 
-## Fleet Board contract follow-up — 2026-07-29
+## Billing Phase 1 — live deployment status
 
-- Authenticated operational reads are resolved through `get_fleet_board_state(timestamptz, timestamptz)`.
-- Assignment and reservation loading is bounded to the visible day/week period on the backend.
-- Saved pay-type colors are read and validated; the Admin color-palette UI is implemented.
+- **VERIFIED GitHub:** The starting `main` SHA for this status update is `1847af4aa486868e35777e8d99c197f87ed1fae5`. It includes PR #11's start/assign/bill checkpoint, PR #12's continuation/reassignment checkpoint, and PR #13's PL/pgSQL terminator correction.
+- **VERIFIED live Supabase:** The six top-level case-write RPCs for extension, cancellation, completion/return, start/assign/bill, same-vehicle continuation, and active-case reassignment exist with the expected ownership, security-definer configuration, restricted search path, and execution grants.
+- **VERIFIED live Supabase:** Internal start/bill, continuation, and reassignment helpers are unavailable to browser roles and remain executable by `service_role` where required.
+- **VERIFIED live Supabase:** Direct browser-role INSERT/UPDATE/DELETE access to the protected workflow tables is blocked.
+- **VERIFIED live Supabase:** `ux_vehicle_events_one_open_per_vehicle` exists with the `is_open = true` predicate.
+- **VERIFIED live Supabase:** `restart_same_vehicle_after_gap(uuid, uuid, timestamptz)` delegates to the existing `start_vehicle_use_state` engine.
+- **NOT VERIFIED:** Real-session anonymous denial, unauthorized authenticated denial, authorized success, end-to-end RLS behavior, and browser workflow execution remain the Phase 1 exit tests.
+- **UNRESOLVED:** No live Ontrac function or trigger applying staging odometer rows has been verified. Checkout and return mileage remain optional; excess-mile calculation remains future work.
 
-Last updated: 2026-07-30
+## Fleet Board and Admin status
 
-## Current phase
+- The abandoned Vehicle Calendar has been removed. The Fleet Board remains a visualization of existing reservations, vehicles, capacity, and transportation-event state.
+- Day view uses the 7:00 AM–7:00 PM operating window with 15-minute grid guidance, and Week view remains available.
+- Fleet Board data loads through `get_fleet_board_state(timestamptz, timestamptz)`.
+- Rates, Fees & Billing Rules supports pay-type creation, Disable/Reactivate, and Fleet Board colors.
+- Existing pay types still cannot be edited. That is the next implementation step.
+- Drag/drop and resize mutations remain intentionally disabled until extension, return, continuation, swap, conflict, and permission workflows are fully verified.
 
-The abandoned Vehicle Calendar has been removed and replaced by the Fleet Board foundation on top of Phase 2 authentication and effective permissions.
+## Next implementation
 
-## Completed
+Phase 2 — Complete existing pay-type administration:
 
-- The authenticated application exposes a read-only Fleet Board with day/week navigation and rental/loaner filtering.
-- Day and seven-day week views, date navigation, sticky resource/date headers, scrolling, rental/loaner filters, daily reservation-capacity counts, and assignment blocks are implemented.
-- The Fleet Board reads existing vehicles, model-level reservations, reservation capacity, and unified transportation-event operational state with explicit field lists.
-- Fleet Board date navigation uses local calendar dates, invalid date-picker values are ignored, cancelled reservations do not count toward displayed capacity, and resolved conflicts are not shown as active.
-- No scheduling tables, views, RPCs, migrations, permissions, or frontend-only workflow rules were added. The branch-only calendar-foundation migration was removed.
+- Add the authorized backend mutation for description, taxable status, default daily amount, and sort order.
+- Add editing controls to the existing Rates, Fees & Billing Rules page.
+- Preserve pay-type identity, historical references, Disable/Reactivate behavior, and Fleet Board colors.
+- Validate and reload authoritative state through existing Supabase contracts.
 
-## Verification
-
-- `npm run build`: passed on 2026-07-29.
-- `npm run lint`: passed on 2026-07-29.
-- `git diff --check`: passed on 2026-07-29.
-- Live RLS/grant behavior, authenticated Fleet Board payloads, and browser interaction remain unverified.
-
-## Blocked backend requirements
-
-- **BLOCKED:** authenticated read access is missing for required Fleet Board sources. This needs a reviewed backend grant/RLS change; it is not addressed in frontend code.
-- **BLOCKED:** the unified operational assignment source does not provide a backend-supported visible-period boundary. Frontend pagination or filtering was intentionally not added because it could silently omit assignments.
-
-## Next verification
-
-After the backend blockers are resolved, browser-test real vehicle status vocabulary, daylight-saving and day-boundary behavior, capacity counts, conflict resolution display, and large-fleet scrolling before connecting existing workflow handoffs.
-
-## Phase 3 final defect review
-
-The Fleet Board foundation is intentionally read-only. Operational changes remain in the existing reservation, transportation-event, vehicle assignment, billing, and conflict workflows. Live browser behavior and access to every board read source remain unverified without an approved authenticated test environment.
+Late fees, warranty-specific calculation, excess-mile billing, and broader reporting remain deferred until the normal billing workflow is complete.

@@ -48,19 +48,19 @@ The core billing release is complete when an authorized user can configure norma
 
 ## Phase 1 — Reconcile and secure existing billing contracts
 
-- [ ] Capture the exact live definitions, ownership, security mode, grants, RLS dependencies, and callers for every high-level billing workflow used by the frontend.
-- [ ] Identify the smallest high-level RPC boundary for configuration reads, billing activation, extension, close/return, same-vehicle continuation, and vehicle swap.
-- [ ] Keep low-level line and continuity functions internal; revoke browser execution where direct access is unnecessary.
-- [ ] Enforce authenticated application-user identity and the verified permission inside every frontend-callable write RPC.
-- [ ] Enforce any required AAL2 rule in executable backend code rather than relying on service-action metadata.
-- [ ] Reconcile recent live-only function/grant changes into idempotent repository migrations without reapplying or redesigning them.
-- [ ] Add sanitized, deterministic RPC status payloads that the frontend can structurally validate.
-- [ ] Verify anonymous denial, unauthorized authenticated denial, authorized success, RLS behavior, and grants.
-- [ ] Update this punchlist, `PROJECT_STATUS.md`, `CHANGELOG.md`, and `DECISIONS.md` if a security boundary decision changes.
+- [x] Capture the exact live definitions, ownership, security mode, grants, RLS dependencies, and callers for every high-level billing workflow used by the frontend.
+- [x] Identify the smallest high-level RPC boundary for configuration reads, billing activation, extension, close/return, same-vehicle continuation, and vehicle swap.
+- [x] Keep low-level line and continuity functions internal; revoke browser execution where direct access is unnecessary.
+- [x] Enforce authenticated application-user identity inside every frontend-callable write RPC. The verified operational boundary uses an active application user plus AAL2 and does not invent a separate feature-permission key.
+- [x] Enforce the required AAL2 rule in executable backend code rather than relying on service-action metadata.
+- [x] Reconcile the live function/grant changes into idempotent repository migrations without redesigning the existing workflows.
+- [x] Add sanitized, deterministic RPC status payloads that the frontend can structurally validate.
+- [ ] Verify anonymous denial, unauthorized authenticated denial, authorized success, and RLS behavior end to end with real application-user sessions. Static live grants and role access are verified.
+- [x] Update this punchlist, `PROJECT_STATUS.md`, and `CHANGELOG.md`. No new security-boundary decision was made, so `DECISIONS.md` is unchanged.
 
 **Phase 1 exit:** The frontend has a verified secure boundary for existing billing workflows; no rates or billing UI are added prematurely.
 
-The repository checkpoints now cover start/assign/bill plus the already-existing same-vehicle continuation and active-case reassignment engines. The continuation/reassignment migration is pending manual live application and verification, so broad Phase 1 and Phase 10 remain open. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Optional return and checkout mileage behavior is preserved. Excess-mile calculation remains future work.
+The repository and live Supabase now match for extension, completion/return, cancellation, start/assign/bill, same-vehicle continuation, and active-case reassignment. All six top-level case-write RPCs have verified ownership, security-definer/search-path settings, and role grants; internal helpers and direct workflow-table mutations remain unavailable to browser roles. Broad Phase 1 remains open only until anonymous, unauthorized authenticated, authorized success, and RLS behavior are exercised end to end with real application-user sessions. Ontrac mileage application/import-path verification remains unresolved: no live function or trigger applying staging odometer rows has been verified. Optional return and checkout mileage behavior is preserved. Excess-mile calculation remains future work. Phase 2 pay-type editing is the next implementation step.
 
 ## Phase 2 — Complete existing pay-type administration
 
@@ -219,15 +219,26 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 
 - Live Supabase billing configuration and current GitHub `main` were inspected.
 
+### 2026-08-04 — Phase 1 live deployment reconciliation
+
+- **VERIFIED GitHub:** `main` includes PR #11's start/assign/bill checkpoint, PR #12's continuation/reassignment checkpoint, and PR #13's PL/pgSQL terminator correction.
+- **VERIFIED live Supabase:** The six top-level case-write RPCs for extension, cancellation, completion/return, start/assign/bill, same-vehicle continuation, and active-case reassignment exist with the expected ownership, security-definer configuration, restricted search path, and execution grants.
+- **VERIFIED live Supabase:** Browser roles cannot directly execute the internal start/bill, continuation, or reassignment helpers or directly mutate the protected workflow tables; `service_role` retains the required internal access.
+- **VERIFIED live Supabase:** `ux_vehicle_events_one_open_per_vehicle` exists with the `is_open = true` predicate, and `restart_same_vehicle_after_gap(uuid, uuid, timestamptz)` delegates to the existing `start_vehicle_use_state` engine.
+- **NOT VERIFIED:** Real-session anonymous denial, unauthorized authenticated denial, authorized success, and end-to-end RLS/browser behavior remain the Phase 1 exit test.
+- **UNRESOLVED:** No live Ontrac function or trigger applying staging odometer rows has been verified. Optional checkout and return mileage behavior remains preserved; excess-mile calculation remains future work.
+- **NEXT:** Phase 2 pay-type editing. Late fees remain disabled and deferred.
+- This reconciliation changed documentation only; it did not execute SQL or change production behavior.
+
 ### 2026-07-31 — Continuation/reassignment security checkpoint prepared
 
 - **VERIFIED:** Dave manually applied PR #11's preceding start/assign/bill migration after its repository checkpoint, and all six live verification checks passed.
 - **VERIFIED baseline:** continuation and reassignment engines already existed; no React or deployed Edge Function caller existed; and `reservations`, `vehicle_events`, `contract_periods`, `reservation_vehicle_dependencies`, `reservation_conflicts`, `vehicle_swaps`, and `billing_lines` were empty.
 - **VERIFIED gap:** `restart_same_vehicle_after_gap` was absent live and in the repository even though the existing reservation restart workflow called it. The pending migration repairs that dependency by delegating to the existing `start_vehicle_use_state` engine.
-- **NOT APPLICABLE:** Codex made no frontend change and applied no live SQL. The migration remains pending Dave's manual statement-by-statement review, application, and verification; do not mark broad Phase 1 or Phase 10 complete beforehand.
+- **SUPERSEDED 2026-08-04:** The migration was subsequently applied and verified live. Broad Phase 1 remains open only for real-session end-to-end authorization and RLS tests; Phase 10 product workflows remain future implementation work.
 - **UNRESOLVED / NEXT:** authoritative amount/tax calculation remains unresolved. Pay-type administration Phase 2 is next after Phase 1 closes. Late fees remain disabled and deferred; eventual Admin-editable dollar amounts must not automatically charge a fee.
 - No production SQL, schema, data, frontend code, or billing behavior was changed.
-- Next implementation phase: **Phase 1 — Reconcile and secure existing billing contracts**.
+- Historical next step at this checkpoint was Phase 1 reconciliation; the current next implementation step is **Phase 2 — Complete existing pay-type administration**.
 
 ### 2026-07-30 — Operational RPC security checkpoint
 
@@ -235,7 +246,7 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - VERIFIED: Revoked browser-role execution from the listed internal helpers while retaining `service_role` execution.
 - VERIFIED: Return mileage remains optional; omission preserves the reservation's existing `end_mileage`.
 - VERIFIED: Production SQL for this checkpoint was applied and verified manually before this repository migration was recorded.
-- NOT VERIFIED: Same-vehicle continuation, start/assign/bill, and vehicle reassignment/swap remain Phase 1 work.
+- SUPERSEDED 2026-08-04: The same-vehicle continuation, start/assign/bill, and active-case reassignment security contracts were subsequently applied and verified live.
 - NOT VERIFIED: No live Ontrac function or trigger applying staging odometer rows has been verified. Checkout mileage is required to remain optional, but its handling remains part of the unverified start/assign/bill work. Return mileage is verified as optional, with omitted `p_end_mileage` preserving the existing `end_mileage`. Excess-mile calculation is future work.
 - No broad Phase 1 item is marked complete by this granular checkpoint.
 
@@ -245,4 +256,4 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - [x] Preserved inventory/create `p_vehicle_mileage`; checkout `p_start_mileage` is separate, optional, non-negative when supplied, and does not overwrite `reservations.start_mileage` when omitted.
 - [x] Added active-app-user/AAL2 enforcement, actor stamping for the exact created vehicle event and contract period, one-open-use-per-vehicle enforcement, and restricted internal helper/direct-table mutations.
 - [ ] Authoritative billing amount and tax calculation remains unresolved future work; this legacy boundary continues to accept trusted amount and tax inputs.
-- **VERIFIED baseline:** live verification found no frontend or deployed `fleet-constraint-engine` caller and zero rows in `reservations`, `vehicle_events`, `contract_periods`, and `billing_lines`. This migration was not applied to live Supabase.
+- **VERIFIED historical baseline:** At this checkpoint, no frontend or deployed `fleet-constraint-engine` caller existed and `reservations`, `vehicle_events`, `contract_periods`, and `billing_lines` were empty. **SUPERSEDED 2026-08-04:** The migration was subsequently applied and verified live.
