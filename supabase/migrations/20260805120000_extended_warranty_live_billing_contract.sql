@@ -82,51 +82,50 @@ returns jsonb language plpgsql security definer set search_path to '' as $functi
 declare v_user_id uuid; v_rules jsonb; begin
   select au.id into v_user_id from public.app_users au where au.auth_user_id = auth.uid() and au.is_active = true;
   if v_user_id is null or not exists (select 1 from public.v_user_effective_permissions p where p.user_id=v_user_id and p.permission_key='user_admin.manage') then raise exception 'Billing administration access denied' using errcode='42501'; end if;
-  select coalesce(jsonb_agg(jsonb_build_object('provider_id',wp.id,'provider_name',wp.name,'provider_type',wp.provider_type,'provider_default_daily_rate',wp.default_daily_rate,'is_enabled',wp.is_active,'rule_id',ewr.id,'covered_days',ewr.covered_days,'requires_approval',ewr.requires_approval,'rule_daily_rate',ewr.daily_rate,'resolved_daily_rate',coalesce(ewr.daily_rate,wp.default_daily_rate),'notes',ewr.notes,'rule_is_active',ewr.is_active,'created_at',ewr.created_at,'updated_at',ewr.updated_at) order by lower(btrim(wp.name)), ewr.id),'[]'::jsonb)
+  select coalesce(jsonb_agg(jsonb_build_object('provider_id',wp.id,'provider_name',wp.name,'provider_type',wp.provider_type,'provider_default_daily_rate',wp.default_daily_rate,'provider_is_active',wp.is_active,'rule_id',ewr.id,'covered_days',ewr.covered_days,'requires_approval',ewr.requires_approval,'rule_daily_rate',ewr.daily_rate,'resolved_daily_rate',coalesce(ewr.daily_rate,wp.default_daily_rate),'notes',ewr.notes,'rule_is_active',ewr.is_active,'created_at',ewr.created_at,'updated_at',ewr.updated_at) order by lower(btrim(wp.name)), ewr.id),'[]'::jsonb)
   into v_rules from public.warranty_providers wp join public.extended_warranty_rules ewr on ewr.provider_id=wp.id;
-  return jsonb_build_object('status','admin_billing_configuration_ready','can_manage',true,'extended_warranty_provider_rules',v_rules);
+  return jsonb_build_object('status','admin_billing_configuration_ready','can_manage',true,'extended_warranty_rules',v_rules);
 end;$function$;
 
-create or replace function public.create_admin_extended_warranty_provider_rule_state(p_provider_name text, p_default_daily_amount numeric, p_covered_days integer, p_requires_approval boolean, p_notes text)
+create or replace function public.create_admin_extended_warranty_provider_rule_state(p_provider_name text, p_default_daily_rate numeric, p_covered_days integer, p_requires_approval boolean, p_notes text)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare v_user_id uuid; v_provider public.warranty_providers%rowtype; v_rule public.extended_warranty_rules%rowtype; begin
   select au.id into v_user_id from public.app_users au where au.auth_user_id = auth.uid() and au.is_active = true;
   if v_user_id is null or not exists (select 1 from public.v_user_effective_permissions p where p.user_id=v_user_id and p.permission_key='user_admin.manage') then raise exception 'Billing administration access denied' using errcode='42501'; end if;
   if p_provider_name is null or btrim(p_provider_name)='' then raise exception 'Extended Warranty provider name is required' using errcode='22023'; end if;
-  if p_default_daily_amount is not null and (p_default_daily_amount < 0 or p_default_daily_amount in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Daily amount must be finite and zero or greater' using errcode='22023'; end if;
+  if p_default_daily_rate is not null and (p_default_daily_rate < 0 or p_default_daily_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Daily amount must be finite and zero or greater' using errcode='22023'; end if;
   if p_covered_days is not null and p_covered_days <= 0 then raise exception 'Covered-day cap must be a positive whole number' using errcode='22023'; end if;
   if p_requires_approval is null then raise exception 'Requires-approval selection is required' using errcode='22023'; end if;
-  insert into public.warranty_providers(name, provider_type, default_daily_rate, is_active) values (btrim(p_provider_name),'extended_warranty',p_default_daily_amount,true) returning * into v_provider;
-  insert into public.extended_warranty_rules(provider_id, covered_days, requires_approval, daily_rate, is_active, notes) values (v_provider.id,p_covered_days,p_requires_approval,p_default_daily_amount,true,nullif(btrim(coalesce(p_notes,'')),'')) returning * into v_rule;
-  return jsonb_build_object('status','admin_extended_warranty_provider_rule_created','provider_rule',jsonb_build_object('provider_id',v_provider.id,'provider_name',v_provider.name,'is_enabled',v_provider.is_active,'rule_id',v_rule.id,'covered_days',v_rule.covered_days,'requires_approval',v_rule.requires_approval,'rule_daily_rate',v_rule.daily_rate,'resolved_daily_rate',coalesce(v_rule.daily_rate,v_provider.default_daily_rate),'notes',v_rule.notes));
+  insert into public.warranty_providers(name, provider_type, default_daily_rate, is_active) values (btrim(p_provider_name),'extended_warranty',p_default_daily_rate,true) returning * into v_provider;
+  insert into public.extended_warranty_rules(provider_id, covered_days, requires_approval, daily_rate, is_active, notes) values (v_provider.id,p_covered_days,p_requires_approval,p_default_daily_rate,true,nullif(btrim(coalesce(p_notes,'')),'')) returning * into v_rule;
+  return jsonb_build_object('status','admin_extended_warranty_provider_rule_created','provider_rule',jsonb_build_object('provider_id',v_provider.id,'provider_name',v_provider.name,'provider_is_active',v_provider.is_active,'rule_id',v_rule.id,'covered_days',v_rule.covered_days,'requires_approval',v_rule.requires_approval,'rule_daily_rate',v_rule.daily_rate,'resolved_daily_rate',coalesce(v_rule.daily_rate,v_provider.default_daily_rate),'notes',v_rule.notes));
 exception when unique_violation then raise exception 'An Extended Warranty provider with this name or active rule already exists' using errcode='23505'; end;$function$;
 
-create or replace function public.update_admin_extended_warranty_provider_rule_state(p_rule_id uuid, p_provider_name text, p_default_daily_amount numeric, p_covered_days integer, p_requires_approval boolean, p_notes text)
+create or replace function public.update_admin_extended_warranty_provider_rule_state(p_provider_id uuid, p_provider_name text, p_default_daily_rate numeric, p_covered_days integer, p_requires_approval boolean, p_notes text)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare v_user_id uuid; v_rule public.extended_warranty_rules%rowtype; v_provider public.warranty_providers%rowtype; begin
   select au.id into v_user_id from public.app_users au where au.auth_user_id = auth.uid() and au.is_active = true;
   if v_user_id is null or not exists (select 1 from public.v_user_effective_permissions p where p.user_id=v_user_id and p.permission_key='user_admin.manage') then raise exception 'Billing administration access denied' using errcode='42501'; end if;
-  if p_rule_id is null then raise exception 'Extended Warranty rule ID is required' using errcode='22023'; end if;
+  if p_provider_id is null then raise exception 'Warranty provider ID is required' using errcode='22023'; end if;
   if p_provider_name is null or btrim(p_provider_name)='' then raise exception 'Extended Warranty provider name is required' using errcode='22023'; end if;
-  if p_default_daily_amount is not null and (p_default_daily_amount < 0 or p_default_daily_amount in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Daily amount must be finite and zero or greater' using errcode='22023'; end if;
+  if p_default_daily_rate is not null and (p_default_daily_rate < 0 or p_default_daily_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Daily amount must be finite and zero or greater' using errcode='22023'; end if;
   if p_covered_days is not null and p_covered_days <= 0 then raise exception 'Covered-day cap must be a positive whole number' using errcode='22023'; end if;
   if p_requires_approval is null then raise exception 'Requires-approval selection is required' using errcode='22023'; end if;
-  select * into v_rule from public.extended_warranty_rules where id=p_rule_id for update; if not found then raise exception 'Extended Warranty rule not found' using errcode='P0002'; end if;
-  update public.warranty_providers set name=btrim(p_provider_name), default_daily_rate=p_default_daily_amount where id=v_rule.provider_id returning * into v_provider;
-  update public.extended_warranty_rules set covered_days=p_covered_days, requires_approval=p_requires_approval, daily_rate=p_default_daily_amount, notes=nullif(btrim(coalesce(p_notes,'')),'') where id=p_rule_id returning * into v_rule;
-  return jsonb_build_object('status','admin_extended_warranty_provider_rule_updated','provider_rule',jsonb_build_object('provider_id',v_provider.id,'provider_name',v_provider.name,'is_enabled',v_provider.is_active,'rule_id',v_rule.id,'covered_days',v_rule.covered_days,'requires_approval',v_rule.requires_approval,'rule_daily_rate',v_rule.daily_rate,'resolved_daily_rate',coalesce(v_rule.daily_rate,v_provider.default_daily_rate),'notes',v_rule.notes));
+  select * into v_rule from public.extended_warranty_rules where provider_id=p_provider_id order by is_active desc, updated_at desc, created_at desc, id limit 1 for share; if not found then raise exception 'Extended warranty rule not found' using errcode='P0002'; end if;
+  update public.warranty_providers set name=btrim(p_provider_name), default_daily_rate=p_default_daily_rate where id=p_provider_id returning * into v_provider;
+  update public.extended_warranty_rules set covered_days=p_covered_days, requires_approval=p_requires_approval, daily_rate=p_default_daily_rate, notes=nullif(btrim(coalesce(p_notes,'')),'') where id=v_rule.id returning * into v_rule;
+  return jsonb_build_object('status','admin_extended_warranty_provider_rule_updated','provider_rule',jsonb_build_object('provider_id',v_provider.id,'provider_name',v_provider.name,'provider_is_active',v_provider.is_active,'rule_id',v_rule.id,'covered_days',v_rule.covered_days,'requires_approval',v_rule.requires_approval,'rule_daily_rate',v_rule.daily_rate,'resolved_daily_rate',coalesce(v_rule.daily_rate,v_provider.default_daily_rate),'notes',v_rule.notes));
 exception when unique_violation then raise exception 'An Extended Warranty provider with this name already exists' using errcode='23505'; end;$function$;
 
-create or replace function public.set_admin_extended_warranty_provider_enabled_state(p_rule_id uuid, p_is_enabled boolean)
+create or replace function public.set_admin_extended_warranty_provider_enabled_state(p_provider_id uuid, p_is_enabled boolean)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare v_user_id uuid; v_rule public.extended_warranty_rules%rowtype; v_provider public.warranty_providers%rowtype; begin
   select au.id into v_user_id from public.app_users au where au.auth_user_id = auth.uid() and au.is_active = true;
   if v_user_id is null or not exists (select 1 from public.v_user_effective_permissions p where p.user_id=v_user_id and p.permission_key='user_admin.manage') then raise exception 'Billing administration access denied' using errcode='42501'; end if;
-  if p_rule_id is null or p_is_enabled is null then raise exception 'Rule ID and enabled state are required' using errcode='22023'; end if;
-  select * into v_rule from public.extended_warranty_rules where id=p_rule_id for update; if not found then raise exception 'Extended Warranty rule not found' using errcode='P0002'; end if;
-  update public.warranty_providers set is_active=p_is_enabled where id=v_rule.provider_id returning * into v_provider;
-  update public.extended_warranty_rules set is_active=p_is_enabled where id=p_rule_id returning * into v_rule;
-  return jsonb_build_object('status',case when p_is_enabled then 'admin_extended_warranty_provider_rule_enabled' else 'admin_extended_warranty_provider_rule_disabled' end,'provider_rule',jsonb_build_object('provider_id',v_provider.id,'provider_name',v_provider.name,'is_enabled',v_provider.is_active,'rule_id',v_rule.id,'covered_days',v_rule.covered_days,'requires_approval',v_rule.requires_approval,'rule_daily_rate',v_rule.daily_rate,'resolved_daily_rate',coalesce(v_rule.daily_rate,v_provider.default_daily_rate),'notes',v_rule.notes));
+  if p_provider_id is null or p_is_enabled is null then raise exception 'Warranty provider ID and enabled state are required' using errcode='22023'; end if;
+  select * into v_rule from public.extended_warranty_rules where provider_id=p_provider_id order by is_active desc, updated_at desc, created_at desc, id limit 1 for share; if not found then raise exception 'Extended warranty rule not found' using errcode='P0002'; end if;
+  update public.warranty_providers set is_active=p_is_enabled where id=p_provider_id returning * into v_provider;
+  return jsonb_build_object('status',case when p_is_enabled then 'admin_extended_warranty_provider_enabled' else 'admin_extended_warranty_provider_disabled' end,'provider_rule',jsonb_build_object('provider_id',v_provider.id,'provider_name',v_provider.name,'provider_is_active',v_provider.is_active,'rule_id',v_rule.id,'covered_days',v_rule.covered_days,'requires_approval',v_rule.requires_approval,'rule_daily_rate',v_rule.daily_rate,'resolved_daily_rate',coalesce(v_rule.daily_rate,v_provider.default_daily_rate),'notes',v_rule.notes));
 end;$function$;
 
 create or replace function public.create_extended_warranty_case_and_get_state(p_transportation_event_id uuid, p_provider_id uuid)
