@@ -287,6 +287,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     try { parseRentalRateMutation(result.data, enabled ? 'admin_rental_rate_rule_enabled' : 'admin_rental_rate_rule_disabled', item.id) }
     catch { setMessage('The rental rate status changed, but its result could not be verified. Refresh before trying again.'); setBusy(false); return }
     if (await load()) setSuccessMessage(`Rental rate ${enabled ? 'reactivated' : 'disabled'} successfully.`)
+    else setMessage(`The rental rate changed, but authoritative settings could not be reloaded after ${enabled ? 'reactivating' : 'disabling'}. Refresh before making another change.`)
   }
 
   const saveColors = async () => {
