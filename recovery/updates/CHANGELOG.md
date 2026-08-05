@@ -103,3 +103,9 @@
 - No SQL, schema, migration, function, view, grant, policy, trigger, or seed changes were made.
 - Live database access for the authenticated browser role was not verified.
 - MFA, password reset, feature-level permission rules, navigation restrictions, and role-management UI were not implemented.
+
+## 2026-08-04 — Billing Phase 3 rental rate administration implementation
+
+- Recorded the already-applied live Phase 3 rental-rate contract in an idempotent repository migration without seeding or inventing business rates.
+- Extended Rates, Fees & Billing Rules with RPC-only rental-rate administration for Admin-entered vehicle class/model identifiers, pay-type selection, daily rate, sort order, and Disable/Reactivate controls. Delete behavior was not added.
+- Added focused structural tests for the Phase 3 schema/RPC/security/frontend contract. Live Supabase verification had already passed before this repository implementation; frontend deployment and browser verification remain **NOT VERIFIED**.
