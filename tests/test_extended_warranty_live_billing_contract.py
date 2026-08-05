@@ -60,6 +60,11 @@ class ExtendedWarrantyLiveBillingContractTest(unittest.TestCase):
     def test_runtime_boundaries(self):
         for text in ["auth.jwt() ->> 'aal'", "<> 'aal2'", "permission_key='billing.extended_warranty_override'", "insert into public.audit_log", "pay_type='Customer Pay'", "pay_type='Extended Warranty'", "public.business_contract_days(v_case.coverage_started_at", "public.business_contract_days(v_vehicle_event.actual_out_at", "public.close_billing_line_state", "public.create_billing_parent_line_state", "line_type='pay_type_split'", "extended_from_billing_line_id=v_parent.id", "manual_review"]:
             self.assertIn(text, self.sql)
+        for text in ["provider_type='extended_warranty'", "provider_type','extended_warranty'", "returning * into v_case", "end,null,clock_timestamp()", "approved_days=p_covered_days_override", "effective_approved_days", "p_effective_at < v_boundary", "where transportation_event_id=p_transportation_event_id for update", "extended_warranty_coverage_split_already_exists", "extended_warranty_manual_review_missing_parent_line"]:
+            self.assertIn(text, self.sql)
+        self.assertNotIn("require_extended_warranty_actor_state", self.lower_sql)
+        self.assertNotIn("on conflict (transportation_event_id) do update", self.lower_sql)
+        self.assertNotIn("'Extended Warranty',p_default_daily_amount,true", self.sql)
         self.assertNotIn("warranty_day_ledger", self.lower_sql)
         self.assertNotRegex(self.sql, r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
@@ -68,6 +73,11 @@ class ExtendedWarrantyLiveBillingContractTest(unittest.TestCase):
             self.assertIn(f"supabase.rpc('{rpc}'", self.frontend)
         self.assertIn("Extended Warranty Providers", self.frontend)
         self.assertIn("Blank means no automatic cap", self.frontend)
+        self.assertIn("ExtendedWarrantyFocusMode", self.frontend)
+        self.assertIn("Cancel / Return to Rates, Fees &amp; Billing Rules", self.frontend)
+        self.assertIn("Return to Rates, Fees &amp; Billing Rules", self.frontend)
+        self.assertIn("extendedWarrantyFocusMode === 'form'", self.frontend)
+        self.assertIn("extendedWarrantyFocusMode === 'success'", self.frontend)
         self.assertIn("parseExtendedWarrantyState", self.frontend)
         self.assertNotIn("warranty_providers')", self.frontend)
         self.assertNotIn("extended_warranty_rules')", self.frontend)

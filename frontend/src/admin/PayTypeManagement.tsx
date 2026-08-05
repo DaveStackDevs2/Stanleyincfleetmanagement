@@ -22,6 +22,7 @@ type RentalRateForm = { id: string | null; vehicleClass: string; payTypeRuleId: 
 type ExtendedWarrantyProviderRule = { id: string; providerId: string; providerName: string; enabled: boolean; defaultDailyAmount: number | null; coveredDays: number | null; requiresApproval: boolean; notes: string }
 type ExtendedWarrantyState = { providerRules: ExtendedWarrantyProviderRule[] }
 type ExtendedWarrantyForm = { id: string | null; providerName: string; defaultDailyAmount: string; coveredDays: string; requiresApproval: boolean; notes: string }
+type ExtendedWarrantyFocusMode = 'list' | 'form' | 'success'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const HEX = /^#[0-9a-f]{6}$/i
@@ -168,6 +169,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [rateState, setRateState] = useState<RentalRateState | null>(null)
   const [extendedWarrantyState, setExtendedWarrantyState] = useState<ExtendedWarrantyState | null>(null)
   const [extendedWarrantyForm, setExtendedWarrantyForm] = useState<ExtendedWarrantyForm>({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' })
+  const [extendedWarrantyFocusMode, setExtendedWarrantyFocusMode] = useState<ExtendedWarrantyFocusMode>('list')
   const [rateForm, setRateForm] = useState<RentalRateForm>({ id: null, vehicleClass: '', payTypeRuleId: '', dailyRate: '', sortOrder: '0' })
   const [draftColors, setDraftColors] = useState<Record<string, ColorPair>>({})
   const [dirtyColorKeys, setDirtyColorKeys] = useState<Set<string>>(() => new Set())
@@ -331,6 +333,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const editExtendedWarrantyProvider = (item: ExtendedWarrantyProviderRule) => {
     setMessage(null); setSuccessMessage(null)
     setExtendedWarrantyForm({ id: item.id, providerName: item.providerName, defaultDailyAmount: item.defaultDailyAmount === null ? '' : String(item.defaultDailyAmount), coveredDays: item.coveredDays === null ? '' : String(item.coveredDays), requiresApproval: item.requiresApproval, notes: item.notes })
+    setExtendedWarrantyFocusMode('form')
   }
 
   const saveExtendedWarrantyProvider = async (event: FormEvent) => {
@@ -353,7 +356,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     try { parseExtendedWarrantyMutation(result.data, isEdit ? 'admin_extended_warranty_provider_rule_updated' : 'admin_extended_warranty_provider_rule_created', extendedWarrantyForm.id ?? undefined) }
     catch { setMessage('The Extended Warranty provider request completed, but its result could not be verified. Refresh before trying again.'); setBusy(false); return }
     const reloaded = await load()
-    if (reloaded) { setExtendedWarrantyForm({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' }); setSuccessMessage(`Extended Warranty provider ${isEdit ? 'updated' : 'added'} successfully.`) }
+    if (reloaded) { setExtendedWarrantyForm({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' }); setSuccessMessage(`Extended Warranty provider ${isEdit ? 'updated' : 'added'} successfully.`); setExtendedWarrantyFocusMode('success') }
     else setMessage('The Extended Warranty provider changed, but authoritative settings could not be reloaded. Refresh before making another change.')
   }
 
@@ -425,20 +428,21 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       </section>
 
 
-      <section className="vehicle-table-card extended-warranty-providers"><div className="section-heading"><div><h2>Extended Warranty Providers</h2><p>Configure outside Extended Warranty providers separately from GM Warranty and the single Extended Warranty pay type. Leave the covered-day cap blank unless that provider has a maximum number of covered days.</p></div></div>
+      <section className="vehicle-table-card extended-warranty-providers"><div className="section-heading"><div><h2>Extended Warranty Providers</h2><p>Configure outside Extended Warranty providers separately from GM Warranty and the single Extended Warranty pay type. Leave the covered-day cap blank unless that provider has a maximum number of covered days.</p></div>{extendedWarrantyFocusMode === 'list' && <button className="primary-action" type="button" disabled={busy} onClick={() => { setMessage(null); setSuccessMessage(null); setExtendedWarrantyForm({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' }); setExtendedWarrantyFocusMode('form') }}>Add Extended Warranty Provider</button>}</div>
         {!extendedWarrantyState && <p className="data-message">Extended Warranty provider settings could not be loaded. Pay Type management remains available.</p>}
-        {extendedWarrantyState && <>
+        {extendedWarrantyState && extendedWarrantyFocusMode === 'list' && <>
           {extendedWarrantyState.providerRules.length === 0 ? <p className="empty-state">No Extended Warranty providers are configured yet. Add providers only after approved business values are available.</p> :
             <div className="table-wrap"><table><thead><tr><th>Provider</th><th>Default daily amount</th><th>Covered-day cap</th><th>Requires approval</th><th>Notes</th><th>Status</th><th>Action</th></tr></thead><tbody>{extendedWarrantyState.providerRules.map((item) => <tr key={item.id}><td><strong>{item.providerName}</strong></td><td>{item.defaultDailyAmount == null ? '—' : item.defaultDailyAmount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td>{item.coveredDays ?? 'No automatic cap'}</td><td>{item.requiresApproval ? 'Yes' : 'No'}</td><td>{item.notes || '—'}</td><td>{item.enabled ? 'Enabled' : 'Disabled'}</td><td><button type="button" disabled={busy} onClick={() => editExtendedWarrantyProvider(item)}>Edit</button>{' '}<button type="button" disabled={busy} onClick={() => void setExtendedWarrantyProviderEnabled(item)}>{item.enabled ? 'Disable' : 'Reactivate'}</button></td></tr>)}</tbody></table></div>}
-          <form className="details-panel editor-body" onSubmit={saveExtendedWarrantyProvider}><div><h2>{extendedWarrantyForm.id ? 'Edit Extended Warranty Provider' : 'Add Extended Warranty Provider'}</h2><p>This focused form updates provider/rule defaults through Admin RPCs only; historical cases keep their snapshots.</p></div>
+        </>}
+        {extendedWarrantyState && extendedWarrantyFocusMode === 'success' && <div className="details-panel editor-body" role="status" aria-live="polite"><div><h2>Extended Warranty provider saved</h2><p>The provider was saved and authoritative billing-rule data was reloaded. Return to Rates, Fees &amp; Billing Rules to review the current list.</p></div><button className="primary-action" type="button" disabled={busy} onClick={() => { setSuccessMessage(null); setExtendedWarrantyFocusMode('list') }}>Return to Rates, Fees &amp; Billing Rules</button></div>}
+        {extendedWarrantyState && extendedWarrantyFocusMode === 'form' && <form className="details-panel editor-body" onSubmit={saveExtendedWarrantyProvider}><div><h2>{extendedWarrantyForm.id ? 'Edit Extended Warranty Provider' : 'Add Extended Warranty Provider'}</h2><p>This focused form updates provider/rule defaults through Admin RPCs only; historical cases keep their snapshots.</p></div>
             <label>Provider name<input required value={extendedWarrantyForm.providerName} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, providerName: event.target.value })}/></label>
             <label>Default daily amount<input min="0" step="0.01" type="number" value={extendedWarrantyForm.defaultDailyAmount} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, defaultDailyAmount: event.target.value })}/></label>
             <label>Optional covered-day cap<input min="1" step="1" type="number" aria-describedby="extended-warranty-cap-help" value={extendedWarrantyForm.coveredDays} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, coveredDays: event.target.value })}/><span id="extended-warranty-cap-help">Only enter a number when that provider has a maximum number of covered days. Blank means no automatic cap.</span></label>
             <label className="checkbox-field"><input type="checkbox" checked={extendedWarrantyForm.requiresApproval} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, requiresApproval: event.target.checked })}/> Requires approval</label>
             <label>Notes<textarea value={extendedWarrantyForm.notes} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, notes: event.target.value })}/></label>
-            <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{extendedWarrantyForm.id ? 'Save Extended Warranty Provider' : 'Add Extended Warranty Provider'}</button>{extendedWarrantyForm.id && <button type="button" disabled={busy} onClick={() => setExtendedWarrantyForm({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' })}>Cancel</button>}</div>
-          </form>
-        </>}
+            <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{extendedWarrantyForm.id ? 'Save Extended Warranty Provider' : 'Add Extended Warranty Provider'}</button><button type="button" disabled={busy} onClick={() => { setMessage(null); setExtendedWarrantyForm({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' }); setExtendedWarrantyFocusMode('list') }}>Cancel / Return to Rates, Fees &amp; Billing Rules</button></div>
+          </form>}
       </section>
 
       <div className="pay-type-grid">
