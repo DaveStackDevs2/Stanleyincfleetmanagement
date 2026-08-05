@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-05 — Extended Warranty mandatory provider cap follow-up
+
+- Recorded the verified live mandatory-cap contract in an idempotent follow-up migration after the existing Extended Warranty live billing contract migration.
+- Updated Extended Warranty Providers administration to remove provider-level approval controls, require a positive covered-day cap, validate returned compatibility `requires_approval` values as `false`, and keep sending `p_requires_approval: false` to the existing Admin RPC signatures.
+- Preserved the existing case-level `billing.extended_warranty_override` path for exceptional coverage extensions and did not change GM Warranty behavior, pay-type behavior, rate behavior, coverage timers, VIN-swap continuity, or other billing engines.
+- Real authenticated mutation/browser verification remains **NOT VERIFIED**; this repository migration is not claimed as applied live by this changelog entry.
+
 ## 2026-08-04 — Billing Phase 2 pay-type editing implementation
 
 - Recorded the verified live ownership, security-definer/search-path configuration, authorization path, and restricted execution grants for `update_admin_pay_type_rule_state(uuid, boolean, numeric, integer, text)` in an idempotent repository migration.

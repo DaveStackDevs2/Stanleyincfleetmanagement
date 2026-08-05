@@ -55,6 +55,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 
 ## Billing Extended Warranty — live billing contract status
 
+- **VERIFIED live Supabase before repository follow-up:** the live mandatory-cap contract was verified before repository work. Every Extended Warranty provider now requires a positive whole-number covered-day cap, provider-level approval is disabled, compatible Admin create/update RPC signatures reject blank/nonpositive caps and provider approval, store `requires_approval = false`, and retain the verified owner/security/search-path/grant boundaries.
+- **IMPLEMENTED IN THE REPOSITORY:** a follow-up migration and Admin UI update now mirror that mandatory-cap contract without changing the existing case-level `billing.extended_warranty_override` workflow.
+- **NOT VERIFIED:** real authenticated mutation/browser verification remains open. The repository migration is not itself proof of live application.
 - **IMPLEMENTED IN THE REPOSITORY / LIVE CONTRACT VERIFIED:** Extended Warranty provider/rule administration is no longer deferred. The migration records the verified provider/rule constraints, Admin RPCs, low-level service-role boundary, case snapshot fields, override permission, runtime case/reconciliation RPC signatures, ownership, security modes, restricted search paths, and role grants.
 - **VERIFIED live/static boundary:** live contract/grants and static boundary checks passed, all provider/rule/case/billing tables had zero rows, and no provider names, rates, caps, pay-type UUIDs, GM Warranty behavior, tax calculation, cashiering, reporting, reservations, quotes, or Fleet Board mutation workflows were introduced.
 - **NOT VERIFIED:** real-session/browser verification remains open. Runtime browser verification is not complete.

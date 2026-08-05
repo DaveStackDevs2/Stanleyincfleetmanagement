@@ -277,3 +277,10 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - [x] Extended Rates, Fees & Billing Rules with a visually separate Extended Warranty Providers section that uses Admin RPCs only and offers Add, focused Edit, Disable, and Reactivate with no Delete action.
 - [x] VERIFIED: live contract/grants and static boundary checks passed before repository capture; all provider/rule/case/billing tables had zero rows, so no business rates or historical billing rows were rewritten.
 - [ ] NOT VERIFIED: real-session/browser verification remains open and must not be marked complete until exercised with real authenticated sessions.
+
+### 2026-08-05 — Extended Warranty mandatory provider cap follow-up
+
+- **VERIFIED before repository work:** the live mandatory-cap contract was verified before repository work: `public.extended_warranty_rules.covered_days` is `NOT NULL`, provider-level approval is disabled by constraint, the compatible Admin create/update RPC signatures require positive covered days, reject provider approval, store `requires_approval = false`, and keep the verified owner/security/search-path/grant boundaries.
+- **IMPLEMENTED IN THE REPOSITORY:** added an idempotent follow-up migration after `20260805120000_extended_warranty_live_billing_contract.sql` and updated Rates, Fees & Billing Rules so Extended Warranty providers require a positive covered-day cap and always send `p_requires_approval: false` through the existing RPC signatures.
+- **PRESERVED:** case-level `billing.extended_warranty_override` remains the only exceptional coverage-extension workflow; GM Warranty behavior, pay-type behavior, rate behavior, coverage timer, VIN-swap continuity, and other billing engines were not changed.
+- **NOT VERIFIED:** real authenticated mutation/browser verification remains open. This repository migration has not been claimed as applied live by this commit.
