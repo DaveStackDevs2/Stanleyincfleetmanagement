@@ -109,3 +109,10 @@
 - Recorded the already-applied live Phase 3 rental-rate contract in an idempotent repository migration without seeding or inventing business rates.
 - Extended Rates, Fees & Billing Rules with RPC-only rental-rate administration for Admin-entered vehicle class/model identifiers, pay-type selection, daily rate, sort order, and Disable/Reactivate controls. Delete behavior was not added.
 - Added focused structural tests for the Phase 3 schema/RPC/security/frontend contract. Live Supabase verification had already passed before this repository implementation; frontend deployment and browser verification remain **NOT VERIFIED**.
+
+## 2026-08-05 — Extended Warranty live billing contract
+
+- Recorded the already-verified Extended Warranty billing contract in one idempotent migration, including nullable/positive covered-day caps, nullable finite nonnegative daily amounts, required provider/rule relationships, one active rule per provider, normalized provider-name uniqueness, case snapshots, override permission assignment, owners, security modes, search paths, and grants.
+- Added runtime RPC definitions for creating Extended Warranty cases, saving authorized covered-day overrides with audit logging, internal cap reconciliation, and browser-facing coverage state retrieval that keeps case-level coverage continuity separate from the current vehicle timer.
+- Added Extended Warranty Providers administration to Rates, Fees & Billing Rules through the shared Supabase client and Admin RPCs only, with Add, focused Edit, Disable, and Reactivate; no Delete workflow was added.
+- Preserved GM Warranty separation, existing pay types, historical provider/pay-type records, existing billing engines, and the no-cashiering boundary. Live contract/grants and static boundary checks passed; provider/rule/case/billing tables had zero rows. Real-session/browser verification remains open.
