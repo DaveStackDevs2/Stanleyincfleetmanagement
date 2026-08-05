@@ -19,6 +19,9 @@ type PayTypeState = { payTypes: PayType[]; colors: Record<string, ColorPair> }
 type ColorState = { payTypes: string[]; colors: Record<string, ColorPair> }
 type EditForm = { id: string; payType: string; taxable: boolean; amount: string; sortOrder: string; description: string }
 type RentalRateForm = { id: string | null; vehicleClass: string; payTypeRuleId: string; dailyRate: string; sortOrder: string }
+type ExtendedWarrantyProviderRule = { id: string; providerId: string; providerName: string; enabled: boolean; defaultDailyAmount: number | null; coveredDays: number | null; requiresApproval: boolean; notes: string }
+type ExtendedWarrantyState = { providerRules: ExtendedWarrantyProviderRule[] }
+type ExtendedWarrantyForm = { id: string | null; providerName: string; defaultDailyAmount: string; coveredDays: string; requiresApproval: boolean; notes: string }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const HEX = /^#[0-9a-f]{6}$/i
@@ -110,6 +113,33 @@ function parseRentalRateState(value: unknown): RentalRateState {
   return { rateRules, payTypes }
 }
 
+function parseExtendedWarrantyProviderRule(item: unknown): ExtendedWarrantyProviderRule {
+  if (!isRecord(item) || typeof item.rule_id !== 'string' || !UUID.test(item.rule_id) ||
+    typeof item.provider_id !== 'string' || !UUID.test(item.provider_id) ||
+    typeof item.provider_name !== 'string' || !item.provider_name.trim() ||
+    typeof item.is_enabled !== 'boolean' ||
+    !(item.resolved_daily_rate === null || (typeof item.resolved_daily_rate === 'number' && Number.isFinite(item.resolved_daily_rate) && item.resolved_daily_rate >= 0)) ||
+    !(item.covered_days === null || (typeof item.covered_days === 'number' && Number.isInteger(item.covered_days) && item.covered_days > 0)) ||
+    typeof item.requires_approval !== 'boolean' ||
+    !(item.notes === null || typeof item.notes === 'string')) throw new Error('invalid-extended-warranty-provider-rule')
+  return { id: item.rule_id, providerId: item.provider_id, providerName: item.provider_name, enabled: item.is_enabled,
+    defaultDailyAmount: item.resolved_daily_rate, coveredDays: item.covered_days, requiresApproval: item.requires_approval, notes: item.notes ?? '' }
+}
+
+function parseExtendedWarrantyState(value: unknown): ExtendedWarrantyState {
+  if (!isRecord(value) || value.status !== 'admin_billing_configuration_ready' || value.can_manage !== true || !Array.isArray(value.extended_warranty_provider_rules)) {
+    throw new Error('invalid-extended-warranty-state')
+  }
+  return { providerRules: value.extended_warranty_provider_rules.map(parseExtendedWarrantyProviderRule) }
+}
+
+function parseExtendedWarrantyMutation(value: unknown, expectedStatus: string, expectedId?: string): ExtendedWarrantyProviderRule {
+  if (!isRecord(value) || value.status !== expectedStatus || !isRecord(value.provider_rule)) throw new Error('invalid-extended-warranty-mutation')
+  const rule = parseExtendedWarrantyProviderRule(value.provider_rule)
+  if (expectedId && rule.id !== expectedId) throw new Error('unexpected-extended-warranty-rule')
+  return rule
+}
+
 function parseRentalRateMutation(value: unknown, expectedStatus: string, expectedId?: string): RentalRateRule {
   if (!isRecord(value) || value.status !== expectedStatus || !isRecord(value.rental_rate_rule)) throw new Error('invalid-rental-rate-mutation')
   const rule = parseRentalRateRule(value.rental_rate_rule)
@@ -136,6 +166,8 @@ function parseUpdatedPayType(value: unknown, expectedId: string): void {
 export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [state, setState] = useState<PayTypeState | null>(null)
   const [rateState, setRateState] = useState<RentalRateState | null>(null)
+  const [extendedWarrantyState, setExtendedWarrantyState] = useState<ExtendedWarrantyState | null>(null)
+  const [extendedWarrantyForm, setExtendedWarrantyForm] = useState<ExtendedWarrantyForm>({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' })
   const [rateForm, setRateForm] = useState<RentalRateForm>({ id: null, vehicleClass: '', payTypeRuleId: '', dailyRate: '', sortOrder: '0' })
   const [draftColors, setDraftColors] = useState<Record<string, ColorPair>>({})
   const [dirtyColorKeys, setDirtyColorKeys] = useState<Set<string>>(() => new Set())
@@ -147,10 +179,11 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
 
   const load = useCallback(async () => {
     setBusy(true); setMessage(null); setSuccessMessage(null)
-    const [rules, palette, rentalRates] = await Promise.all([
+    const [rules, palette, rentalRates, extendedWarranty] = await Promise.all([
       supabase.rpc('get_admin_pay_type_rules_state'),
       supabase.rpc('get_fleet_board_pay_type_colors_state'),
       supabase.rpc('get_admin_rental_rate_rules_state'),
+      supabase.rpc('get_admin_billing_configuration_state'),
     ])
     try {
       if (rules.error || palette.error) throw new Error('request-failed')
@@ -158,6 +191,8 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       parseColors(palette.data)
       if (!rentalRates.error) setRateState(parseRentalRateState(rentalRates.data))
       else setRateState(null)
+      if (!extendedWarranty.error) setExtendedWarrantyState(parseExtendedWarrantyState(extendedWarranty.data))
+      else setExtendedWarrantyState(null)
       setState({ payTypes, colors })
       setDraftColors(Object.fromEntries(payTypes.filter((item) => item.enabled).map((item) => [
         item.payType, colors[item.payType] ?? FALLBACK_COLORS,
@@ -167,6 +202,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     } catch {
       setState(null)
       setRateState(null)
+      setExtendedWarrantyState(null)
       setMessage('Pay-type settings could not be loaded. Confirm your access and try again.')
       return false
     } finally { setBusy(false) }
@@ -290,6 +326,48 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     else setMessage(`The rental rate changed, but authoritative settings could not be reloaded after ${enabled ? 'reactivating' : 'disabling'}. Refresh before making another change.`)
   }
 
+
+
+  const editExtendedWarrantyProvider = (item: ExtendedWarrantyProviderRule) => {
+    setMessage(null); setSuccessMessage(null)
+    setExtendedWarrantyForm({ id: item.id, providerName: item.providerName, defaultDailyAmount: item.defaultDailyAmount === null ? '' : String(item.defaultDailyAmount), coveredDays: item.coveredDays === null ? '' : String(item.coveredDays), requiresApproval: item.requiresApproval, notes: item.notes })
+  }
+
+  const saveExtendedWarrantyProvider = async (event: FormEvent) => {
+    event.preventDefault()
+    if (busy) return
+    const amount = extendedWarrantyForm.defaultDailyAmount.trim() === '' ? null : Number(extendedWarrantyForm.defaultDailyAmount)
+    const coveredDays = extendedWarrantyForm.coveredDays.trim() === '' ? null : Number(extendedWarrantyForm.coveredDays)
+    if (!extendedWarrantyForm.providerName.trim() || (amount !== null && (!Number.isFinite(amount) || amount < 0)) ||
+      (coveredDays !== null && (!Number.isInteger(coveredDays) || coveredDays <= 0))) {
+      setMessage('Enter a provider name, optional finite non-negative daily amount, and optional positive whole-number covered-day cap.')
+      return
+    }
+    setBusy(true); setMessage(null); setSuccessMessage(null)
+    const isEdit = extendedWarrantyForm.id !== null
+    const payload = { p_provider_name: extendedWarrantyForm.providerName.trim(), p_default_daily_amount: amount, p_covered_days: coveredDays, p_requires_approval: extendedWarrantyForm.requiresApproval, p_notes: extendedWarrantyForm.notes.trim() || null }
+    const result = isEdit
+      ? await supabase.rpc('update_admin_extended_warranty_provider_rule_state', { p_rule_id: extendedWarrantyForm.id, ...payload })
+      : await supabase.rpc('create_admin_extended_warranty_provider_rule_state', payload)
+    if (result.error) { setMessage(`The Extended Warranty provider could not be ${isEdit ? 'updated' : 'added'}. Review the values and try again. No change was confirmed.`); setBusy(false); return }
+    try { parseExtendedWarrantyMutation(result.data, isEdit ? 'admin_extended_warranty_provider_rule_updated' : 'admin_extended_warranty_provider_rule_created', extendedWarrantyForm.id ?? undefined) }
+    catch { setMessage('The Extended Warranty provider request completed, but its result could not be verified. Refresh before trying again.'); setBusy(false); return }
+    const reloaded = await load()
+    if (reloaded) { setExtendedWarrantyForm({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' }); setSuccessMessage(`Extended Warranty provider ${isEdit ? 'updated' : 'added'} successfully.`) }
+    else setMessage('The Extended Warranty provider changed, but authoritative settings could not be reloaded. Refresh before making another change.')
+  }
+
+  const setExtendedWarrantyProviderEnabled = async (item: ExtendedWarrantyProviderRule) => {
+    setBusy(true); setMessage(null); setSuccessMessage(null)
+    const enabled = !item.enabled
+    const result = await supabase.rpc('set_admin_extended_warranty_provider_enabled_state', { p_rule_id: item.id, p_is_enabled: enabled })
+    if (result.error) { setMessage(`The Extended Warranty provider could not be ${enabled ? 'reactivated' : 'disabled'}. No changes were applied.`); setBusy(false); return }
+    try { parseExtendedWarrantyMutation(result.data, enabled ? 'admin_extended_warranty_provider_rule_enabled' : 'admin_extended_warranty_provider_rule_disabled', item.id) }
+    catch { setMessage('The Extended Warranty provider status changed, but its result could not be verified. Refresh before trying again.'); setBusy(false); return }
+    if (await load()) setSuccessMessage(`Extended Warranty provider ${enabled ? 'reactivated' : 'disabled'} successfully.`)
+    else setMessage(`The Extended Warranty provider changed, but authoritative settings could not be reloaded after ${enabled ? 'reactivating' : 'disabling'}. Refresh before making another change.`)
+  }
+
   const saveColors = async () => {
     if (!state) return
     setBusy(true); setMessage(null); setSuccessMessage(null)
@@ -342,6 +420,23 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
             <label>Daily rate<input required min="0" step="0.01" type="number" value={rateForm.dailyRate} disabled={busy} onChange={(event) => setRateForm({ ...rateForm, dailyRate: event.target.value })}/></label>
             <label>Sort order<input required min="0" step="1" type="number" value={rateForm.sortOrder} disabled={busy} onChange={(event) => setRateForm({ ...rateForm, sortOrder: event.target.value })}/></label>
             <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{rateForm.id ? 'Save Rental Rate' : 'Add Rental Rate'}</button>{rateForm.id && <button type="button" disabled={busy} onClick={() => setRateForm({ id: null, vehicleClass: '', payTypeRuleId: '', dailyRate: '', sortOrder: '0' })}>Cancel</button>}</div>
+          </form>
+        </>}
+      </section>
+
+
+      <section className="vehicle-table-card extended-warranty-providers"><div className="section-heading"><div><h2>Extended Warranty Providers</h2><p>Configure outside Extended Warranty providers separately from GM Warranty and the single Extended Warranty pay type. Leave the covered-day cap blank unless that provider has a maximum number of covered days.</p></div></div>
+        {!extendedWarrantyState && <p className="data-message">Extended Warranty provider settings could not be loaded. Pay Type management remains available.</p>}
+        {extendedWarrantyState && <>
+          {extendedWarrantyState.providerRules.length === 0 ? <p className="empty-state">No Extended Warranty providers are configured yet. Add providers only after approved business values are available.</p> :
+            <div className="table-wrap"><table><thead><tr><th>Provider</th><th>Default daily amount</th><th>Covered-day cap</th><th>Requires approval</th><th>Notes</th><th>Status</th><th>Action</th></tr></thead><tbody>{extendedWarrantyState.providerRules.map((item) => <tr key={item.id}><td><strong>{item.providerName}</strong></td><td>{item.defaultDailyAmount == null ? '—' : item.defaultDailyAmount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td>{item.coveredDays ?? 'No automatic cap'}</td><td>{item.requiresApproval ? 'Yes' : 'No'}</td><td>{item.notes || '—'}</td><td>{item.enabled ? 'Enabled' : 'Disabled'}</td><td><button type="button" disabled={busy} onClick={() => editExtendedWarrantyProvider(item)}>Edit</button>{' '}<button type="button" disabled={busy} onClick={() => void setExtendedWarrantyProviderEnabled(item)}>{item.enabled ? 'Disable' : 'Reactivate'}</button></td></tr>)}</tbody></table></div>}
+          <form className="details-panel editor-body" onSubmit={saveExtendedWarrantyProvider}><div><h2>{extendedWarrantyForm.id ? 'Edit Extended Warranty Provider' : 'Add Extended Warranty Provider'}</h2><p>This focused form updates provider/rule defaults through Admin RPCs only; historical cases keep their snapshots.</p></div>
+            <label>Provider name<input required value={extendedWarrantyForm.providerName} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, providerName: event.target.value })}/></label>
+            <label>Default daily amount<input min="0" step="0.01" type="number" value={extendedWarrantyForm.defaultDailyAmount} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, defaultDailyAmount: event.target.value })}/></label>
+            <label>Optional covered-day cap<input min="1" step="1" type="number" aria-describedby="extended-warranty-cap-help" value={extendedWarrantyForm.coveredDays} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, coveredDays: event.target.value })}/><span id="extended-warranty-cap-help">Only enter a number when that provider has a maximum number of covered days. Blank means no automatic cap.</span></label>
+            <label className="checkbox-field"><input type="checkbox" checked={extendedWarrantyForm.requiresApproval} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, requiresApproval: event.target.checked })}/> Requires approval</label>
+            <label>Notes<textarea value={extendedWarrantyForm.notes} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, notes: event.target.value })}/></label>
+            <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{extendedWarrantyForm.id ? 'Save Extended Warranty Provider' : 'Add Extended Warranty Provider'}</button>{extendedWarrantyForm.id && <button type="button" disabled={busy} onClick={() => setExtendedWarrantyForm({ id: null, providerName: '', defaultDailyAmount: '', coveredDays: '', requiresApproval: false, notes: '' })}>Cancel</button>}</div>
           </form>
         </>}
       </section>

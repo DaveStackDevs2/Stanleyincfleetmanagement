@@ -52,3 +52,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **IMPLEMENTED IN THE REPOSITORY / LIVE CONTRACT VERIFIED:** An idempotent migration now records `public.rental_rate_rules`, its constraints, indexes, updated-at trigger, RLS/table grants, Admin RPCs, and service-role-only resolver. The frontend uses RPCs only and validates payloads and mutation confirmations before rendering success.
 - **VERIFIED live data state:** Live currently contains zero actual rental-rate rows. No vehicle classes, model identifiers, daily rates, taxes, or other business values were invented or seeded.
 - **NOT VERIFIED:** Frontend deployment, browser verification after merge, and Vercel production verification remain open.
+
+## Billing Extended Warranty — live billing contract status
+
+- **IMPLEMENTED IN THE REPOSITORY / LIVE CONTRACT VERIFIED:** Extended Warranty provider/rule administration is no longer deferred. The migration records the verified provider/rule constraints, Admin RPCs, low-level service-role boundary, case snapshot fields, override permission, runtime case/reconciliation RPC signatures, ownership, security modes, restricted search paths, and role grants.
+- **VERIFIED live/static boundary:** live contract/grants and static boundary checks passed, all provider/rule/case/billing tables had zero rows, and no provider names, rates, caps, pay-type UUIDs, GM Warranty behavior, tax calculation, cashiering, reporting, reservations, quotes, or Fleet Board mutation workflows were introduced.
+- **NOT VERIFIED:** real-session/browser verification remains open. Runtime browser verification is not complete.

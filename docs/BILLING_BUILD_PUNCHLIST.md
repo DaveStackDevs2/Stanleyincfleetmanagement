@@ -268,3 +268,12 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - **IMPLEMENTED IN THE FRONTEND:** Rates, Fees & Billing Rules now includes Rental Rates with empty-state handling, Admin free-text vehicle class/model identifiers, enabled pay-type options from the RPC, Add/Edit/Disable/Reactivate controls, mutation-response validation, authoritative reloads, and sanitized messages. Delete is not provided.
 - **VERIFIED live data state:** Live currently contains zero actual rate rows. No business rates, vehicle classes, taxes, or billing rules were invented or seeded.
 - **NOT VERIFIED:** Frontend deployment, browser verification after merge, Vercel verification, and integration of this resolver into future billing preview/pickup workflows remain open.
+
+## 2026-08-05 — Extended Warranty live billing contract checkpoint
+
+- [x] Implemented the Extended Warranty provider/rule administration contract in one idempotent migration without seeding provider names, rates, caps, pay-type UUIDs, or production values.
+- [x] Added case-level Extended Warranty snapshot fields to the legacy `warranty_cases` table while preserving the existing table name and separating this work from GM Warranty and `gm_warranty_rates`.
+- [x] Recorded runtime RPC contracts for case creation, authorized covered-day override, internal coverage reconciliation, and browser-facing coverage state retrieval using case-level coverage days and the existing billing engines.
+- [x] Extended Rates, Fees & Billing Rules with a visually separate Extended Warranty Providers section that uses Admin RPCs only and offers Add, focused Edit, Disable, and Reactivate with no Delete action.
+- [x] VERIFIED: live contract/grants and static boundary checks passed before repository capture; all provider/rule/case/billing tables had zero rows, so no business rates or historical billing rows were rewritten.
+- [ ] NOT VERIFIED: real-session/browser verification remains open and must not be marked complete until exercised with real authenticated sessions.
