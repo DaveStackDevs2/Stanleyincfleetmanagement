@@ -61,3 +61,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **IMPLEMENTED IN THE REPOSITORY / LIVE CONTRACT VERIFIED:** Extended Warranty provider/rule administration is no longer deferred. The migration records the verified provider/rule constraints, Admin RPCs, low-level service-role boundary, case snapshot fields, override permission, runtime case/reconciliation RPC signatures, ownership, security modes, restricted search paths, and role grants.
 - **VERIFIED live/static boundary:** live contract/grants and static boundary checks passed, all provider/rule/case/billing tables had zero rows, and no provider names, rates, caps, pay-type UUIDs, GM Warranty behavior, tax calculation, cashiering, reporting, reservations, quotes, or Fleet Board mutation workflows were introduced.
 - **NOT VERIFIED:** real-session/browser verification remains open. Runtime browser verification is not complete.
+
+## 2026-08-06 — Billing Phase 4 authoritative tax
+
+**VERIFIED live contract (historical verification recorded; no live database change in this work):** eight pay types passed; `69.95` produced exact `6.995` for all six taxable types; GM Warranty and Extended Warranty produced zero; zero-dollar produced zero; blank/negative inputs produced sanitized `22023`; mandatory snapshots and relevant grants passed; billing lines remained empty.
+
+**IMPLEMENTED LOCALLY:** migration and Admin Rates, Fees & Billing Rules UI now encode exact, separate-line loaner/rental tax with RPC-only administration. **NOT VERIFIED / OPEN:** authenticated Admin mutation and browser testing.

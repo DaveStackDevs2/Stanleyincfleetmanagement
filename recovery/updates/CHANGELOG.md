@@ -123,3 +123,9 @@
 - Added runtime RPC definitions for creating Extended Warranty cases, saving authorized covered-day overrides with audit logging, internal cap reconciliation, and browser-facing coverage state retrieval that keeps case-level coverage continuity separate from the current vehicle timer.
 - Added Extended Warranty Providers administration to Rates, Fees & Billing Rules through the shared Supabase client and Admin RPCs only, with Add, focused Edit, Disable, and Reactivate; no Delete workflow was added.
 - Preserved GM Warranty separation, existing pay types, historical provider/pay-type records, existing billing engines, and the no-cashiering boundary. Live contract/grants and static boundary checks passed; provider/rule/case/billing tables had zero rows. Real-session/browser verification remains open.
+
+## 2026-08-06 — Billing Phase 4: authoritative loaner/rental tax
+
+- Added the idempotent authoritative tax migration, exact numeric resolver, immutable billing snapshots, parent/child tax orchestration, secured Admin tax RPCs, fixed warranty exemptions, fixed pay-type taxability, and legacy low-level browser revocations.
+- Added a focused Loaner & Rental Tax Admin view using RPC-only reads/writes and exact percentage-to-decimal conversion; pay-type taxability is now read-only.
+- Recorded the verified live contract without touching live Supabase. Authenticated Admin mutation and browser verification remain **NOT VERIFIED / OPEN**.
