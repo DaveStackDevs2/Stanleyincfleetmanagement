@@ -129,3 +129,4 @@
 - Added the idempotent authoritative tax migration, exact numeric resolver, immutable billing snapshots, parent/child tax orchestration, secured Admin tax RPCs, fixed warranty exemptions, fixed pay-type taxability, and legacy low-level browser revocations.
 - Added a focused Loaner & Rental Tax Admin view using RPC-only reads/writes and exact percentage-to-decimal conversion; pay-type taxability is now read-only.
 - Recorded the verified live contract without touching live Supabase. Authenticated Admin mutation and browser verification remain **NOT VERIFIED / OPEN**.
+- 2026-08-06: Corrected Phase 4 tax integration drift by using unrestricted numeric tax-rate snapshots and propagating omitted tax as `NULL` through all live start/bill and extension orchestration layers, preserving exact authoritative calculation and existing security/grant boundaries.
