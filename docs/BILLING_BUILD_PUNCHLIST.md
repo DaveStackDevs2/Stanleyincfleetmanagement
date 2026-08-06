@@ -284,3 +284,11 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - **IMPLEMENTED IN THE REPOSITORY:** added an idempotent follow-up migration after `20260805120000_extended_warranty_live_billing_contract.sql` and updated Rates, Fees & Billing Rules so Extended Warranty providers require a positive covered-day cap and always send `p_requires_approval: false` through the existing RPC signatures.
 - **PRESERVED:** case-level `billing.extended_warranty_override` remains the only exceptional coverage-extension workflow; GM Warranty behavior, pay-type behavior, rate behavior, coverage timer, VIN-swap continuity, and other billing engines were not changed.
 - **NOT VERIFIED:** real authenticated mutation/browser verification remains open. This repository migration has not been claimed as applied live by this commit.
+
+## Billing Phase 4 — Authoritative loaner/rental tax (2026-08-06)
+
+- **VERIFIED (live contract, recorded only; live Supabase was not touched in this implementation):** all eight pay types passed. The six taxable types returned exact `6.995` for a `69.95` base; GM Warranty and Extended Warranty returned zero. Zero-dollar returned zero; blank pay type and negative base returned sanitized `22023`; snapshot columns were mandatory; relevant grants passed; `billing_lines` remained empty.
+- **IMPLEMENTED LOCALLY:** one idempotent migration records the authoritative rate, fixed exemptions, exact resolver, mandatory historical snapshots, separate child tax line, secured Admin RPCs, fixed pay-type mutations, and legacy browser revocations.
+- **NOT VERIFIED / OPEN:** real authenticated Admin mutation and browser testing remain open until performed against an authorized environment.
+- [x] Phase 4 nullable-tax propagation drift resolved live: unrestricted `numeric` tax-rate snapshots and exact authoritative tax now flow through start/bill and extension engines without legacy zero defaults or coercion.
+- [ ] Complete real authenticated start/bill and extension browser verification for taxable and warranty-exempt cases.

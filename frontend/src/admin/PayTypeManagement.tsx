@@ -18,6 +18,7 @@ type RentalRateState = { rateRules: RentalRateRule[]; payTypes: RentalRatePayTyp
 type PayTypeState = { payTypes: PayType[]; colors: Record<string, ColorPair> }
 type ColorState = { payTypes: string[]; colors: Record<string, ColorPair> }
 type EditForm = { id: string; payType: string; taxable: boolean; amount: string; sortOrder: string; description: string }
+type TaxState = { taxRate: number; percentage: number }
 type RentalRateForm = { id: string | null; vehicleClass: string; payTypeRuleId: string; dailyRate: string; sortOrder: string }
 type ExtendedWarrantyProviderRule = { id: string; providerId: string; providerName: string; enabled: boolean; defaultDailyAmount: number | null; coveredDays: number; notes: string }
 type ExtendedWarrantyState = { providerRules: ExtendedWarrantyProviderRule[] }
@@ -29,6 +30,40 @@ const HEX = /^#[0-9a-f]{6}$/i
 const FALLBACK_COLORS: ColorPair = { background_color: '#e5e7eb', text_color: '#374151' }
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+const hasExactKeys = (value: Record<string, unknown>, keys: string[]): boolean =>
+  Object.keys(value).sort().join('|') === [...keys].sort().join('|')
+
+function percentageToDecimalFraction(value: string): string | null {
+  const normalized = value.trim()
+  if (!/^(?:\d+\.?\d*|\.\d+)$/.test(normalized)) return null
+  const [whole, fraction = ''] = normalized.startsWith('.') ? ['0', normalized.slice(1)] : normalized.split('.')
+  const digits = `${whole}${fraction}`.replace(/^0+(?=\d)/, '')
+  const position = digits.length - fraction.length - 2
+  const decimal = position > 0 ? `${digits.slice(0, position)}.${digits.slice(position)}` : `0.${'0'.repeat(-position)}${digits}`
+  return decimal.replace(/\.?0+$/, '') || '0'
+}
+
+function parseTaxState(value: unknown): TaxState {
+  if (!isRecord(value) || !hasExactKeys(value, ['status', 'can_manage', 'setting_key', 'tax_rate', 'tax_percentage', 'calculation_mode', 'tax_line_mode', 'exempt_pay_types']) ||
+    value.status !== 'admin_loaner_rental_tax_ready' || value.can_manage !== true ||
+    value.setting_key !== 'billing.loaner_rental_tax_rate' || typeof value.tax_rate !== 'number' ||
+    typeof value.tax_percentage !== 'number' || value.calculation_mode !== 'exact_no_rounding' ||
+    value.tax_line_mode !== 'separate_child_line' || !Array.isArray(value.exempt_pay_types) ||
+    value.exempt_pay_types.length !== 2 || value.exempt_pay_types[0] !== 'GM Warranty' || value.exempt_pay_types[1] !== 'Extended Warranty') throw new Error('invalid-tax-state')
+  return { taxRate: value.tax_rate, percentage: value.tax_percentage }
+}
+
+function parseTaxMutation(value: unknown, expectedRate: number, expectedPercentage: number): void {
+  if (!isRecord(value) || !hasExactKeys(value, ['status', 'setting_key', 'previous_tax_rate', 'tax_rate', 'tax_percentage', 'calculation_mode', 'tax_line_mode']) ||
+    value.status !== 'admin_loaner_rental_tax_updated' ||
+    value.setting_key !== 'billing.loaner_rental_tax_rate' ||
+    typeof value.previous_tax_rate !== 'number' || !Number.isFinite(value.previous_tax_rate) ||
+    typeof value.tax_rate !== 'number' || value.tax_rate !== expectedRate ||
+    typeof value.tax_percentage !== 'number' || value.tax_percentage !== expectedPercentage ||
+    value.calculation_mode !== 'exact_no_rounding' || value.tax_line_mode !== 'separate_child_line') {
+    throw new Error('invalid-tax-mutation')
+  }
+}
 
 function parsePayTypeState(value: unknown): PayTypeState {
   if (!isRecord(value) || value.status !== 'admin_pay_type_rules_ready' || value.can_manage !== true ||
@@ -176,16 +211,20 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  const [form, setForm] = useState({ payType: '', taxable: false, amount: '', sortOrder: '0', description: '' })
+  const [form, setForm] = useState({ payType: '', amount: '', sortOrder: '0', description: '' })
   const [editForm, setEditForm] = useState<EditForm | null>(null)
+  const [taxState, setTaxState] = useState<TaxState | null>(null)
+  const [taxEditing, setTaxEditing] = useState(false)
+  const [taxPercentage, setTaxPercentage] = useState('')
 
   const load = useCallback(async () => {
     setBusy(true); setMessage(null); setSuccessMessage(null)
-    const [rules, palette, rentalRates, extendedWarranty] = await Promise.all([
+    const [rules, palette, rentalRates, extendedWarranty, tax] = await Promise.all([
       supabase.rpc('get_admin_pay_type_rules_state'),
       supabase.rpc('get_fleet_board_pay_type_colors_state'),
       supabase.rpc('get_admin_rental_rate_rules_state'),
       supabase.rpc('get_admin_billing_configuration_state'),
+      supabase.rpc('get_admin_loaner_rental_tax_state'),
     ])
     try {
       if (rules.error || palette.error) throw new Error('request-failed')
@@ -195,6 +234,8 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       else setRateState(null)
       if (!extendedWarranty.error) setExtendedWarrantyState(parseExtendedWarrantyState(extendedWarranty.data))
       else setExtendedWarrantyState(null)
+      if (tax.error) throw new Error('tax-request-failed')
+      setTaxState(parseTaxState(tax.data))
       setState({ payTypes, colors })
       setDraftColors(Object.fromEntries(payTypes.filter((item) => item.enabled).map((item) => [
         item.payType, colors[item.payType] ?? FALLBACK_COLORS,
@@ -205,6 +246,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       setState(null)
       setRateState(null)
       setExtendedWarrantyState(null)
+      setTaxState(null)
       setMessage('Pay-type settings could not be loaded. Confirm your access and try again.')
       return false
     } finally { setBusy(false) }
@@ -230,11 +272,11 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       return
     }
     void mutate(supabase.rpc('create_admin_pay_type_rule_state', {
-      p_pay_type: form.payType.trim(), p_is_taxable: form.taxable,
-      p_default_daily_rate: amount, p_sort_order: sortOrder,
+      p_pay_type: form.payType.trim(), p_is_taxable: true,
+      p_default_daily_amount: amount, p_sort_order: sortOrder,
       p_description: form.description.trim() || null,
     }), 'The pay type could not be added. Review the values and try again.').then((saved) => {
-      if (saved) setForm({ payType: '', taxable: false, amount: '', sortOrder: '0', description: '' })
+      if (saved) setForm({ payType: '', amount: '', sortOrder: '0', description: '' })
     })
   }
 
@@ -393,7 +435,24 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     }
   }
 
+  const saveTaxRate = async (event: FormEvent) => {
+    event.preventDefault()
+    const percentage = Number(taxPercentage)
+    const decimal = percentageToDecimalFraction(taxPercentage)
+    if (decimal === null || !Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
+      setMessage('Enter a tax percentage greater than 0 and no greater than 100.'); return
+    }
+    setBusy(true); setMessage(null); setSuccessMessage(null)
+    const result = await supabase.rpc('set_admin_loaner_rental_tax_rate_state', { p_tax_rate: decimal })
+    if (result.error) { setMessage('The loaner and rental tax rate could not be saved. No change was confirmed.'); setBusy(false); return }
+    try { parseTaxMutation(result.data, Number(decimal), percentage) }
+    catch { setMessage('The tax update request completed, but its result could not be verified. The rate may have changed; refresh before trying again.'); setBusy(false); return }
+    if (await load()) { setTaxEditing(false); setSuccessMessage('Loaner and rental tax rate saved successfully.') }
+    else setMessage('The tax rate changed, but the authoritative state could not be reloaded. Refresh before making another change.')
+  }
+
   const extendedWarrantyFocused = extendedWarrantyFocusMode !== 'list'
+  const focused = extendedWarrantyFocused || taxEditing
 
   return <main className="content management-page pay-type-page">
     <section className="fleet-header"><div><p className="eyebrow">ADMINISTRATION / BILLING</p>
@@ -404,7 +463,9 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     {successMessage && <div className="data-message success-message" role="status" aria-live="polite">{successMessage}</div>}
     {busy && !state && <p role="status">Loading pay types…</p>}
     {state && <>
-      {!extendedWarrantyFocused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Pay Types</h2><p>Disabled pay types remain available to historical billing records.</p></div><button type="button" onClick={() => void load()} disabled={busy}>Refresh</button></div>
+      {taxEditing && taxState && <section className="vehicle-table-card"><form className="details-panel editor-body" onSubmit={saveTaxRate}><div><h2>Edit Loaner &amp; Rental Tax</h2><p>Enter the percentage transferred to Tekion as a separate tax line. Calculations use exact PostgreSQL numeric multiplication without rounding.</p></div><label>Tax percentage<input required inputMode="decimal" value={taxPercentage} disabled={busy} onChange={(event) => setTaxPercentage(event.target.value)} /><span>Greater than 0 through 100.</span></label><p>Only GM Warranty and Extended Warranty are exempt.</p><div className="page-actions"><button className="primary-action" disabled={busy} type="submit">Save Tax Rate</button><button type="button" disabled={busy} onClick={async () => { setMessage(null); await load(); setTaxEditing(false) }}>Cancel / Return to Rates, Fees &amp; Billing Rules</button></div></form></section>}
+      {!focused && taxState && <section className="vehicle-table-card loaner-rental-tax"><div className="section-heading"><div><h2>Loaner &amp; Rental Tax</h2><p>Tax is calculated exactly without rounding and appears as a separate line for transfer into Tekion.</p></div><button className="primary-action" type="button" disabled={busy} onClick={() => { setMessage(null); setSuccessMessage(null); setTaxPercentage(String(taxState.percentage)); setTaxEditing(true) }}>Edit</button></div><p><strong>{taxState.percentage}%</strong></p><p>Only GM Warranty and Extended Warranty are exempt. Every other pay type is taxable.</p></section>}
+      {!focused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Pay Types</h2><p>Disabled pay types remain available to historical billing records.</p></div><button type="button" onClick={() => void load()} disabled={busy}>Refresh</button></div>
         <div className="table-wrap"><table><thead><tr><th>Pay type</th><th>Description</th><th>Taxable</th><th>Daily amount</th><th>Sort order</th><th>Status</th><th>Action</th></tr></thead><tbody>
           {state.payTypes.map((item) => <tr key={item.id}><td><strong>{item.payType}</strong></td><td>{item.description || '—'}</td><td>{item.taxable ? 'Yes' : 'No'}</td>
             <td>{item.defaultDailyAmount == null ? '—' : item.defaultDailyAmount.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td>{item.sortOrder}</td><td>{item.enabled ? 'Enabled' : 'Disabled'}</td><td>
@@ -414,7 +475,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
             </td></tr>)}
         </tbody></table></div></section>}
 
-      {!extendedWarrantyFocused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Rental Rates</h2><p>Configure normal daily rates by Admin-entered vehicle class/model identifier and pay type. No rates are preloaded.</p></div></div>
+      {!focused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Rental Rates</h2><p>Configure normal daily rates by Admin-entered vehicle class/model identifier and pay type. No rates are preloaded.</p></div></div>
         {!rateState && <p className="data-message">Rental rate settings could not be loaded. Pay Type management remains available.</p>}
         {rateState && <>
           {rateState.rateRules.length === 0 ? <p className="empty-state">No rental rates are configured yet. Add rates only after the business provides approved values.</p> :
@@ -446,21 +507,21 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
           </form>}
       </section>
 
-      {!extendedWarrantyFocused && <div className="pay-type-grid">
+      {!focused && <div className="pay-type-grid">
         {editForm && <form className="details-panel editor-body" onSubmit={savePayType}><div><h2>Edit Pay Type</h2><p>Update billing defaults without changing this pay type's identity.</p></div>
           <label>Pay-type name<input value={editForm.payType} readOnly aria-readonly="true" /></label>
           <label>Description<textarea value={editForm.description} disabled={busy} onChange={(event) => setEditForm({ ...editForm, description: event.target.value })}/></label>
           <label>Default daily amount<input min="0" step="0.01" type="number" value={editForm.amount} disabled={busy} onChange={(event) => setEditForm({ ...editForm, amount: event.target.value })}/></label>
           <label>Sort order<input required min="0" step="1" type="number" value={editForm.sortOrder} disabled={busy} onChange={(event) => setEditForm({ ...editForm, sortOrder: event.target.value })}/></label>
-          <label className="checkbox-field"><input type="checkbox" checked={editForm.taxable} disabled={busy} onChange={(event) => setEditForm({ ...editForm, taxable: event.target.checked })}/> Taxable</label>
+          <p><strong>Taxability:</strong> {editForm.taxable ? 'Taxable (fixed)' : 'Tax-exempt (fixed warranty rule)'}</p>
           <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">Save Pay Type</button><button type="button" disabled={busy} onClick={() => setEditForm(null)}>Cancel</button></div>
         </form>}
-        <form className="details-panel editor-body" onSubmit={addPayType}><div><h2>Add Pay Type</h2><p>New pay types are enabled immediately. Existing pay types are never deleted.</p></div>
+        <form className="details-panel editor-body" onSubmit={addPayType}><div><h2>Add Pay Type</h2><p>New pay types are enabled immediately and are always taxable. Existing pay types are never deleted.</p></div>
           <label>Pay-type name<input required value={form.payType} onChange={(event) => setForm({ ...form, payType: event.target.value })}/></label>
           <label>Description<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })}/></label>
           <label>Default daily amount<input min="0" step="0.01" type="number" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })}/></label>
           <label>Sort order<input required min="0" step="1" type="number" value={form.sortOrder} onChange={(event) => setForm({ ...form, sortOrder: event.target.value })}/></label>
-          <label className="checkbox-field"><input type="checkbox" checked={form.taxable} onChange={(event) => setForm({ ...form, taxable: event.target.checked })}/> Taxable</label>
+          <p><strong>Taxability:</strong> Taxable (fixed for every new pay type)</p>
           <button className="primary-action" disabled={busy} type="submit">Add Pay Type</button>
         </form>
         <section className="details-panel editor-body"><div><h2>Fleet Board Colors</h2><p>Colors apply only to currently active pay types.</p></div>
