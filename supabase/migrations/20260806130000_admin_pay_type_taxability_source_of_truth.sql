@@ -22,11 +22,14 @@ begin
   if v_rule.is_active is distinct from true or coalesce(v_rule.active,false) is distinct from true then
     raise exception 'Pay type is inactive' using errcode='22023';
   end if;
+  if v_rule.is_taxable is null or v_rule.tax_applicable is distinct from v_rule.is_taxable then
+    raise exception 'Pay type tax configuration is invalid' using errcode='22023';
+  end if;
   v_taxable := v_rule.is_taxable;
   if not v_taxable then v_rate:=0; v_source:='pay_type_exemption'; v_explanation:=v_rule.pay_type || ' is configured as exempt from loaner and rental tax.';
   else
-    select case when jsonb_typeof(setting_value) = 'number' then (setting_value #>> '{}')::numeric end
-      into v_rate from public.admin_settings where setting_key='billing.loaner_rental_tax_rate';
+    begin select (setting_value #>> '{}')::numeric into v_rate from public.admin_settings where setting_key='billing.loaner_rental_tax_rate';
+    exception when others then raise exception 'Loaner and rental tax rate is invalid' using errcode='22023'; end;
     if v_rate is null or v_rate < 0 or v_rate > 1 or v_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric) then raise exception 'Loaner and rental tax rate is invalid' using errcode='22023'; end if;
     v_source:='admin_settings:billing.loaner_rental_tax_rate'; v_explanation:='Loaner and rental tax is calculated exactly without rounding and transferred as a separate tax line.';
   end if;
@@ -72,10 +75,11 @@ begin
   if p_is_taxable is null then raise exception 'Taxable selection is required' using errcode='22023'; end if;
   if p_sort_order is null or p_sort_order<0 then raise exception 'Sort order must be zero or greater' using errcode='22023'; end if;
   if p_default_daily_amount is not null and p_default_daily_amount<0 then raise exception 'Default daily amount must be zero or greater' using errcode='22023'; end if;
+  select * into v_rule from public.pay_type_rules where id=p_pay_type_rule_id for update;
+  if not found then raise exception 'Pay type rule not found' using errcode='P0002'; end if;
   update public.pay_type_rules set is_taxable=p_is_taxable,tax_applicable=p_is_taxable,
     default_daily_amount=p_default_daily_amount,sort_order=p_sort_order,description=nullif(btrim(p_description),''),updated_at=clock_timestamp()
   where id=p_pay_type_rule_id returning * into v_rule;
-  if not found then raise exception 'Pay type rule not found' using errcode='P0002'; end if;
   return jsonb_build_object('status','admin_pay_type_rule_updated','pay_type_rule',jsonb_build_object(
     'pay_type_rule_id',v_rule.id,'pay_type',v_rule.pay_type,'is_enabled',v_rule.is_active and coalesce(v_rule.active,false),
     'is_active',v_rule.is_active,'active',coalesce(v_rule.active,false),'is_taxable',v_rule.is_taxable,

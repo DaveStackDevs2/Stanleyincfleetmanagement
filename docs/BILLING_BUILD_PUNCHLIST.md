@@ -100,7 +100,7 @@ The repository and live Supabase now match for extension, completion/return, can
 - [x] Snapshot the applied tax result so later configuration changes do not alter historical billing.
 - [x] Support a safe, explicit non-taxable result for any pay type configured non-taxable; GM Warranty and Extended Warranty are currently the only exempt rows.
 - [x] Verify taxable, non-taxable, zero-dollar, exact no-rounding, missing-configuration, and historical snapshot contracts; real authenticated operational/browser verification remains open.
-- [ ] Update this punchlist and recovery documentation in the same commit.
+- [x] Update this punchlist and recovery documentation in the same commit.
 
 **Phase 4 exit:** Backend calculations return a reproducible amount, tax amount, rate source, and explanation.
 

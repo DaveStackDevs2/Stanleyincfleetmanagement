@@ -29,7 +29,15 @@ class PayTypeTaxabilityCorrection(unittest.TestCase):
 
     def test_resolver_uses_stored_value_and_preserves_exact_contract(self):
         resolver = self.function('resolve_billing_tax_state', 'alter function public.resolve_billing_tax_state')
+        synchronized_guard = (
+            'if v_rule.is_taxable is null or '
+            'v_rule.tax_applicable is distinct from v_rule.is_taxable then'
+        )
+        self.assertIn(synchronized_guard, resolver)
+        self.assertLess(resolver.index(synchronized_guard), resolver.index('v_taxable := v_rule.is_taxable'))
+        self.assertIn("raise exception 'Pay type tax configuration is invalid' using errcode='22023'", resolver)
         self.assertIn('v_taxable := v_rule.is_taxable', resolver)
+        self.assertIn("exception when others then raise exception 'Loaner and rental tax rate is invalid' using errcode='22023'", resolver)
         self.assertIn('p_taxable_base*v_rate', resolver)
         self.assertNotIn('round(', resolver.lower())
         self.assertIn("'pay_type_exemption'", resolver)
@@ -42,6 +50,13 @@ class PayTypeTaxabilityCorrection(unittest.TestCase):
         self.assertIn('is_taxable=p_is_taxable,tax_applicable=p_is_taxable', update)
         self.assertIn('p_is_taxable is null', create)
         self.assertIn('p_is_taxable is null', update)
+        locked_select = 'select * into v_rule from public.pay_type_rules where id=p_pay_type_rule_id for update;'
+        missing_row = "if not found then raise exception 'Pay type rule not found' using errcode='P0002'; end if;"
+        mutation = 'update public.pay_type_rules set is_taxable=p_is_taxable,tax_applicable=p_is_taxable'
+        self.assertEqual(update.count(locked_select), 1)
+        self.assertEqual(update.count(missing_row), 1)
+        self.assertLess(update.index(locked_select), update.index(missing_row))
+        self.assertLess(update.index(missing_row), update.index(mutation))
 
     def test_exact_security_contracts(self):
         self.assertIn("language plpgsql security invoker set search_path to ''", SQL)
