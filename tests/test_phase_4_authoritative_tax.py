@@ -51,9 +51,10 @@ class Phase4TaxContract(unittest.TestCase):
         for name in ('tax_rate_snapshot', 'is_taxable_snapshot', 'tax_rate_source_snapshot'):
             self.assertIn(name, SQL)
         self.assertIn('ck_pay_type_rules_only_warranty_tax_exempt', SQL)
-        self.assertNotIn('checked={form.taxable}', UI)
-        self.assertNotIn('checked={editForm.taxable}', UI)
-        self.assertIn('p_pay_type: form.payType.trim(), p_is_taxable: true', UI)
+        # The historical migration records the original verified contract; the follow-up restores Admin choice.
+        self.assertIn('checked={form.taxable}', UI)
+        self.assertIn('checked={editForm.taxable}', UI)
+        self.assertIn('p_pay_type: form.payType.trim(), p_is_taxable: form.taxable', UI)
         self.assertIn('p_pay_type_rule_id: editForm.id, p_is_taxable: editForm.taxable', UI)
 
     def test_migration_is_narrow_and_create_argument_matches_live(self):
@@ -61,7 +62,8 @@ class Phase4TaxContract(unittest.TestCase):
         self.assertNotIn('CREATE OR REPLACE FUNCTION public.set_admin_pay_type_rule_enabled_state', SQL)
         self.assertNotRegex(SQL, r'(?:revoke|grant execute).*get_admin_pay_type_rules_state')
         self.assertNotRegex(SQL, r'(?:revoke|grant execute).*set_admin_pay_type_rule_enabled_state')
-        create_call = UI[UI.index("supabase.rpc('create_admin_pay_type_rule_state'"):UI.index('}),', UI.index("supabase.rpc('create_admin_pay_type_rule_state'"))]
+        create_start = UI.index("supabase.rpc('create_admin_pay_type_rule_state'")
+        create_call = UI[create_start:UI.index('if (result.error)', create_start)]
         self.assertIn('p_default_daily_amount: amount', create_call)
         self.assertNotIn('p_default_daily_rate', create_call)
 

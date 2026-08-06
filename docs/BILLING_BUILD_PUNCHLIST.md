@@ -93,13 +93,13 @@ The repository and live Supabase now match for extension, completion/return, can
 
 ## Phase 4 — Establish authoritative tax calculation
 
-- [ ] Verify the dealership's required taxable base and current tax configuration source; do not infer a percentage from the pay-type taxable flag.
-- [ ] Add the minimum Admin-managed tax configuration only if no existing live source is found.
-- [ ] Calculate tax in a backend resolver using the selected pay type's taxable status and the authoritative rate configuration.
-- [ ] Preserve the existing separate tax child-line design.
-- [ ] Snapshot the applied tax result so later configuration changes do not alter historical billing.
-- [ ] Support a safe, explicit non-taxable result for GM Warranty and Extended Warranty pay types as currently configured.
-- [ ] Verify taxable, non-taxable, zero-dollar, rounding, missing-configuration, and historical cases.
+- [x] Verify the dealership's required taxable base and current tax configuration source; the stored pay-type Taxable field and the 10% Admin setting are authoritative.
+- [x] Add the minimum Admin-managed tax configuration after verifying no existing live rate source.
+- [x] Calculate tax in a backend resolver using the selected pay type's stored taxable status and the authoritative rate configuration.
+- [x] Preserve the existing separate tax child-line design.
+- [x] Snapshot the applied tax result so later configuration changes do not alter historical billing.
+- [x] Support a safe, explicit non-taxable result for any pay type configured non-taxable; GM Warranty and Extended Warranty are currently the only exempt rows.
+- [x] Verify taxable, non-taxable, zero-dollar, exact no-rounding, missing-configuration, and historical snapshot contracts; real authenticated operational/browser verification remains open.
 - [ ] Update this punchlist and recovery documentation in the same commit.
 
 **Phase 4 exit:** Backend calculations return a reproducible amount, tax amount, rate source, and explanation.
@@ -288,7 +288,13 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 ## Billing Phase 4 — Authoritative loaner/rental tax (2026-08-06)
 
 - **VERIFIED (live contract, recorded only; live Supabase was not touched in this implementation):** all eight pay types passed. The six taxable types returned exact `6.995` for a `69.95` base; GM Warranty and Extended Warranty returned zero. Zero-dollar returned zero; blank pay type and negative base returned sanitized `22023`; snapshot columns were mandatory; relevant grants passed; `billing_lines` remained empty.
-- **IMPLEMENTED LOCALLY:** one idempotent migration records the authoritative rate, fixed exemptions, exact resolver, mandatory historical snapshots, separate child tax line, secured Admin RPCs, fixed pay-type mutations, and legacy browser revocations.
-- **NOT VERIFIED / OPEN:** real authenticated Admin mutation and browser testing remain open until performed against an authorized environment.
+- **IMPLEMENTED IN THE REPOSITORY / VERIFIED LIVE CONTRACT:** the follow-up removes the name-based exemption lock. The synchronized stored Admin Taxable value is authoritative for the exact resolver and create/update mutations; current production values are unchanged and no rows are seeded or rewritten.
+- **NOT VERIFIED / OPEN:** real authenticated Admin mutation/browser testing and full operational start/bill/extension verification remain open until performed against an authorized environment.
 - [x] Phase 4 nullable-tax propagation drift resolved live: unrestricted `numeric` tax-rate snapshots and exact authoritative tax now flow through start/bill and extension engines without legacy zero defaults or coercion.
 - [ ] Complete real authenticated start/bill and extension browser verification for taxable and warranty-exempt cases.
+
+### 2026-08-06 — Phase 4 pay-type taxability correction
+
+- **VERIFIED live before repository work:** removed the name-based exemption constraint, added `ck_pay_type_rules_tax_fields_synchronized`, and corrected the resolver and Admin create/update RPCs while preserving owners, security modes, empty search paths, and grants. All eight existing rows remained unchanged.
+- **IMPLEMENTED:** Add and focused Edit Pay Type expose Taxable controls and submit the selected boolean. Rename/delete remain unavailable; Disable/Reactivate and Fleet Board colors remain intact.
+- **NOT VERIFIED / OPEN:** real authenticated Admin mutations/browser behavior and full operational start/bill/extension cases. No live Supabase changes were made by this repository work.

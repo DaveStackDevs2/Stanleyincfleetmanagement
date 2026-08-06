@@ -130,3 +130,10 @@
 - Added a focused Loaner & Rental Tax Admin view using RPC-only reads/writes and exact percentage-to-decimal conversion; pay-type taxability is now read-only.
 - Recorded the verified live contract without touching live Supabase. Authenticated Admin mutation and browser verification remain **NOT VERIFIED / OPEN**.
 - 2026-08-06: Corrected Phase 4 tax integration drift by using unrestricted numeric tax-rate snapshots and propagating omitted tax as `NULL` through all live start/bill and extension orchestration layers, preserving exact authoritative calculation and existing security/grant boundaries.
+
+## 2026-08-06 — Correct Phase 4 pay-type taxability
+
+- Added an idempotent follow-up migration matching the verified live synchronization constraint and resolver/create/update contracts. Stored Admin taxability is authoritative; no exemption is inferred from a pay-type name and no production rows are seeded or rewritten.
+- Restored editable Taxable checkboxes to Add Pay Type and focused Edit Pay Type, submitting `p_is_taxable` with complete validated mutation payloads and retaining authoritative reload and sanitized feedback.
+- Preserved exact no-rounding arithmetic, unrestricted numeric snapshots, separate tax child lines, null-tax propagation, the 10% Admin setting, owners/security/search paths/grants, immutable pay-type names, Disable/Reactivate, and Fleet Board colors.
+- Real authenticated mutation/browser and full operational start/bill/extension verification remain **NOT VERIFIED / OPEN**. Live Supabase was not touched.

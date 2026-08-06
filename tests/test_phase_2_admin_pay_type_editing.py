@@ -55,7 +55,7 @@ class Phase2PayTypeEditingTest(unittest.TestCase):
         call = re.search(r"supabase\.rpc\('update_admin_pay_type_rule_state',\s*\{(.*?)\}\)", self.frontend, re.S).group(1)
         self.assertIn("p_pay_type_rule_id", call)
         self.assertNotIn("p_pay_type:", call)
-        self.assertIn("parseUpdatedPayType(result.data, editForm.id)", self.frontend)
+        self.assertIn("parsePayTypeMutation(result.data, 'admin_pay_type_rule_updated', editForm.id)", self.frontend)
         self.assertIn("const reloaded = await load()", self.frontend)
         self.assertIn("was updated successfully", self.frontend)
         self.assertIn("may have changed; refresh before trying again", self.frontend)
