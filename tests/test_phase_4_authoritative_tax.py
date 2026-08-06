@@ -66,5 +66,45 @@ class Phase4TaxContract(unittest.TestCase):
         self.assertNotIn('p_default_daily_rate', create_call)
 
 
+    def test_unrestricted_snapshot_precision_and_nullable_tax_chains(self):
+        self.assertIn('tax_rate_snapshot numeric;', SQL)
+        self.assertIn(
+            'alter column tax_rate_snapshot type numeric using tax_rate_snapshot::numeric',
+            SQL,
+        )
+        self.assertNotIn('tax_rate_snapshot numeric(7,6)', SQL)
+
+        nullable_parameters = (
+            'p_tax_amount numeric DEFAULT NULL::numeric',
+            'p_billing_tax_amount numeric DEFAULT NULL::numeric',
+            'p_extension_tax_amount numeric DEFAULT NULL::numeric',
+        )
+        for parameter in nullable_parameters:
+            self.assertIn(parameter, SQL)
+
+        zero_coercions = (
+            'coalesce(p_tax_amount, 0)',
+            'coalesce(p_billing_tax_amount, 0)',
+            'coalesce(p_extension_tax_amount, 0)',
+        )
+        for coercion in zero_coercions:
+            self.assertNotIn(coercion, SQL.lower())
+
+        for function_name in (
+            'create_transportation_event_billing_line_state',
+            'create_reservation_billing_line_state',
+            'activate_case_billing_state',
+            'create_start_and_bill_case_with_vehicle_by_vin_state',
+            'create_start_and_bill_case_with_vehicle_by_vin_and_get_payload_',
+            'create_start_bill_case_and_get_payload_state',
+            'create_extension_billing_line_state',
+            'accept_extension_commit_state',
+            'accept_reservation_extension_state',
+            'accept_case_extension_and_get_unified_payload_state',
+            'accept_transportation_event_extension_state',
+        ):
+            self.assertIn(f'function public.{function_name}', SQL.lower())
+
+
 if __name__ == '__main__':
     unittest.main()
