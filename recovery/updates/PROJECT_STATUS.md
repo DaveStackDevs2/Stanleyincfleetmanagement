@@ -68,3 +68,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 
 **IMPLEMENTED LOCALLY:** migration and Admin Rates, Fees & Billing Rules UI now encode exact, separate-line loaner/rental tax with RPC-only administration. **NOT VERIFIED / OPEN:** authenticated Admin mutation and browser testing.
 - 2026-08-06: Phase 4 nullable-tax propagation drift was resolved and verified directly in live Supabase across both start/bill and extension engine chains. `tax_rate_snapshot` is unrestricted `numeric`; no public function retains a tax-parameter zero default or zero coercion. Real authenticated operational/browser verification remains open.
+
+### 2026-08-06 — Phase 4 pay-type taxability correction
+
+- **VERIFIED live:** stored synchronized `is_taxable`/`tax_applicable` is authoritative. The name-based hard lock was removed; GM Warranty and Extended Warranty remain exempt because of current stored data, not their names. The exact resolver and Admin create/update contracts preserve their verified security boundaries.
+- **IMPLEMENTED IN THE REPOSITORY:** a follow-up migration records the verified live contract without seeding or rewriting rows, and Add/Edit Pay Type again allow authorized Admins to choose Taxable Yes/No. Rename/delete remain unavailable; Disable/Reactivate and Fleet Board color behavior are preserved.
+- **NOT VERIFIED / OPEN:** authenticated Admin mutation/browser testing and full operational start/bill/extension verification. This work did not touch live Supabase.
