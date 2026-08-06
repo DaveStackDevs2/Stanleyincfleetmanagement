@@ -30,6 +30,8 @@ const HEX = /^#[0-9a-f]{6}$/i
 const FALLBACK_COLORS: ColorPair = { background_color: '#e5e7eb', text_color: '#374151' }
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
+const hasExactKeys = (value: Record<string, unknown>, keys: string[]): boolean =>
+  Object.keys(value).sort().join('|') === [...keys].sort().join('|')
 
 function percentageToDecimalFraction(value: string): string | null {
   const normalized = value.trim()
@@ -42,12 +44,25 @@ function percentageToDecimalFraction(value: string): string | null {
 }
 
 function parseTaxState(value: unknown): TaxState {
-  if (!isRecord(value) || value.status !== 'admin_loaner_rental_tax_ready' || value.can_manage !== true ||
+  if (!isRecord(value) || !hasExactKeys(value, ['status', 'can_manage', 'setting_key', 'tax_rate', 'tax_percentage', 'calculation_mode', 'tax_line_mode', 'exempt_pay_types']) ||
+    value.status !== 'admin_loaner_rental_tax_ready' || value.can_manage !== true ||
     value.setting_key !== 'billing.loaner_rental_tax_rate' || typeof value.tax_rate !== 'number' ||
-    typeof value.percentage !== 'number' || value.calculation_mode !== 'exact_no_rounding' ||
+    typeof value.tax_percentage !== 'number' || value.calculation_mode !== 'exact_no_rounding' ||
     value.tax_line_mode !== 'separate_child_line' || !Array.isArray(value.exempt_pay_types) ||
     value.exempt_pay_types.length !== 2 || value.exempt_pay_types[0] !== 'GM Warranty' || value.exempt_pay_types[1] !== 'Extended Warranty') throw new Error('invalid-tax-state')
-  return { taxRate: value.tax_rate, percentage: value.percentage }
+  return { taxRate: value.tax_rate, percentage: value.tax_percentage }
+}
+
+function parseTaxMutation(value: unknown, expectedRate: number, expectedPercentage: number): void {
+  if (!isRecord(value) || !hasExactKeys(value, ['status', 'setting_key', 'previous_tax_rate', 'tax_rate', 'tax_percentage', 'calculation_mode', 'tax_line_mode']) ||
+    value.status !== 'admin_loaner_rental_tax_updated' ||
+    value.setting_key !== 'billing.loaner_rental_tax_rate' ||
+    typeof value.previous_tax_rate !== 'number' || !Number.isFinite(value.previous_tax_rate) ||
+    typeof value.tax_rate !== 'number' || value.tax_rate !== expectedRate ||
+    typeof value.tax_percentage !== 'number' || value.tax_percentage !== expectedPercentage ||
+    value.calculation_mode !== 'exact_no_rounding' || value.tax_line_mode !== 'separate_child_line') {
+    throw new Error('invalid-tax-mutation')
+  }
 }
 
 function parsePayTypeState(value: unknown): PayTypeState {
@@ -258,7 +273,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     }
     void mutate(supabase.rpc('create_admin_pay_type_rule_state', {
       p_pay_type: form.payType.trim(), p_is_taxable: true,
-      p_default_daily_rate: amount, p_sort_order: sortOrder,
+      p_default_daily_amount: amount, p_sort_order: sortOrder,
       p_description: form.description.trim() || null,
     }), 'The pay type could not be added. Review the values and try again.').then((saved) => {
       if (saved) setForm({ payType: '', amount: '', sortOrder: '0', description: '' })
@@ -430,6 +445,8 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     setBusy(true); setMessage(null); setSuccessMessage(null)
     const result = await supabase.rpc('set_admin_loaner_rental_tax_rate_state', { p_tax_rate: decimal })
     if (result.error) { setMessage('The loaner and rental tax rate could not be saved. No change was confirmed.'); setBusy(false); return }
+    try { parseTaxMutation(result.data, Number(decimal), percentage) }
+    catch { setMessage('The tax update request completed, but its result could not be verified. The rate may have changed; refresh before trying again.'); setBusy(false); return }
     if (await load()) { setTaxEditing(false); setSuccessMessage('Loaner and rental tax rate saved successfully.') }
     else setMessage('The tax rate changed, but the authoritative state could not be reloaded. Refresh before making another change.')
   }
