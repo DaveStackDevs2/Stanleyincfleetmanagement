@@ -19,7 +19,7 @@ class OperationalBillingDashboardContract(unittest.TestCase):
         )
         self.assertEqual(SQL.rstrip().splitlines()[-6:], list(statements))
         self.assertNotIn('\nstable\n', SQL.lower())
-        self.assertIn("errcode = '42501'", SQL)
+        self.assertIn("errcode = '42501'", SQL.lower())
 
     def test_live_frontend_hierarchy(self):
         for token in ('itemKeys', 'reservationKeys', 'currentVehicleKeys', 'readyKeys',
