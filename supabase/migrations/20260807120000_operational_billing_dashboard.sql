@@ -795,9 +795,7 @@ $function$;
 
 alter function public.get_billing_preview_state(uuid,timestamptz) owner to postgres;
 alter function public.get_billing_workspace_state(timestamptz) owner to postgres;
-
 revoke all on function public.get_billing_preview_state(uuid,timestamptz) from public, anon, authenticated, service_role;
 revoke all on function public.get_billing_workspace_state(timestamptz) from public, anon, authenticated, service_role;
-
 grant execute on function public.get_billing_preview_state(uuid,timestamptz) to authenticated;
 grant execute on function public.get_billing_workspace_state(timestamptz) to authenticated;
