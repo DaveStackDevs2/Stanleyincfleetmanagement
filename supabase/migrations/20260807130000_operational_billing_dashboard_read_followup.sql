@@ -10,10 +10,12 @@ DECLARE
     v_definition text;
     v_changed boolean := false;
     v_aal2_block text := E'    IF coalesce(auth.jwt() ->> ''aal'', '''') <> ''aal2'' THEN\n        RAISE EXCEPTION ''AAL2 authentication is required''\n            USING ERRCODE = ''42501'';\n    END IF;\n\n';
-    v_ro_select_old text := E'            reservation.id AS reservation_id,\n            reservation.status AS reservation_status,';
-    v_ro_select_new text := E'            reservation.id AS reservation_id,\n            reservation.ro_number,\n            reservation.status AS reservation_status,';
-    v_ro_payload_old text := E'                ''reservation_id'', v_case.reservation_id,\n                ''status'', v_case.reservation_status,';
-    v_ro_payload_new text := E'                ''reservation_id'', v_case.reservation_id,\n                ''ro_number'', v_case.ro_number,\n                ''status'', v_case.reservation_status,';
+    v_ro_select_old text := E'            reservation.reservation_type,\n            reservation.requested_model,';
+    v_ro_select_new text := E'            reservation.reservation_type,\n            reservation.ro_number,\n            reservation.requested_model,';
+    v_ro_payload_old text := E'                ''reservation_type'', v_case.reservation_type,\n                ''requested_model'', v_case.requested_model,';
+    v_ro_payload_new text := E'                ''reservation_type'', v_case.reservation_type,\n                ''ro_number'', v_case.ro_number,\n                ''requested_model'', v_case.requested_model,';
+    v_contract_days_old text := E'                ''paid_through_at'', parent.paid_through_at,\n                ''is_open'', parent.is_open,';
+    v_contract_days_new text := E'                ''paid_through_at'', parent.paid_through_at,\n                ''contract_days'',\n                    CASE\n                        WHEN parent.start_time IS NULL THEN NULL\n                        ELSE public.business_contract_days(\n                            parent.start_time,\n                            coalesce(\n                                parent.end_time,\n                                parent.paid_through_at,\n                                p_effective_at\n                            )\n                        )\n                    END,\n                ''is_open'', parent.is_open,';
 BEGIN
     IF v_preview IS NULL OR v_workspace IS NULL THEN
         RAISE EXCEPTION
@@ -21,17 +23,36 @@ BEGIN
     END IF;
 
     v_definition := pg_get_functiondef(v_preview);
+    v_changed := false;
     IF position('app_user.is_active = true' IN v_definition) = 0 THEN
         RAISE EXCEPTION
             'Billing preview active-user validation has drifted';
     END IF;
     IF position(v_aal2_block IN v_definition) > 0 THEN
         v_definition := replace(v_definition, v_aal2_block, '');
-        EXECUTE v_definition;
+        v_changed := true;
     ELSIF position('AAL2 authentication is required' IN v_definition) > 0
        OR position('auth.jwt() ->> ''aal''' IN v_definition) > 0 THEN
         RAISE EXCEPTION
             'Billing preview AAL2 insertion point has drifted';
+    END IF;
+
+    IF position(v_contract_days_new IN v_definition) = 0 THEN
+        IF position(E'                ''contract_days'',\n' IN v_definition) > 0
+           OR position(v_contract_days_old IN v_definition) = 0 THEN
+            RAISE EXCEPTION
+                'Billing preview segment contract-days insertion point has drifted';
+        END IF;
+        v_definition := replace(
+            v_definition,
+            v_contract_days_old,
+            v_contract_days_new
+        );
+        v_changed := true;
+    END IF;
+
+    IF v_changed THEN
+        EXECUTE v_definition;
     END IF;
 
     v_definition := pg_get_functiondef(v_workspace);
@@ -50,7 +71,8 @@ BEGIN
     END IF;
 
     IF position(v_ro_select_new IN v_definition) = 0 THEN
-        IF position(v_ro_select_old IN v_definition) = 0 THEN
+        IF position('reservation.ro_number' IN v_definition) > 0
+           OR position(v_ro_select_old IN v_definition) = 0 THEN
             RAISE EXCEPTION
                 'Billing workspace reservation RO select insertion point has drifted';
         END IF;
@@ -63,7 +85,8 @@ BEGIN
     END IF;
 
     IF position(v_ro_payload_new IN v_definition) = 0 THEN
-        IF position(v_ro_payload_old IN v_definition) = 0 THEN
+        IF position('''ro_number''' IN v_definition) > 0
+           OR position(v_ro_payload_old IN v_definition) = 0 THEN
             RAISE EXCEPTION
                 'Billing workspace reservation RO payload insertion point has drifted';
         END IF;
