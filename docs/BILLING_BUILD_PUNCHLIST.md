@@ -129,6 +129,68 @@ The repository and live Supabase now match for extension, completion/return, can
 
 **Phase 6 exit:** Staff can inspect complete authoritative billing state without changing it.
 
+### Phase 6 completion gate — verify the first real active Billing case before beginning another product area
+
+This gate is part of completing Billing. Reservations, Quotes, Walk-ins, calendar integration, closed-case reporting, and additional Billing mutations must not begin merely to make the Dashboard appear populated. The first populated card must be created through an existing verified operational workflow using explicitly approved business or controlled verification data, and the resulting transportation event must remain the source of truth.
+
+#### Verified live readiness as of 2026-08-07
+
+- [x] The authenticated production Billing Dashboard loads successfully for an active application user without requiring an Admin role or AAL2.
+- [x] The production empty state matches live Supabase: zero active transportation events, zero reservations, zero open vehicle events, and zero open contract periods.
+- [x] Live contains one customer record, one non-retired vehicle whose current status is `available`, and eight active pay-type rules.
+- [ ] Live contains no active rental-rate rule and no active pay type with a non-null default daily amount. A ready Billing preview cannot calculate a vehicle charge until Dave enters an actual dealership-approved rate through Rates, Fees & Billing Rules. No test rate may be invented or seeded.
+- [ ] Dave must identify whether the existing customer and available vehicle are safe controlled-test records or provide the actual customer, vehicle, repair-order or rental context, dates, and pay type for the first legitimate case. Repository maintainers and automation must not infer consent to repurpose the existing production records.
+- [x] The secured top-level `create_start_bill_case_and_get_payload_state` wrapper exists live. It must remain the only permitted creation boundary for this verification unless a subsequently verified higher-level wrapper delegates to the same engine.
+- [ ] The exact wrapper inputs, permission path, AAL requirements, active-user behavior, conflict checks, rate resolution, tax resolution, created-record identifiers, and cleanup/closure path must be re-inspected immediately before creating the verification case.
+- [ ] No browser, SQL, service-role, or test harness may directly insert or update `transportation_events`, `reservations`, `vehicle_events`, `contract_periods`, or `billing_lines` to manufacture a passing card.
+
+#### Controlled creation and authoritative reload
+
+- [ ] Configure one real daily-rate path using an actual dealership-approved value: either a matching active rental-rate rule or the intended pay type's real default daily amount. Record which rule supplied the rate and verify the resolver returns it at the intended effective timestamp.
+- [ ] Select one explicit verification scenario: a repair-order loaner with a real RO number, or a customer rental identified as Rental. Record the expected pay type, taxable status, daily rate, start timestamp, expected-return timestamp, and vehicle VIN before execution.
+- [ ] Execute the secured high-level case-start workflow exactly once from an authorized application-user context. Do not submit trusted frontend totals and do not bypass its permission, conflict, reservation, VIN-assignment, contract-period, billing-line, or tax-child orchestration.
+- [ ] Verify directly in live Supabase that exactly one active transportation event, one intended reservation relationship, one open vehicle assignment, one open contract period, and one current parent billing segment were created for the returned identifiers.
+- [ ] Verify the selected vehicle is no longer presented as available for another overlapping assignment and that the one-open-use constraints remain satisfied.
+- [ ] Reload `get_billing_workspace_state` through the authenticated production browser rather than relying on the case-start response or a database query alone.
+
+#### At-a-glance case-card acceptance criteria
+
+- [ ] The active case appears as one full-width, tightly spaced navigation container beneath the summary tiles; the entire container is operable with a pointer, Enter, and Space.
+- [ ] A repair-order loaner displays the actual reservation `ro_number` as `RO #…`, the customer name, actual out timestamp, expected-return timestamp, chronological pay-type segments, exact authoritative contract days, stored or resolved daily rates, accumulated pre-tax amount, and one separate accumulated-tax row.
+- [ ] A rental displays `Rental`, the customer name, actual out timestamp, expected-return timestamp, current pre-tax daily rate, exact accumulated pre-tax rental charges, and a separate exact accumulated-tax row.
+- [ ] The card never substitutes a transportation-event UUID, reservation UUID, source UUID, VIN, stock number, or customer number for a missing RO number.
+- [ ] Historical segment days come only from the backend-provided segment `contract_days`, calculated by `public.business_contract_days`; Extended Warranty covered-day limits and overrides are never presented as historical billed days.
+- [ ] The current open segment uses the flat preview's `contract_days`, `daily_rate`, `subtotal`, and `pay_type`, and is not duplicated when the stored segment array also contains the open parent line.
+- [ ] Vehicle charges, tax, and combined values remain exact PostgreSQL numeric strings. The frontend performs no rounding, floating-point conversion, multiplication, addition, or recomputation.
+- [ ] The page describes accumulated operational charges for Tekion entry and never implies that this application collected, cashiered, deposited, refunded, or settled money.
+
+#### Individual case-detail acceptance criteria
+
+- [ ] Opening the case replaces the active-case list with that transportation event's focused read-only Billing detail and provides an obvious return action that restores the authoritative active list.
+- [ ] The detail shows the reservation and transportation-event context, pay type, vehicle context, billed-through state, chronological stored segments, current preview, separate tax, accumulated totals, and sanitized missing-configuration or missing-dependency states.
+- [ ] For Extended Warranty, the case-level coverage timer remains continuous across vehicle swaps, the effective covered-day limit is shown separately, authorized case-specific overrides remain auditable, and the current-vehicle timer is displayed independently because it resets when the vehicle changes.
+- [ ] A non-Extended-Warranty case shows a clear not-configured state and is not forced through an Extended Warranty branch.
+- [ ] Returning to the list and pressing Refresh both reload authoritative RPC state; neither action retains fabricated or frontend-calculated billing values.
+
+#### Permission and failure verification
+
+- [ ] Verify anonymous execution denial.
+- [ ] Verify a signed-in person without an active `app_users` record is denied.
+- [ ] Verify an active authenticated application user can read the workspace without being assigned an Admin role.
+- [ ] Before Billing mutations are exposed, define and verify specific permission keys for each action. Do not implement a blanket “Admin can bill” rule and do not infer mutation access from read-only workspace access.
+- [ ] Verify missing rate, unavailable vehicle, conflicting assignment, duplicate submission, invalid timestamp, and unauthorized mutation paths return sanitized failures without partial operational or billing writes.
+- [ ] Confirm browser-role users still cannot directly mutate the protected workflow tables or execute service-role-only internal helpers.
+
+#### Verification-case closure and evidence
+
+- [ ] Capture the production browser result for the populated list card and the individual detail view without exposing unnecessary customer information in repository documentation.
+- [ ] Close or cancel the controlled case only through the verified high-level operational workflow appropriate to the scenario. Never delete the transportation event or its billing history merely to clean up a test.
+- [ ] Verify the vehicle assignment, contract period, parent billing segment, and tax child reach their intended closed states; verify the vehicle returns to the correct operational status.
+- [ ] Verify the closed case leaves the active Billing list and remains available for the later historical Billing views.
+- [ ] Add the GitHub merge commit, exact live verification results, authenticated browser evidence, and any remaining limitation to the Required update record before marking Phase 6 complete.
+
+**Phase 6 populated-case exit:** One real or explicitly approved controlled loaner or rental has been created through the secured operational engine, rendered accurately in the active Billing list, opened successfully as an individual case, and closed or cancelled through an auditable high-level workflow without direct table writes or invented business values.
+
 ## Phase 7 — Start/activate billing at vehicle pickup
 
 - [ ] Connect Rent Now and Loan Now to the existing case/transportation-event and VIN-assignment workflow.
@@ -202,6 +264,97 @@ The repository and live Supabase now match for extension, completion/return, can
 - [ ] Confirm this punchlist and recovery documents accurately reflect completed and unresolved work.
 
 **Phase 12 exit:** The normal billing workflow is production-ready and independently verified.
+
+## Ordered product work after the populated Billing-case exit
+
+The following work is deliberately ordered. It does not authorize implementation before the Phase 6 populated-case exit is satisfied. Each product area must reuse the live operational engines and permission model rather than creating parallel customer, reservation, transportation-event, vehicle-assignment, contract-period, or billing records.
+
+### First post-Billing product area — planned Reservations through pickup
+
+A Reservation represents a future transportation need. It may identify a requested model or class, customer, repair-order context, pay type, expected pickup, and expected return, but it must remain model-level until an authorized person assigns a specific VIN at pickup. Creating a Reservation must not start a transportation event, start a vehicle-use timer, start an Extended Warranty coverage timer, create a contract period, or create a billing segment.
+
+- [ ] Inspect the exact live `reservations` schema, status values, constraints, relationships, RLS policies, grants, triggers, lifecycle RPCs, dependency/conflict engines, and all repository callers before changing anything.
+- [ ] Inspect the existing Reservations frontend and determine which create, edit, cancel, search, list, detail, dependency, conflict, and VIN-assignment behaviors already work and which are only visual placeholders.
+- [ ] Define explicit reservation permissions by action, including view, create, edit, cancel, resolve conflict, assign VIN, and activate pickup. Reuse existing verified permission keys when they exist; do not invent duplicate keys or use an Admin-role shortcut.
+- [ ] Create Reservations only through a secured high-level RPC that validates the active application user, customer reference, requested model or class, pay type, start timestamp, expected-return timestamp, repair-order number when applicable, status, and optional notes.
+- [ ] Preserve the actual RO number in `reservations.ro_number`. Do not substitute a UUID or create a second RO-number field.
+- [ ] Keep the reservation model-level before pickup. A future reservation may display candidate vehicles or availability guidance, but it must not reserve a specific VIN through an unverified frontend-only assumption.
+- [ ] Surface verified conflicts and dependencies without silently overriding them. Any permitted override must require a specific permission, reason, actor, and timestamp.
+- [ ] At pickup, require the authorized user to select the actual available VIN and confirm the authoritative customer, pay type, actual out timestamp, expected return, optional mileage, and rate/tax preview.
+- [ ] Delegate pickup to the existing secured case-start and billing engine so the transportation event, VIN assignment, vehicle event, contract period, initial parent billing segment, tax snapshot, and returned unified payload are created atomically.
+- [ ] Reload the authoritative Reservation, Transportation Event, Fleet Board, and Billing workspace states after activation. Do not stitch together a successful-looking frontend state from the submitted form.
+- [ ] Prevent repeated clicks, stale reservation activation, overlapping VIN use, duplicate open transportation events, duplicate open contract periods, and duplicate open parent billing segments.
+- [ ] Verify normal planned loaner pickup, planned rental pickup, taxable and non-taxable pay types, missing rate, missing customer, invalid date range, unavailable VIN, conflicting assignment, duplicate submission, unauthorized user, and sanitized failure behavior.
+- [ ] Verify the newly activated case appears in the active Billing workspace with the exact RO/rental summary and opens into the individual case detail.
+- [ ] Update this punchlist and required recovery documents only after the live contract, deployed frontend, real-session permissions, and browser workflow have been verified.
+
+**Reservations exit:** Staff can create and maintain model-level planned reservations, then activate one at pickup through the shared secured operational engine with one VIN, one transportation event, one open contract period, and one authoritative Billing case.
+
+### Second post-Billing product area — Walk-ins through the same activation engine
+
+A Walk-in is an unscheduled customer who needs a vehicle immediately. It is not a different kind of transportation engine. It skips advance scheduling but must reuse the same customer validation, availability, pay-type, rate, tax, permission, conflict, VIN-assignment, contract-period, transportation-event, and Billing orchestration used when a planned Reservation is picked up.
+
+- [ ] Inspect whether live schema or functions already represent Walk-ins through `source_type`, reservation type, transportation-event source fields, or another verified mechanism. Reuse the existing representation and do not add a new table or status merely because the frontend needs a label.
+- [ ] Provide a focused Walk-in intake action from the appropriate operational surface, not from Rates, Fees & Billing Rules and not from the read-only Billing summary.
+- [ ] Require an existing customer selection or a separately authorized customer-creation workflow. Do not create duplicate customers from free text without verified matching behavior.
+- [ ] Capture the real repair-order number for a repair-order loaner, or the explicit Rental classification for a customer rental.
+- [ ] Require the actual VIN because a Walk-in is starting immediately. Validate availability and conflicts through the existing backend engines at commit time.
+- [ ] Resolve the pay type, configured rate, taxable state, expected return, optional mileage, and exact preview before activation.
+- [ ] Delegate the final commit to the same secured case-start RPC used by planned pickup. Do not maintain separate SQL or React implementations for Walk-ins.
+- [ ] Return and reload the same unified operational and Billing payloads used by Reservation activation.
+- [ ] Verify loaner Walk-in, rental Walk-in, taxable, non-taxable, missing-rate, unavailable-vehicle, duplicate-customer, duplicate-submit, unauthorized, and sanitized failure cases.
+- [ ] Confirm Walk-in cases are indistinguishable from planned cases after activation except for their verified source/context fields; extensions, swaps, returns, Billing, and history must use the same engines.
+
+**Walk-ins exit:** Staff can start an unscheduled loaner or rental immediately without bypassing Reservations-era validation or creating a second transportation-event implementation.
+
+### Third post-Billing product area — non-operational Quotes that convert into Reservations
+
+A Quote is an estimate. It may use current configured rates and tax rules to explain an expected charge, but it does not represent a vehicle leaving the dealership. It must not start timers, assign a VIN, create a transportation event, create a contract period, or create committed billing lines.
+
+- [ ] Inspect the repository and live database for any existing quote tables, RPCs, status values, permissions, or frontend work before designing a new contract.
+- [ ] Define quote permissions separately for view, create, edit, expire, cancel, and convert. Do not infer Quote mutation access from Billing read access or an Admin role.
+- [ ] Capture the customer, requested model or class, anticipated dates, intended pay type, notes, and any verified dealership context required for the estimate.
+- [ ] Resolve the displayed daily rate and tax only through the same authoritative backend rate and tax resolvers used by Billing. Keep exact numeric values as strings and do not calculate totals in React.
+- [ ] Clearly label all Quote amounts as estimates based on the selected dates and current configuration. A Quote must not imply that a vehicle is assigned, charges are accumulating, or payment was collected.
+- [ ] Store enough rate/tax/source context to explain the estimate while defining whether later configuration changes should refresh an unaccepted Quote or remain visible as a prior estimate. Do not choose this historical behavior without an explicit product decision.
+- [ ] Convert an accepted Quote into a model-level Reservation through one secured high-level workflow. Preserve traceability from Quote to Reservation without copying frontend totals into committed Billing state.
+- [ ] At later pickup, recalculate and confirm the authoritative live Billing preview; the accepted Quote must not override the actual pickup timestamp, assigned VIN, current pay-type configuration, authorized exception, or committed historical snapshots unless an explicit verified contract says so.
+- [ ] Verify quote creation, revision, expiration, cancellation, conversion, changed-rate behavior, taxable and non-taxable estimates, invalid dates, missing rate, unauthorized user, duplicate conversion, and sanitized failures.
+
+**Quotes exit:** Staff can prepare a traceable non-operational estimate and convert it into a planned Reservation without starting transportation or Billing prematurely.
+
+### Fourth post-Billing product area — calendar integration across Reservations and active transportation
+
+The calendar is a visualization and navigation surface over authoritative Reservation and Transportation Event state. It is not a separate scheduling database and must not create its own interpretations of vehicle availability, Billing dates, or event status.
+
+- [ ] Preserve the 7:00 AM–7:00 PM Day timeline, 15-minute grid guidance, hover feedback, collapsible navigation panel, and model-level future Reservation behavior already established for the Fleet Board.
+- [ ] Display future Reservations using their requested model or class until pickup assigns a VIN.
+- [ ] Display active Transportation Events using their actual assigned VIN, actual out timestamp, expected return, and verified operational status.
+- [ ] Link a future Reservation block to its Reservation detail and authorized pickup workflow.
+- [ ] Link an active assignment block to its Transportation Event and individual Billing detail.
+- [ ] Link suitable empty time to the Quote, Reservation, or Walk-in entry points only after those workflows are operational and permission-verified.
+- [ ] Reload calendar state from the authoritative Fleet Board RPC after every successful Reservation or Transportation Event mutation.
+- [ ] Do not enable drag, drop, or resize writes until extension, return, same-vehicle continuation, different-vehicle reassignment, conflict handling, stale-state rejection, and action-specific permissions are fully operational and browser-verified.
+- [ ] Verify overlapping requests, model-level reservations, pickup VIN assignment, expected-return changes, after-hours actual return facts, day/week navigation, stale reload, mobile layout, and large-fleet scrolling.
+
+**Calendar integration exit:** Staff can move from calendar context into the correct Reservation, pickup, Walk-in, Quote, Transportation Event, or Billing workflow without the calendar becoming a competing source of truth.
+
+### Fifth post-Billing product area — closed-case Billing review
+
+Closed-case review is historical operational reporting for dealership reconciliation with Tekion. It is not cashiering, accounts receivable, payment processing, or a replacement dealership ledger.
+
+- [ ] Define a secured read-only backend query for closed Transportation Events that reuses stored Billing snapshots and does not recalculate historical charges from current rate or tax configuration.
+- [ ] Provide explicit views for all closed rentals, all closed loaners, a user-selected closed-date range, and all closed cases.
+- [ ] Define whether the date filter applies to actual return, transportation-event closure, billed-through, or another verified business timestamp before implementation. Display the selected meaning clearly.
+- [ ] Return the RO number for repair-order loaners, Rental classification for rentals, customer context, out and return dates, pay-type segments, exact historical contract days, stored rates, pre-tax amounts, separate tax, and exact accumulated totals.
+- [ ] Preserve split pay types, Extended Warranty exhaustion and override history, vehicle swaps, same-vehicle continuations, and historical segment boundaries without collapsing them into a misleading single current pay type.
+- [ ] Allow each historical row or card to open the same read-only individual Billing detail structure used by active cases, with closed-state context and no active-case mutation controls.
+- [ ] Add pagination or bounded result loading before supporting an unrestricted All view on material production history.
+- [ ] Define export requirements only after the on-screen historical contract is verified. Do not assume CSV, spreadsheet, PDF, or Tekion integration requirements.
+- [ ] Verify empty results, single and multiple segments, rentals, loaners, taxable and non-taxable lines, Extended Warranty split, vehicle swap, date boundaries, unauthorized access, large result sets, exact no-rounding display, and sanitized failures.
+
+**Closed-case review exit:** Staff can locate and inspect the exact stored Billing history needed for Tekion reconciliation across rentals, loaners, selected dates, or all closed cases without modifying history or implying cashiering.
+
 
 ## Deferred follow-up — not part of the core release
 
@@ -310,3 +463,12 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - **VERIFIED LIVE BEFORE THIS REPOSITORY WORK:** both Billing read RPCs accept active authenticated application users without AAL2, retain their authenticated-only security boundary, and the workspace reservation payload includes nullable `ro_number`. Live currently has zero active transportation cases. No SQL was applied to live Supabase in this work.
 - **IMPLEMENTED IN THE REPOSITORY:** an idempotent, drift-safe follow-up migration records only those verified RPC changes. Active cases are compact, full-width keyboard/click navigation objects with RO/rental context, chronological closed segments, one nonduplicated current segment, exact accumulated pre-tax and separate-tax values, rental and attention summaries, and an individual read-only case destination with distinct Extended Warranty and current-vehicle timers.
 - **NOT VERIFIED:** real non-empty-case rendering and navigation, authenticated browser behavior, deployment, and production browser behavior remain open because live has zero active transportation cases. Billing mutations and billing-specific permissions remain future work.
+
+
+### 2026-08-07 — Billing completion gate and ordered post-Billing product sequence recorded
+
+- **VERIFIED LIVE:** Production currently has zero active transportation events, zero reservations, zero open vehicle events, zero open contract periods, one customer record, one non-retired available vehicle, eight active pay-type rules, zero active rental-rate rules, and zero active pay types with a configured default daily amount.
+- **VERIFIED PRODUCTION BROWSER:** An active authenticated application user can load the deployed Billing Dashboard without an Admin role or AAL2; the authoritative empty state and exact zero totals render successfully.
+- **DECISION:** The first populated Billing card and detail view must be verified and the controlled case must be closed or cancelled through high-level operational workflows before implementation begins in another product area. No production customer, vehicle, rate, reservation, or transportation event may be invented or repurposed without Dave's explicit approval.
+- **ORDERED NEXT PRODUCT WORK AFTER BILLING EXIT:** Complete planned Reservations through pickup and VIN assignment first; add Walk-ins by reusing the same case-start engine second; add non-operational Quotes with explicit conversion into Reservations third; integrate the operational calendar only after those workflows share authoritative state; and add closed-case Billing views after the active-case lifecycle is verified.
+- This update records sequencing and acceptance criteria only. It does not change live Supabase, production data, application code, permissions, or billing behavior.
