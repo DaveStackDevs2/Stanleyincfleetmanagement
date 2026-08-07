@@ -4,7 +4,6 @@
 create or replace function public.get_billing_preview_state(p_transportation_event_id uuid, p_effective_at timestamptz)
 returns jsonb
 language plpgsql
-stable
 security definer
 set search_path to ''
 as $function$
@@ -19,35 +18,34 @@ declare
 begin
   select u.id into v_user_id from public.app_users u
    where u.auth_user_id=auth.uid() and u.is_active=true;
-  if v_user_id is null or coalesce(auth.jwt()->>'aal','') <> 'aal2' then
-    return jsonb_build_object('status','billing_preview_unavailable','message','Billing preview access is unavailable.');
-  end if;
+  if v_user_id is null then raise exception 'An active application user is required' using errcode = '42501'; end if;
+  if coalesce(auth.jwt()->>'aal','') <> 'aal2' then raise exception 'AAL2 authentication is required' using errcode = '42501'; end if;
   if p_transportation_event_id is null or p_effective_at is null then
-    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependencies',jsonb_build_array('transportation_event_or_effective_at'));
+    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependency','transportation_event_or_effective_at');
   end if;
   select * into v_event from public.transportation_events where id=p_transportation_event_id;
-  if not found then return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependencies',jsonb_build_array('transportation_event')); end if;
+  if not found then return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependency','transportation_event'); end if;
   if (select count(*) from public.reservations where transportation_event_id=p_transportation_event_id) <> 1 then
-    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependencies',jsonb_build_array('reservation'));
+    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependency','reservation');
   end if;
   select * into v_res from public.reservations where transportation_event_id=p_transportation_event_id;
   select * into v_customer from public.customers where id=coalesce(v_res.customer_id,v_event.customer_id);
   if (select count(*) from public.vehicle_events where transportation_event_id=p_transportation_event_id and is_open) > 1 then
-    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependencies',jsonb_build_array('vehicle_assignment'));
+    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependency','vehicle_assignment');
   end if;
   select * into v_vehicle_event from public.vehicle_events where transportation_event_id=p_transportation_event_id and is_open order by actual_out_at desc,id desc limit 1;
   if v_vehicle_event.id is not null then
     select * into v_vehicle from public.vehicles where id=v_vehicle_event.vehicle_id;
     if (select count(*) from public.contract_periods where vehicle_event_id=v_vehicle_event.id and is_open) > 1 then
-      return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependencies',jsonb_build_array('contract_period'));
+      return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependency','contract_period');
     end if;
     select * into v_contract from public.contract_periods where vehicle_event_id=v_vehicle_event.id and is_open order by contract_out_at desc,id desc limit 1;
   end if;
   if v_vehicle_event.id is null or v_contract.id is null then
-    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependencies',to_jsonb(array_remove(array[case when v_vehicle_event.id is null then 'vehicle_assignment' end,case when v_contract.id is null then 'contract_period' end],null)));
+    return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependency',case when v_vehicle_event.id is null then 'current_vehicle_assignment' else 'current_contract_period' end);
   end if;
   select * into v_rule from public.pay_type_rules where pay_type=v_res.pay_type limit 1;
-  if v_rule.id is null then return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependencies',jsonb_build_array('pay_type')); end if;
+  if v_rule.id is null then return jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_dependency','pay_type'); end if;
   select * into v_line from public.billing_lines where transportation_event_id=p_transportation_event_id and parent_billing_line_id is null and is_open order by start_time desc nulls last,created_at desc,id desc limit 1;
   if v_line.daily_rate_override is not null then v_rate:=v_line.daily_rate_override; v_rate_source:='billing_line_daily_rate_override';
   elsif v_line.default_daily_rate_snapshot is not null then v_rate:=v_line.default_daily_rate_snapshot; v_rate_source:='billing_line_default_daily_rate_snapshot';
@@ -56,7 +54,7 @@ begin
     if v_rate_state->>'status'='rental_daily_rate_resolved' then v_rate:=(v_rate_state->>'daily_rate')::numeric; v_rate_source:='rental_rate_rule';
     elsif v_rule.default_daily_amount is not null then v_rate:=v_rule.default_daily_amount; v_rate_source:='pay_type_default_daily_amount'; end if;
   end if;
-  if v_rate is null then return jsonb_build_object('status','billing_preview_missing_configuration','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_configuration',jsonb_build_array('daily_rate')); end if;
+  if v_rate is null then return jsonb_build_object('status','billing_preview_missing_configuration','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'missing_configuration','daily_rate'); end if;
   v_days:=public.business_contract_days(v_contract.contract_out_at,coalesce(v_res.actual_return_datetime,p_effective_at));
   v_subtotal:=v_days*v_rate; -- exact PostgreSQL numeric multiplication; without scale reduction.
   if v_line.id is not null then v_tax:=v_subtotal*v_line.tax_rate_snapshot;
@@ -74,16 +72,15 @@ begin
    'current_segment',jsonb_build_object('billing_line_id',v_line.id,'rate_source',v_rate_source,'daily_rate',v_rate::text,'billable_days',v_days,'subtotal',v_subtotal::text,'tax',v_tax::text,'total',v_total::text),
    'historical_segments',v_segments,'extended_warranty',v_warranty,'subtotal',v_subtotal::text,'tax',v_tax::text,'total',v_total::text,
    'accumulated_subtotal',(v_acc_subtotal+v_subtotal)::text,'accumulated_tax',(v_acc_tax+v_tax)::text,'accumulated_total',(v_acc_subtotal+v_acc_tax+v_subtotal+v_tax)::text);
-exception when others then
-  return jsonb_build_object('status','billing_preview_unavailable','transportation_event_id',p_transportation_event_id,'effective_at',p_effective_at,'message','Billing preview is temporarily unavailable.');
 end;$function$;
 
 create or replace function public.get_billing_workspace_state(p_effective_at timestamptz)
-returns jsonb language plpgsql stable security definer set search_path to '' as $function$
+returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare v_user_id uuid; v_item jsonb; v_items jsonb:='[]'; v_case record; v_ready int:=0; v_attention int:=0; v_sub numeric:=0; v_tax numeric:=0; v_total numeric:=0;
 begin
  select id into v_user_id from public.app_users u where u.auth_user_id=auth.uid() and u.is_active=true;
- if v_user_id is null or coalesce(auth.jwt()->>'aal','')<>'aal2' then return jsonb_build_object('status','billing_workspace_unavailable','message','Billing workspace access is unavailable.'); end if;
+ if v_user_id is null then raise exception 'An active application user is required' using errcode = '42501'; end if;
+ if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication is required' using errcode = '42501'; end if;
  if p_effective_at is null then return jsonb_build_object('status','billing_workspace_unavailable','message','Billing workspace is temporarily unavailable.'); end if;
  for v_case in select id from public.transportation_events where status='active' order by created_at,id loop
    begin v_item:=public.get_billing_preview_state(v_case.id,p_effective_at); exception when others then v_item:=jsonb_build_object('status','billing_preview_unavailable','transportation_event_id',v_case.id,'effective_at',p_effective_at,'message','Billing preview is temporarily unavailable.'); end;
