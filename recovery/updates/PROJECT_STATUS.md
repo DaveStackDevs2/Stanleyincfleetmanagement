@@ -74,3 +74,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED live:** stored synchronized `is_taxable`/`tax_applicable` is authoritative. The name-based hard lock was removed; GM Warranty and Extended Warranty remain exempt because of current stored data, not their names. The exact resolver and Admin create/update contracts preserve their verified security boundaries.
 - **IMPLEMENTED IN THE REPOSITORY:** a follow-up migration records the verified live contract without seeding or rewriting rows, and Add/Edit Pay Type again allow authorized Admins to choose Taxable Yes/No. Rename/delete remain unavailable; Disable/Reactivate and Fleet Board color behavior are preserved.
 - **NOT VERIFIED / OPEN:** authenticated Admin mutation/browser testing and full operational start/bill/extension verification. This work did not touch live Supabase.
+
+## 2026-08-07 — Operational Billing Dashboard
+
+- **VERIFIED live contract / IMPLEMENTED IN REPOSITORY:** The read-only preview and workspace RPC definitions record the already-verified live active-user plus AAL2 boundary, authoritative rate/tax resolution, historical snapshots, exact text money, deterministic attention states, empty workspace, and sanitized per-item failures.
+- **IMPLEMENTED IN REPOSITORY:** Dashboard is now the default operational Billing workspace. It loads only `get_billing_workspace_state` through the shared Supabase client, validates the complete payload, displays exact strings, and provides read-only case, segment, and Extended Warranty inspection.
+- **NOT VERIFIED:** authenticated browser behavior, deployment, and live-session denial/success remain unverified. No operational mutation, cashiering, reporting, or browser-verification milestone is complete.

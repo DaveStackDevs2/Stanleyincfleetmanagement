@@ -5,6 +5,7 @@ import { useAuthorization } from './authorization/useAuthorization'
 import { supabase } from './lib/supabase'
 import { FleetBoard } from './fleet-board/FleetBoard'
 import { PayTypeManagement } from './admin/PayTypeManagement'
+import { BillingWorkspace } from './billing/BillingWorkspace'
 
 type AdminFeature = {
   title: string
@@ -12,7 +13,7 @@ type AdminFeature = {
   status: 'Foundation' | 'Planned' | 'Coming Soon'
 }
 
-type Page = 'admin' | 'fleet' | 'access' | 'fleet-board' | 'pay-types'
+type Page = 'dashboard' | 'admin' | 'fleet' | 'access' | 'fleet-board' | 'pay-types'
 type FleetFilter =
   | 'All'
   | 'Active'
@@ -158,7 +159,7 @@ const formatDate = (value: string | null) =>
 function App() {
   const { permissionKeys } = useAuthorization()
   const canManageUsers = permissionKeys.includes('user_admin.manage')
-  const [page, setPage] = useState<Page>('admin')
+  const [page, setPage] = useState<Page>('dashboard')
   const [sidebarExpanded, setSidebarExpanded] = useState(true)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(
@@ -296,7 +297,7 @@ function App() {
         </div>
 
         <nav className="sidebar-nav" aria-label="Primary navigation">
-          <button type="button">Dashboard</button>
+          <button type="button" className={page === 'dashboard' ? 'active' : ''} onClick={() => setPage('dashboard')}>Dashboard</button>
           <button type="button" className={page === 'fleet-board' ? 'active' : ''} onClick={() => setPage('fleet-board')}>Fleet Board</button>
           <button type="button">Reservations</button>
           <button type="button">Active Transportation</button>
@@ -350,6 +351,8 @@ function App() {
                     ? 'User & Role Management'
                   : page === 'pay-types'
                     ? 'Rates, Fees & Billing Rules'
+                    : page === 'dashboard'
+                    ? 'Billing Dashboard'
                     : 'Admin Console'}
               </strong>
 
@@ -362,6 +365,8 @@ function App() {
                     ? 'Effective permission administration'
                   : page === 'pay-types'
                     ? 'Pay-type administration'
+                    : page === 'dashboard'
+                    ? 'Authoritative operational billing'
                     : 'Foundation and planned controls'}
               </span>
             </div>
@@ -374,7 +379,9 @@ function App() {
           </div>
         </header>
 
-        {page === 'fleet-board' ? (
+        {page === 'dashboard' ? (
+          <BillingWorkspace />
+        ) : page === 'fleet-board' ? (
           <FleetBoard />
         ) : page === 'access' ? (
           <UserRoleManagement onBack={() => setPage('admin')} />
