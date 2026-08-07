@@ -137,3 +137,9 @@
 - Restored editable Taxable checkboxes to Add Pay Type and focused Edit Pay Type, submitting `p_is_taxable` with complete validated mutation payloads and retaining authoritative reload and sanitized feedback.
 - Preserved exact no-rounding arithmetic, unrestricted numeric snapshots, separate tax child lines, null-tax propagation, the 10% Admin setting, owners/security/search paths/grants, immutable pay-type names, Disable/Reactivate, and Fleet Board colors.
 - Real authenticated mutation/browser and full operational start/bill/extension verification remain **NOT VERIFIED / OPEN**. Live Supabase was not touched.
+
+## 2026-08-07 — Operational Billing Dashboard
+
+- Recorded the already-verified live billing preview/workspace RPCs in one idempotent migration with active-user/AAL2 enforcement, exact backend calculations, sanitized deterministic states, postgres ownership, restricted search paths, and authenticated-only execution.
+- Made Dashboard open by default and added a focused read-only Billing workspace with strict whole-payload validation, exact-string totals, attention states, billing-segment details, Extended Warranty state, and authoritative Refresh.
+- Added structural contract tests. Live Supabase was not touched; authenticated browser/deployment verification and every operational billing mutation remain **NOT VERIFIED**.

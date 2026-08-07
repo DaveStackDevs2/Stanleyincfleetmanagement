@@ -298,3 +298,9 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - **VERIFIED live before repository work:** removed the name-based exemption constraint, added `ck_pay_type_rules_tax_fields_synchronized`, and corrected the resolver and Admin create/update RPCs while preserving owners, security modes, empty search paths, and grants. All eight existing rows remained unchanged.
 - **IMPLEMENTED:** Add and focused Edit Pay Type expose Taxable controls and submit the selected boolean. Rename/delete remain unavailable; Disable/Reactivate and Fleet Board colors remain intact.
 - **NOT VERIFIED / OPEN:** real authenticated Admin mutations/browser behavior and full operational start/bill/extension cases. No live Supabase changes were made by this repository work.
+
+### 2026-08-07 — Operational Billing Dashboard
+
+- **VERIFIED live before repository work:** `get_billing_preview_state(uuid,timestamptz)` and `get_billing_workspace_state(timestamptz)` are deployed with the active-user/AAL2, exact-numeric, sanitized-state, owner/search-path, and authenticated-only execution contracts recorded by this migration. Live operational and billing source tables are empty; live Supabase was not changed during this work.
+- **IMPLEMENTED IN THE REPOSITORY:** Phases 5 and the read-only inspection portion of Phase 6 now have an idempotent migration, focused contract tests, and an operational Dashboard using only the shared client and workspace RPC. Exact monetary text is rendered without frontend arithmetic.
+- **NOT VERIFIED:** real authenticated browser rendering, mutation workflows, operational start/extension/return/swap, and production deployment remain open. No Phase 7+ mutation or Phase 12 browser completion is claimed.
