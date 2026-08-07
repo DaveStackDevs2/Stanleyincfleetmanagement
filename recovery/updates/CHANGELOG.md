@@ -143,3 +143,10 @@
 - Recorded the already-verified live billing preview/workspace RPCs in one idempotent migration with active-user/AAL2 enforcement, exact backend calculations, sanitized deterministic states, postgres ownership, restricted search paths, and authenticated-only execution.
 - Made Dashboard open by default and added a focused read-only Billing workspace with strict whole-payload validation, exact-string totals, attention states, billing-segment details, Extended Warranty state, and authoritative Refresh.
 - Added structural contract tests. Live Supabase was not touched; authenticated browser/deployment verification and every operational billing mutation remain **NOT VERIFIED**.
+
+## 2026-08-07 — Operational Billing Dashboard read-only follow-up
+
+- Added a drift-safe, idempotent migration matching the verified live removal of AAL2 from only the two read-only Billing RPCs and the addition of nullable reservation `ro_number`, while retaining active-user validation, exact function security/ownership/search-path/volatility, and authenticated-only grants.
+- Redesigned active loaner and rental cases as tightly spaced, full-width keyboard/click navigation containers leading to an individual read-only detail destination with a clear return action.
+- Added chronological closed-segment summaries, a deduplicated flat current segment, exact accumulated pre-tax and separate-tax rows, rental summaries, sanitized attention navigation, and distinct Extended Warranty/current-vehicle timers without frontend arithmetic or writes.
+- Live Supabase was not changed. Real non-empty-case and browser behavior remain **NOT VERIFIED** because live currently has zero active transportation cases.

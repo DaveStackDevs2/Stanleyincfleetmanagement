@@ -80,3 +80,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED live contract / IMPLEMENTED IN REPOSITORY:** The read-only preview and workspace RPC definitions record the already-verified live active-user plus AAL2 boundary, authoritative rate/tax resolution, historical snapshots, exact text money, deterministic attention states, empty workspace, and sanitized per-item failures.
 - **IMPLEMENTED IN REPOSITORY:** Dashboard is now the default operational Billing workspace. It loads only `get_billing_workspace_state` through the shared Supabase client, validates the complete payload, displays exact strings, and provides read-only case, segment, and Extended Warranty inspection.
 - **NOT VERIFIED:** authenticated browser behavior, deployment, and live-session denial/success remain unverified. No operational mutation, cashiering, reporting, or browser-verification milestone is complete.
+
+## 2026-08-07 — Focused operational Billing workspace follow-up
+
+- **VERIFIED LIVE INPUT:** `get_billing_preview_state` and `get_billing_workspace_state` no longer require AAL2, while retaining active-application-user validation and authenticated-only execution; workspace reservations now include nullable `ro_number`. Live has zero active transportation cases.
+- **IMPLEMENTED IN REPOSITORY:** the follow-up migration records that live contract without applying SQL. The Dashboard list now uses each full-width case as accessible navigation into a read-only detail destination, presents exact stored loaner/rental amounts and separate tax without frontend arithmetic, preserves attention cases, and keeps Extended Warranty and current-vehicle timers distinct.
+- **NOT VERIFIED:** non-empty live case presentation, browser navigation, deployment, and real-session behavior. No live Supabase change or billing mutation was performed.
