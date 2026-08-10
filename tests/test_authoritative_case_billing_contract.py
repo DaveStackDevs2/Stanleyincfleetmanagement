@@ -42,9 +42,34 @@ class AuthoritativeBillingContractTests(unittest.TestCase):
         self.assertIn("set_reservation_billed_through_state", SQL)
         self.assertIn("ensure_tax_child_line_state", SQL)
         self.assertIn("paid_through_at=p_billed_through_at", SQL)
-        self.assertIn("is_open=true", SQL)
         self.assertIn("checkpoint_subtotal',v_preview->>'subtotal'", SQL)
         self.assertIn("billing_checkpoint_recorded", SQL)
+
+        checkpoint_body = SQL.split(
+            "create or replace function public.mark_case_billed_through_and_get_preview_state", 1
+        )[1].split("$function$;", 1)[0]
+        checkpoint_updates = "\n".join(re.findall(r"update public\.billing_lines set [^;]+;", checkpoint_body))
+        self.assertNotRegex(checkpoint_updates, r"\bend_time\s*=")
+        self.assertNotRegex(checkpoint_updates, r"\bis_open\s*=")
+
+    def test_checkpoint_payload_matches_verified_live_contract(self):
+        expected_keys = [
+            "status", "reservation_id", "transportation_event_id", "billing_line_id",
+            "billed_through_at", "checkpoint_subtotal", "checkpoint_tax",
+            "checkpoint_total", "tax_child_result", "billing_preview",
+        ]
+        sql_payload = "'status'" + SQL.split("return jsonb_build_object('status','billing_checkpoint_recorded'", 1)[1]
+        sql_payload = sql_payload.split(");", 1)[0]
+        for key in expected_keys:
+            self.assertIn(f"'{key}'", sql_payload)
+        self.assertNotIn("'checkpoint_at'", sql_payload)
+        self.assertNotIn("'tax_billing_line_id'", sql_payload)
+
+        checkpoint_validator = UI.split("const checkpointKeys=", 1)[1].split("const localNow=", 1)[0]
+        for key in expected_keys:
+            self.assertIn(f"'{key}'", checkpoint_validator)
+        self.assertNotIn("checkpoint_at", checkpoint_validator)
+        self.assertNotIn("tax_billing_line_id", checkpoint_validator)
 
     def test_low_level_and_obsolete_grants_are_revoked(self):
         self.assertRegex(SQL, r"revoke execute on function public\.create_start_bill_case_and_get_payload_state[\s\S]+from authenticated")

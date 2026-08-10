@@ -106,16 +106,15 @@ begin
   if v_preview->>'status' <> 'billing_preview_ready' then raise exception 'Authoritative checkpoint preview is not ready'; end if;
   perform public.set_reservation_billed_through_state(p_reservation_id,p_billed_through_at,p_note);
   update public.billing_lines set amount=(v_preview->>'subtotal')::numeric,
-    tax_amount=(v_preview->>'tax_amount')::numeric, paid_through_at=p_billed_through_at,
-    end_time=p_billed_through_at, is_open=true where id=v_line.id;
+    tax_amount=(v_preview->>'tax_amount')::numeric, paid_through_at=p_billed_through_at
+    where id=v_line.id;
   v_tax := public.ensure_tax_child_line_state(v_line.id);
-  update public.billing_lines set paid_through_at=p_billed_through_at, end_time=p_billed_through_at
+  update public.billing_lines set paid_through_at=p_billed_through_at
     where parent_billing_line_id=v_line.id and line_type='tax';
   v_current := public.get_billing_preview_state(v_res.transportation_event_id,clock_timestamp());
   return jsonb_build_object('status','billing_checkpoint_recorded','reservation_id',p_reservation_id,
     'transportation_event_id',v_res.transportation_event_id,'billing_line_id',v_line.id,
-    'tax_billing_line_id',(select id from public.billing_lines where parent_billing_line_id=v_line.id and line_type='tax'),
-    'checkpoint_at',p_billed_through_at,'checkpoint_subtotal',v_preview->>'subtotal',
+    'billed_through_at',p_billed_through_at,'checkpoint_subtotal',v_preview->>'subtotal',
     'checkpoint_tax',v_preview->>'tax_amount','checkpoint_total',v_preview->>'total',
     'tax_child_result',v_tax,'billing_preview',v_current);
 end;
