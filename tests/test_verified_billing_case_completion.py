@@ -56,6 +56,14 @@ class VerifiedBillingCaseCompletionTests(unittest.TestCase):
         self.assertIn("trimmedMileage===''?null:Number(trimmedMileage)", UI)
         self.assertIn("!/^\\d+$/.test(trimmedMileage)", UI)
         self.assertIn('Number.isSafeInteger(parsedMileage)', UI)
+        self.assertIn("Number.isNaN(date.getTime())||date.getTime()>Date.now()", UI)
+        self.assertIn("valid actual return date and time that is not in the future", UI)
+        self.assertRegex(UI, r'Actual return date and time<input[^>]+max=\{localNow\(\)\}')
+        entry = '<CaseHeader item={item}/>{item.reservation.reservation_id&&<button type="button" className="primary-action completion-entry"'
+        attention = "{p.status!=='billing_preview_ready'?"
+        self.assertIn(entry, UI)
+        self.assertLess(UI.index(entry), UI.index(attention, UI.index(entry)))
+        self.assertNotIn('<ReadySummary item={item} p={p}/><button type="button" className="primary-action completion-entry"', UI)
         self.assertIn("supabase.rpc('complete_case_and_get_unified_payload_state'", UI)
         self.assertNotRegex(UI, r"\.from\(['\"](?:reservations|transportation_events|billing_lines|vehicle_events)")
 
@@ -64,6 +72,8 @@ class VerifiedBillingCaseCompletionTests(unittest.TestCase):
             self.assertIn(contract, UI)
         for field in ('case_completed_and_loaded', 'case_returned_and_closed', 'transportation_event_id', 'actual_in_at', 'unified_case_payload'):
             self.assertIn(field, UI)
+        self.assertIn('setMutationAccepted(true);const reloaded=await onComplete()', UI)
+        self.assertIn('const locked=busy||mutationAccepted', UI)
         self.assertIn('await onComplete()', UI)
         self.assertIn('onComplete={async()=>{const reloaded=await load();', UI)
         self.assertIn("supabase.rpc('get_reconciled_billing_workspace_state'", UI)
