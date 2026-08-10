@@ -25,18 +25,40 @@ class AuthoritativeBillingContractTests(unittest.TestCase):
         self.assertIn("au.is_active = true", SQL)
         self.assertNotIn("auth.jwt()", SQL)
 
-    def test_start_has_no_caller_totals_or_actor_and_reuses_engines(self):
+    def test_start_has_live_defaults_and_reuses_verified_wrapper(self):
         signature = SQL.split(") returns jsonb", 1)[0]
         for forbidden in ("amount", "tax", "rate", "actor"):
             self.assertNotIn("p_" + forbidden, signature)
-        for engine in ("create_reservation_with_transportation_event_state", "start_vehicle_use_state", "get_billing_preview_state", "create_billing_parent_line_state", "ensure_tax_child_line_state"):
+        for default in (
+            "p_reservation_notes text default null",
+            "p_service_advisor text default null",
+            "p_start_mileage integer default null",
+        ):
+            self.assertIn(default, signature)
+        for engine in ("create_and_start_case_with_vehicle_by_vin_state", "get_billing_preview_state", "create_billing_parent_line_state", "ensure_tax_child_line_state"):
             self.assertIn(engine, SQL)
+        start_body = SQL.split("create or replace function public.create_authoritative_start_bill_case_state", 1)[1].split("$function$;", 1)[0]
+        self.assertNotIn("create_reservation_with_transportation_event_state", start_body)
+        self.assertNotIn("start_vehicle_use_state", start_body)
+        self.assertIn("'continuity_result'", start_body)
+        self.assertIn("ve.vehicle_id=p_vehicle_id", start_body)
+        self.assertIn("for share", start_body)
+        self.assertIn("status <> 'retired' for update", start_body)
+        self.assertIn("p_expected_return_datetime <= p_start_date", start_body)
+        self.assertIn("p_actual_out_at < p_start_date", start_body)
+        self.assertRegex(start_body, r"if p_start_mileage is not null then update public\.reservations")
+        self.assertIn("v_preview_at := clock_timestamp()", start_body)
+        self.assertIn("(v_preview->>'billing_start')::timestamptz", start_body)
+        self.assertIn("parent_billing_line_created", start_body)
         self.assertIn("'active'", SQL)
         self.assertIn("'billing_line_id',v_line_id", SQL)
         self.assertIn("authoritative_case_created_started_billed", SQL)
 
     def test_checkpoint_is_monotonic_exact_synchronized_and_open(self):
-        for phrase in ("cannot be in the future", "cannot precede case start", "cannot move backward", "exactly one open parent billing segment"):
+        checkpoint_body = SQL.split(
+            "create or replace function public.mark_case_billed_through_and_get_preview_state", 1
+        )[1].split("$function$;", 1)[0]
+        for phrase in ("cannot be in the future", "cannot precede case start", "cannot move backward", "Open parent billing segment was not found", "Multiple open parent billing segments were found"):
             self.assertIn(phrase, SQL)
         self.assertIn("get_billing_preview_state(v_res.transportation_event_id,p_billed_through_at)", SQL)
         self.assertIn("set_reservation_billed_through_state", SQL)
@@ -44,10 +66,15 @@ class AuthoritativeBillingContractTests(unittest.TestCase):
         self.assertIn("paid_through_at=p_billed_through_at", SQL)
         self.assertIn("checkpoint_subtotal',v_preview->>'subtotal'", SQL)
         self.assertIn("billing_checkpoint_recorded", SQL)
+        self.assertIn("v_now := clock_timestamp()", checkpoint_body)
+        self.assertIn("bl.transportation_event_id=v_res.transportation_event_id", checkpoint_body)
+        self.assertIn("nullif(btrim(p_note),'')", checkpoint_body)
+        self.assertIn("reservation_billed_through_set", checkpoint_body)
+        self.assertEqual(checkpoint_body.count("updated_at=v_now"), 2)
+        self.assertIn("get diagnostics v_tax_update_count = row_count", checkpoint_body)
+        self.assertIn("(v_preview->>'tax_amount')::numeric > 0 and v_tax_update_count <> 1", checkpoint_body)
+        self.assertIn("v_current->>'status' <> 'billing_preview_ready'", checkpoint_body)
 
-        checkpoint_body = SQL.split(
-            "create or replace function public.mark_case_billed_through_and_get_preview_state", 1
-        )[1].split("$function$;", 1)[0]
         checkpoint_updates = "\n".join(re.findall(r"update public\.billing_lines set [^;]+;", checkpoint_body))
         self.assertNotRegex(checkpoint_updates, r"\bend_time\s*=")
         self.assertNotRegex(checkpoint_updates, r"\bis_open\s*=")
