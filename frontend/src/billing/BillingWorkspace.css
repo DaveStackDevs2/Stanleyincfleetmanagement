@@ -15,3 +15,4 @@
   font: inherit;
 }
 .case-context textarea { min-height: 5rem; resize: vertical; }
+.completion-entry{margin-top:20px}.completion-view>p{color:var(--muted)}.completion-identifiers{margin-top:20px;padding:16px;border:1px solid var(--border);border-radius:8px}.completion-actions{display:flex;gap:12px;align-items:center;margin-top:16px}.completion-actions button{padding:.65rem 1rem}.completion-success{max-width:720px}.completion-success p{color:var(--muted)}
