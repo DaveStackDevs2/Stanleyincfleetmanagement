@@ -163,3 +163,9 @@
 - Recorded the verified live permission-scoped authoritative case-start and billed-through contracts in one idempotent, data-free migration; restricted the obsolete caller-total wrapper and low-level billed-through engine.
 - Added the selected-case “Mark billed through” Dashboard action with explicit user submission, deterministic response validation, sanitized messages, and authoritative reload that preserves selection when practical.
 - Applied exact-string, non-rounding monetary formatting throughout Billing and recorded only the verified controlled Customer Pay path as complete. Other operational workflows remain explicitly open.
+
+## 2026-08-10 — Verified Billing Complete / Return Case
+
+- Added the idempotent repository migration for the verified `billing.case_complete` permission, name-based Dev assignment, and effective-permission-protected completion wrapper while preserving the internal completion engines and authenticated-only execution boundary.
+- Added a focused selected-case Complete / Return screen with read-only case identity, local actual-return time, optional validated mileage and note, shared-client RPC-only submission, strict deterministic response checks, sanitized feedback, authoritative Billing reload, and focused success destination.
+- Preserved Mark billed through, existing cards and selection behavior, exact-string monetary handling, and read-only functionality. Live Supabase was not touched; authenticated browser completion and final database readback remain **OPEN / NOT VERIFIED** until deployment and exercise.

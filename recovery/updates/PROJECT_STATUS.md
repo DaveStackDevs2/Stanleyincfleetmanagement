@@ -100,3 +100,10 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **IMPLEMENTED IN REPOSITORY:** Billing Dashboard exclusively calls `get_reconciled_billing_workspace_state` through the shared Supabase client while preserving strict payload validation, exact numeric strings, selection/reload, billed-through behavior, sanitized messages, separate timers, and the read-only presentation.
 - **OPEN / NOT VERIFIED:** authenticated split-boundary browser verification, vehicle-swap verification, override verification, and unauthorized-session denial remain open until actually tested.
 - **NOT APPLICABLE:** this work did not touch live Supabase, seed operational data, begin Reservations or Quotes, or affect GM Warranty.
+
+## 2026-08-10 — Billing Complete / Return Case integration
+
+- **VERIFIED LIVE CONTRACT:** the `billing.case_complete` permission, Dev assignment, and effective-permission check for the established completion wrapper were verified. The wrapper contract continues to enforce active app-user resolution, AAL2, authenticated actor identity, existing-mileage preservation when omitted, and delegation to the existing completion and unified-payload engines.
+- **IMPLEMENTED IN REPOSITORY:** the verified contract is recorded in one idempotent migration, and BillingWorkspace now has a focused Complete / Return flow using only the shared-client wrapper RPC. It validates optional mileage, the full deterministic completion result, and reloads `get_reconciled_billing_workspace_state` before showing success.
+- **OPEN / NOT VERIFIED:** authenticated browser completion and final database readback remain open until deployed and exercised. Live Supabase was not changed by this task.
+- **NOT APPLICABLE:** no new completion engine, direct workflow-table write/delete, controlled production fixture, reservation/quote/swap/extension feature, or billing-money coercion was introduced.
