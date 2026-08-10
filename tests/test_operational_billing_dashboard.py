@@ -33,7 +33,7 @@ class OperationalBillingDashboardContract(unittest.TestCase):
         self.assertIn("extended_warranty: ExtendedWarranty | null", UI)
 
     def test_rpc_only_exact_string_display(self):
-        self.assertIn("supabase.rpc('get_billing_workspace_state'", UI)
+        self.assertIn("supabase.rpc('get_reconciled_billing_workspace_state'", UI)
         for write in ('.from(', 'insert(', 'update(', 'delete('):
             self.assertNotIn(write, UI)
         for arithmetic in ('Math.round', 'toFixed', 'parseFloat', 'parseInt'):

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-08-10 — Verified Extended Warranty reconciliation integration
+
+- Added an idempotent, data-free migration recording the verified live `billing.extended_warranty_reconcile` permission, name-based Dev assignment, revoked browser execution of the unchanged payload engine, an explicit wrapper that adds the effective-permission boundary, and a non-AAL2 automatic Billing workspace orchestrator that calls the established lower-level reconciliation engine directly.
+- Changed Billing Dashboard's single shared-client load to reconcile eligible active Extended Warranty cases before receiving the unchanged authoritative workspace payload. Complete validation, exact string monetary display, selected-case reload, Mark billed through, sanitized messages, separate case and vehicle timers, and read-only behavior remain intact.
+- Recorded that Zurich creation through the existing Admin workflow and the live callable contract were verified. No provider, rate, covered-day cap, UUID, customer, vehicle, RO, or controlled fixture was seeded, and GM Warranty was not changed.
+- Authenticated split-boundary browser verification, vehicle-swap verification, override verification, and unauthorized-session denial remain **OPEN / NOT VERIFIED**. Live Supabase was not modified by this work.
+
 ## 2026-08-05 — Extended Warranty mandatory provider cap follow-up
 
 - Recorded the verified live mandatory-cap contract in an idempotent follow-up migration after the existing Extended Warranty live billing contract migration.
