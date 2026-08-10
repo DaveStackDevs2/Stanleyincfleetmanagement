@@ -92,3 +92,11 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED CONTROLLED CUSTOMER PAY PATH:** authoritative adjustable-rate start and a 7-day checkpoint were verified live; the open case continued accumulating correctly through day 10. Parent, tax child, and reservation checkpoint timestamps were synchronized, while the segment remained open.
 - **IMPLEMENTED IN REPOSITORY:** permission-scoped start/checkpoint RPC contracts, restricted legacy execution, a focused Billing Dashboard checkpoint action, authoritative workspace reload with preserved selection, and non-rounding exact-string monetary display.
 - **OPEN / NOT VERIFIED:** split pay types, Extended Warranty runtime exhaustion/override, swaps, returns, extensions, closure, unauthorized real-session behavior, and other workflows. No live Supabase change was made by this repository work.
+
+## 2026-08-10 — Verified Extended Warranty reconciliation integration
+
+- **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** the verified reconciliation permission and callable boundaries are recorded in a new data-free migration. The Dev role receives `billing.extended_warranty_reconcile` by role name; the established engine is internal-only; the explicit wrapper alone requires AAL2; and the Billing workspace automatically reconciles active warranty cases in transportation-event UUID order before returning the existing workspace state. No Admin-role gate was added.
+- **VERIFIED LIVE OPERATIONAL INPUT:** Zurich was created through the existing Admin workflow. Its live rate and covered-day cap are operational configuration, not repository seed data.
+- **IMPLEMENTED IN REPOSITORY:** Billing Dashboard exclusively calls `get_reconciled_billing_workspace_state` through the shared Supabase client while preserving strict payload validation, exact numeric strings, selection/reload, billed-through behavior, sanitized messages, separate timers, and the read-only presentation.
+- **OPEN / NOT VERIFIED:** authenticated split-boundary browser verification, vehicle-swap verification, override verification, and unauthorized-session denial remain open until actually tested.
+- **NOT APPLICABLE:** this work did not touch live Supabase, seed operational data, begin Reservations or Quotes, or affect GM Warranty.
