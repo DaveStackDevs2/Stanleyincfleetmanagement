@@ -25,9 +25,10 @@ class VerifiedExtendedWarrantyReconciliationIntegration(unittest.TestCase):
         signature = "public.reconcile_extended_warranty_coverage_and_get_state(uuid)"
         for token in ("owner to postgres", "security definer", "set search_path to ''"):
             self.assertRegex(LOWER, rf"alter function {re.escape(signature)}\s+{token}")
-        self.assertRegex(LOWER, rf"revoke all on function {re.escape(signature)}\s+from public, anon, authenticated, service_role")
+        self.assertRegex(LOWER, rf"revoke execute on function {re.escape(signature)}\s+from public, anon, authenticated")
         self.assertRegex(LOWER, rf"grant execute on function {re.escape(signature)}\s+to postgres, service_role")
-        self.assertIn("pg_get_functiondef(v_function)", SQL)
+        for forbidden in ("pg_get_functiondef", "v_definition := replace", "execute v_definition", "do $migration$"):
+            self.assertNotIn(forbidden, LOWER)
 
     def test_explicit_wrapper_has_active_permission_and_aal2_checks(self):
         name = "reconcile_extended_warranty_coverage_and_get_payload_state"
@@ -35,14 +36,21 @@ class VerifiedExtendedWarrantyReconciliationIntegration(unittest.TestCase):
         for token in ("p_transportation_event_id is null", "auth.uid()", "app_user.is_active = true", "v_user_effective_permissions", "billing.extended_warranty_reconcile", "auth.jwt() ->> 'aal'", "<> 'aal2'", "reconcile_extended_warranty_coverage_and_get_state"):
             self.assertIn(token, body)
         self.assertNotIn("Admin", body)
+        self.assertIn("Extended Warranty reconciliation permission is required", body)
+        self.assertNotIn("Permission denied", body)
         self.assertRegex(LOWER, rf"revoke all on function public\.{name}\(uuid\)\s+from public, anon, authenticated, service_role")
         self.assertRegex(LOWER, rf"grant execute on function public\.{name}\(uuid\)\s+to authenticated, service_role")
 
     def test_workspace_orchestrator_is_deterministic_and_not_aal2(self):
         name = "get_reconciled_billing_workspace_state"
         body = self.body(name)
-        for token in ("p_effective_at is null", "p_effective_at > v_now", "auth.uid()", "app_user.is_active = true", "v_user_effective_permissions", "billing.extended_warranty_reconcile", "lower(btrim(transportation_event.status)) = 'active'", "from public.warranty_cases", "order by transportation_event.id", "reconcile_extended_warranty_coverage_state", "return public.get_billing_workspace_state(p_effective_at)"):
+        for token in ("p_effective_at is null", "p_effective_at > v_now", "auth.uid()", "app_user.is_active = true", "v_user_effective_permissions", "billing.extended_warranty_reconcile", "select warranty_case.transportation_event_id", "from public.warranty_cases warranty_case", "join public.transportation_events transportation_event", "on transportation_event.id = warranty_case.transportation_event_id", "lower(btrim(transportation_event.status)) = 'active'", "order by warranty_case.transportation_event_id", "reconcile_extended_warranty_coverage_state", "return public.get_billing_workspace_state(p_effective_at)"):
             self.assertIn(token, body)
+        self.assertIn("Workspace reconciliation timestamp cannot be in the future", body)
+        self.assertIn("Extended Warranty reconciliation permission is required", body)
+        self.assertNotIn("Permission denied", body)
+        loop_query = body.split("for v_transportation_event_id in", 1)[1].split("loop", 1)[0]
+        self.assertNotIn("exists (", loop_query)
         self.assertNotIn("auth.jwt()", body)
         self.assertNotIn("Admin", body)
         self.assertLess(body.index("perform public.reconcile_extended_warranty_coverage_state"), body.index("return public.get_billing_workspace_state"))

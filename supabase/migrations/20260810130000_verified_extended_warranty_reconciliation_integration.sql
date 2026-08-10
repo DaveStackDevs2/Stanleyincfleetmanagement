@@ -17,47 +17,15 @@ where role.role_name = 'Dev'
   and permission.permission_key = 'billing.extended_warranty_reconcile'
 on conflict do nothing;
 
--- The established payload builder is now an internal boundary. Remove its former
--- browser authorization checks without copying or otherwise changing its engine.
-DO $migration$
-DECLARE
-  v_function regprocedure :=
-    to_regprocedure('public.reconcile_extended_warranty_coverage_and_get_state(uuid)');
-  v_definition text;
-  v_active_user_block text := E'  IF v_actor_user_id IS NULL THEN\n    RAISE EXCEPTION ''An active application user is required''\n      USING ERRCODE = ''42501'';\n  END IF;\n\n';
-  v_aal2_block text := E'  IF coalesce(auth.jwt() ->> ''aal'', '''') <> ''aal2'' THEN\n    RAISE EXCEPTION ''AAL2 authentication is required''\n      USING ERRCODE = ''42501'';\n  END IF;\n\n';
-BEGIN
-  IF v_function IS NULL THEN
-    RAISE EXCEPTION 'Expected Extended Warranty reconciliation payload engine is missing';
-  END IF;
-
-  v_definition := pg_get_functiondef(v_function);
-
-  IF position(v_active_user_block IN v_definition) > 0 THEN
-    v_definition := replace(v_definition, v_active_user_block, '');
-  ELSIF position('An active application user is required' IN v_definition) > 0 THEN
-    RAISE EXCEPTION 'Extended Warranty payload engine active-user boundary has drifted';
-  END IF;
-
-  IF position(v_aal2_block IN v_definition) > 0 THEN
-    v_definition := replace(v_definition, v_aal2_block, '');
-  ELSIF position('AAL2 authentication is required' IN v_definition) > 0
-     OR position('auth.jwt() ->> ''aal''' IN v_definition) > 0 THEN
-    RAISE EXCEPTION 'Extended Warranty payload engine AAL2 boundary has drifted';
-  END IF;
-
-  EXECUTE v_definition;
-END;
-$migration$;
-
+-- Preserve the established payload engine body and restrict its execution boundary.
 alter function public.reconcile_extended_warranty_coverage_and_get_state(uuid)
   owner to postgres;
 alter function public.reconcile_extended_warranty_coverage_and_get_state(uuid)
   security definer;
 alter function public.reconcile_extended_warranty_coverage_and_get_state(uuid)
   set search_path to '';
-revoke all on function public.reconcile_extended_warranty_coverage_and_get_state(uuid)
-  from public, anon, authenticated, service_role;
+revoke execute on function public.reconcile_extended_warranty_coverage_and_get_state(uuid)
+  from public, anon, authenticated;
 grant execute on function public.reconcile_extended_warranty_coverage_and_get_state(uuid)
   to postgres, service_role;
 
@@ -98,7 +66,7 @@ begin
     where permission.user_id = v_actor_user_id
       and permission.permission_key = 'billing.extended_warranty_reconcile'
   ) then
-    raise exception 'Permission denied'
+    raise exception 'Extended Warranty reconciliation permission is required'
       using errcode = '42501';
   end if;
 
@@ -134,7 +102,7 @@ begin
 
   v_now := clock_timestamp();
   if p_effective_at > v_now then
-    raise exception 'Workspace timestamp cannot be in the future'
+    raise exception 'Workspace reconciliation timestamp cannot be in the future'
       using errcode = '22023';
   end if;
 
@@ -155,20 +123,17 @@ begin
     where permission.user_id = v_actor_user_id
       and permission.permission_key = 'billing.extended_warranty_reconcile'
   ) then
-    raise exception 'Permission denied'
+    raise exception 'Extended Warranty reconciliation permission is required'
       using errcode = '42501';
   end if;
 
   for v_transportation_event_id in
-    select transportation_event.id
-    from public.transportation_events transportation_event
+    select warranty_case.transportation_event_id
+    from public.warranty_cases warranty_case
+    join public.transportation_events transportation_event
+      on transportation_event.id = warranty_case.transportation_event_id
     where lower(btrim(transportation_event.status)) = 'active'
-      and exists (
-        select 1
-        from public.warranty_cases warranty_case
-        where warranty_case.transportation_event_id = transportation_event.id
-      )
-    order by transportation_event.id
+    order by warranty_case.transportation_event_id
   loop
     perform public.reconcile_extended_warranty_coverage_state(
       v_transportation_event_id,
