@@ -86,3 +86,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED LIVE INPUT:** `get_billing_preview_state` and `get_billing_workspace_state` no longer require AAL2, while retaining active-application-user validation and authenticated-only execution; workspace reservations now include nullable `ro_number`. Live has zero active transportation cases.
 - **IMPLEMENTED IN REPOSITORY:** the follow-up migration records that live contract without applying SQL. The Dashboard list now uses each full-width case as accessible navigation into a read-only detail destination, presents exact stored loaner/rental amounts and separate tax without frontend arithmetic, preserves attention cases, and keeps Extended Warranty and current-vehicle timers distinct.
 - **NOT VERIFIED:** non-empty live case presentation, browser navigation, deployment, and real-session behavior. No live Supabase change or billing mutation was performed.
+
+## 2026-08-10 — Authoritative case start and billed-through checkpoint
+
+- **VERIFIED CONTROLLED CUSTOMER PAY PATH:** authoritative adjustable-rate start and a 7-day checkpoint were verified live; the open case continued accumulating correctly through day 10. Parent, tax child, and reservation checkpoint timestamps were synchronized, while the segment remained open.
+- **IMPLEMENTED IN REPOSITORY:** permission-scoped start/checkpoint RPC contracts, restricted legacy execution, a focused Billing Dashboard checkpoint action, authoritative workspace reload with preserved selection, and non-rounding exact-string monetary display.
+- **OPEN / NOT VERIFIED:** split pay types, Extended Warranty runtime exhaustion/override, swaps, returns, extensions, closure, unauthorized real-session behavior, and other workflows. No live Supabase change was made by this repository work.

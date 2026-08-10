@@ -150,3 +150,9 @@
 - Redesigned active loaner and rental cases as tightly spaced, full-width keyboard/click navigation containers leading to an individual read-only detail destination with a clear return action.
 - Added chronological closed-segment summaries, a deduplicated flat current segment, exact accumulated pre-tax and separate-tax rows, rental summaries, sanitized attention navigation, and distinct Extended Warranty/current-vehicle timers without frontend arithmetic or writes.
 - Live Supabase was not changed. Real non-empty-case and browser behavior remain **NOT VERIFIED** because live currently has zero active transportation cases.
+
+## 2026-08-10 — Authoritative Billing start and Tekion checkpoint
+
+- Recorded the verified live permission-scoped authoritative case-start and billed-through contracts in one idempotent, data-free migration; restricted the obsolete caller-total wrapper and low-level billed-through engine.
+- Added the selected-case “Mark billed through” Dashboard action with explicit user submission, deterministic response validation, sanitized messages, and authoritative reload that preserves selection when practical.
+- Applied exact-string, non-rounding monetary formatting throughout Billing and recorded only the verified controlled Customer Pay path as complete. Other operational workflows remain explicitly open.
