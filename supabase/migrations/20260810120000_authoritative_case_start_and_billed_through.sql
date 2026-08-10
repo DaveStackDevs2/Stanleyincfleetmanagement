@@ -103,7 +103,7 @@ revoke all on function public.create_authoritative_start_bill_case_state(uuid,uu
 grant execute on function public.create_authoritative_start_bill_case_state(uuid,uuid,timestamptz,timestamptz,timestamptz,text,text,text,text,text,integer) to authenticated, service_role;
 
 create or replace function public.mark_case_billed_through_and_get_preview_state(
-  p_reservation_id uuid, p_billed_through_at timestamptz, p_note text
+  p_reservation_id uuid, p_billed_through_at timestamptz, p_note text default null
 ) returns jsonb
 language plpgsql security definer set search_path to ''
 as $function$

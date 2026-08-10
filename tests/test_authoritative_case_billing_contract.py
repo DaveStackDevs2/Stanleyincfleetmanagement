@@ -68,6 +68,7 @@ class AuthoritativeBillingContractTests(unittest.TestCase):
         checkpoint_body = SQL.split(
             "create or replace function public.mark_case_billed_through_and_get_preview_state", 1
         )[1].split("$function$;", 1)[0]
+        self.assertIn("p_note text default null", checkpoint_body)
         for phrase in ("cannot be in the future", "cannot precede case start", "cannot move backward", "Open parent billing segment was not found", "Multiple open parent billing segments were found"):
             self.assertIn(phrase, SQL)
         self.assertIn("get_billing_preview_state(v_res.transportation_event_id,p_billed_through_at)", SQL)
