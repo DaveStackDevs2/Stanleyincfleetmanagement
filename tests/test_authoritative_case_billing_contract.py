@@ -35,7 +35,7 @@ class AuthoritativeBillingContractTests(unittest.TestCase):
             "p_start_mileage integer default null",
         ):
             self.assertIn(default, signature)
-        for engine in ("create_and_start_case_with_vehicle_by_vin_state", "get_billing_preview_state", "create_billing_parent_line_state", "ensure_tax_child_line_state"):
+        for engine in ("create_and_start_case_with_vehicle_by_vin_state", "get_billing_preview_state", "create_billing_parent_line_state"):
             self.assertIn(engine, SQL)
         start_body = SQL.split("create or replace function public.create_authoritative_start_bill_case_state", 1)[1].split("$function$;", 1)[0]
         self.assertNotIn("create_reservation_with_transportation_event_state", start_body)
@@ -43,16 +43,26 @@ class AuthoritativeBillingContractTests(unittest.TestCase):
         self.assertIn("'continuity_result'", start_body)
         self.assertIn("ve.vehicle_id=p_vehicle_id", start_body)
         self.assertIn("for share", start_body)
-        self.assertIn("status <> 'retired' for update", start_body)
+        self.assertIn("is_retired = false for update", start_body)
+        self.assertNotIn("status <> 'retired'", start_body)
         self.assertIn("p_expected_return_datetime <= p_start_date", start_body)
         self.assertIn("p_actual_out_at < p_start_date", start_body)
         self.assertRegex(start_body, r"if p_start_mileage is not null then update public\.reservations")
         self.assertIn("v_preview_at := clock_timestamp()", start_body)
+        for normalized_input in (
+            "btrim(p_reservation_type)",
+            "nullif(btrim(p_reservation_notes), '')",
+            "nullif(btrim(p_service_advisor), '')",
+            "nullif(btrim(p_ro_number), '')",
+            "btrim(p_pay_type)",
+        ):
+            self.assertIn(normalized_input, start_body)
         self.assertIn("(v_preview->>'billing_start')::timestamptz", start_body)
         self.assertIn("parent_billing_line_created", start_body)
         self.assertIn("'active'", SQL)
         self.assertIn("'billing_line_id',v_line_id", SQL)
         self.assertIn("authoritative_case_created_started_billed", SQL)
+        self.assertNotIn("perform public.ensure_tax_child_line_state", start_body)
 
     def test_checkpoint_is_monotonic_exact_synchronized_and_open(self):
         checkpoint_body = SQL.split(
@@ -67,10 +77,21 @@ class AuthoritativeBillingContractTests(unittest.TestCase):
         self.assertIn("checkpoint_subtotal',v_preview->>'subtotal'", SQL)
         self.assertIn("billing_checkpoint_recorded", SQL)
         self.assertIn("v_now := clock_timestamp()", checkpoint_body)
+        self.assertEqual(checkpoint_body.count("v_now"), 3)
+        self.assertIn("p_billed_through_at > v_now", checkpoint_body)
         self.assertIn("bl.transportation_event_id=v_res.transportation_event_id", checkpoint_body)
         self.assertIn("nullif(btrim(p_note),'')", checkpoint_body)
         self.assertIn("reservation_billed_through_set", checkpoint_body)
-        self.assertEqual(checkpoint_body.count("updated_at=v_now"), 2)
+        self.assertEqual(checkpoint_body.count("updated_at=clock_timestamp()"), 2)
+        self.assertNotIn("updated_at=v_now", checkpoint_body)
+        self.assertIn(
+            "get_billing_preview_state(v_res.transportation_event_id,clock_timestamp())",
+            checkpoint_body,
+        )
+        self.assertNotIn(
+            "get_billing_preview_state(v_res.transportation_event_id,v_now)",
+            checkpoint_body,
+        )
         self.assertIn("get diagnostics v_tax_update_count = row_count", checkpoint_body)
         self.assertIn("(v_preview->>'tax_amount')::numeric > 0 and v_tax_update_count <> 1", checkpoint_body)
         self.assertIn("v_current->>'status' <> 'billing_preview_ready'", checkpoint_body)

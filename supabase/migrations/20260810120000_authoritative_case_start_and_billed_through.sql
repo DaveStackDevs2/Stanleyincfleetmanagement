@@ -47,7 +47,7 @@ begin
 
   select * into v_customer from public.customers where id=p_customer_id for share;
   if not found then raise exception using errcode='P0002', message='Customer was not found'; end if;
-  select * into v_vehicle from public.vehicles where id=p_vehicle_id and status <> 'retired' for update;
+  select * into v_vehicle from public.vehicles where id=p_vehicle_id and is_retired = false for update;
   if not found then raise exception using errcode='P0002', message='Vehicle is unavailable'; end if;
 
   v_create := public.create_and_start_case_with_vehicle_by_vin_state(
@@ -56,8 +56,9 @@ begin
     v_vehicle.stock_number, v_vehicle.model, v_vehicle.fleet_type,
     v_vehicle.mileage, v_vehicle.current_tag, v_vehicle.fleet_conversion_type,
     p_actual_out_at, v_customer.phone, v_customer.email, v_customer.flags,
-    v_customer.internal_notes, p_reservation_type, 'active',
-    p_reservation_notes, p_service_advisor, p_ro_number, p_pay_type,
+    v_customer.internal_notes, btrim(p_reservation_type), 'active',
+    nullif(btrim(p_reservation_notes), ''), nullif(btrim(p_service_advisor), ''),
+    nullif(btrim(p_ro_number), ''), btrim(p_pay_type),
     v_vehicle.location, v_vehicle.notes, v_vehicle.status, v_vehicle.recon_status);
   begin
     v_reservation := (v_create->>'reservation_id')::uuid;
@@ -88,7 +89,6 @@ begin
   begin v_line_id := (v_line->>'parent_billing_line_id')::uuid;
   exception when invalid_text_representation then raise exception 'Billing engine returned a malformed parent billing line identifier'; end;
   if v_line_id is null then raise exception 'Billing engine returned no parent billing line'; end if;
-  perform public.ensure_tax_child_line_state(v_line_id);
   v_final := public.get_billing_preview_state(v_event, clock_timestamp());
   if v_final->>'status' <> 'billing_preview_ready' then raise exception 'Current authoritative billing preview is not ready'; end if;
   return jsonb_build_object('status','authoritative_case_created_started_billed',
@@ -135,14 +135,14 @@ begin
   if v_set_result->>'status' <> 'reservation_billed_through_set' then raise exception 'Reservation billed-through timestamp was not set'; end if;
   update public.billing_lines set amount=(v_preview->>'subtotal')::numeric,
     tax_amount=(v_preview->>'tax_amount')::numeric, paid_through_at=p_billed_through_at,
-    updated_at=v_now
+    updated_at=clock_timestamp()
     where id=v_line.id;
   v_tax := public.ensure_tax_child_line_state(v_line.id);
-  update public.billing_lines set paid_through_at=p_billed_through_at, updated_at=v_now
+  update public.billing_lines set paid_through_at=p_billed_through_at, updated_at=clock_timestamp()
     where parent_billing_line_id=v_line.id and line_type='tax';
   get diagnostics v_tax_update_count = row_count;
   if (v_preview->>'tax_amount')::numeric > 0 and v_tax_update_count <> 1 then raise exception 'Positive checkpoint tax requires exactly one synchronized tax child'; end if;
-  v_current := public.get_billing_preview_state(v_res.transportation_event_id,v_now);
+  v_current := public.get_billing_preview_state(v_res.transportation_event_id,clock_timestamp());
   if v_current->>'status' <> 'billing_preview_ready' then raise exception 'Current authoritative billing preview is not ready'; end if;
   return jsonb_build_object('status','billing_checkpoint_recorded','reservation_id',p_reservation_id,
     'transportation_event_id',v_res.transportation_event_id,'billing_line_id',v_line.id,
