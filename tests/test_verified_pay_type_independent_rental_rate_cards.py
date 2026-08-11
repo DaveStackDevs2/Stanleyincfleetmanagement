@@ -29,9 +29,13 @@ class RentalRateCardCheckpointTests(unittest.TestCase):
             self.assertIn(f'alter function public.{signature} owner to postgres', LOWER)
         self.assertIn("stable security invoker set search_path to ''", LOWER)
         self.assertIn("permission_key='user_admin.manage'", LOWER)
-        self.assertIn("interval '1 microsecond'", LOWER)
-        self.assertIn("when effective_to is not null then effective_to", LOWER)
-        self.assertIn("when p_is_enabled and not is_active then v_at", LOWER)
+        enabled_fn = LOWER.split('create or replace function public.set_admin_rental_rate_card_enabled_state', 1)[1].split('alter function public.resolve_rental_rate_card_state', 1)[0]
+        self.assertIn('v_at:=clock_timestamp()', enabled_fn)
+        self.assertIn("if v_at<=v_rule.effective_from then v_at:=v_rule.effective_from+interval '1 microsecond'; end if", enabled_fn)
+        self.assertIn('effective_to=case when p_is_enabled then null when is_active then v_at else effective_to end', enabled_fn)
+        self.assertIn('effective_from=case when p_is_enabled and not is_active then v_at else effective_from end', enabled_fn)
+        self.assertEqual(enabled_fn.count('v_at:=clock_timestamp()'), 1)
+        self.assertNotIn('when v_at<=effective_from', enabled_fn)
         self.assertIn("'rental_rate_card_not_configured'", LOWER)
         for field in ['daily_rate','weekly_rate','monthly_rate','effective_from','effective_to','vehicle_class','rental_rate_rule_id']:
             self.assertIn(field, LOWER)
@@ -46,5 +50,8 @@ class RentalRateCardCheckpointTests(unittest.TestCase):
         self.assertNotIn('<th>Pay type</th><th>Daily rate</th>', UI)
         self.assertNotIn('p_pay_type_rule_id:rateForm', UI)
         self.assertIn('Cancel / Return to Rates, Fees &amp; Billing Rules', UI)
+        rate_form = UI.split('{rateFocused && <section', 1)[1].split('{!focused && <section', 1)[0]
+        self.assertIn('Cancel / Return to Rates, Fees &amp; Billing Rules', rate_form)
+        self.assertIn('{!rateFocused && <section className="vehicle-table-card extended-warranty-providers">', UI)
 
 if __name__ == '__main__': unittest.main()

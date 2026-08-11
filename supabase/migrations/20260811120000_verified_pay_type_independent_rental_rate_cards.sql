@@ -96,8 +96,9 @@ begin
  select * into v_rule from public.rental_rate_rules where id=p_rental_rate_rule_id for update;
  if not found then raise exception 'Rental rate card not found' using errcode='P0002'; end if;
  v_at:=clock_timestamp();
+ if v_at<=v_rule.effective_from then v_at:=v_rule.effective_from+interval '1 microsecond'; end if;
  update public.rental_rate_rules set is_active=p_is_enabled,
- effective_to=case when p_is_enabled then null when effective_to is not null then effective_to when v_at<=effective_from then effective_from+interval '1 microsecond' else v_at end,
+ effective_to=case when p_is_enabled then null when is_active then v_at else effective_to end,
  effective_from=case when p_is_enabled and not is_active then v_at else effective_from end,updated_by=v_user where id=p_rental_rate_rule_id returning * into v_rule;
  return jsonb_build_object('status',case when p_is_enabled then 'admin_rental_rate_card_enabled' else 'admin_rental_rate_card_disabled' end,'rental_rate_card',jsonb_build_object('rental_rate_rule_id',v_rule.id,'vehicle_class',v_rule.vehicle_class,'daily_rate',v_rule.daily_rate,'weekly_rate',v_rule.weekly_rate,'monthly_rate',v_rule.monthly_rate,'sort_order',v_rule.sort_order,'is_active',v_rule.is_active,'is_current',v_rule.is_active and v_rule.effective_from<=clock_timestamp() and (v_rule.effective_to is null or v_rule.effective_to>clock_timestamp()),'effective_from',v_rule.effective_from,'effective_to',v_rule.effective_to,'created_at',v_rule.created_at,'updated_at',v_rule.updated_at));
 exception when unique_violation then raise exception 'A current rental rate card already exists for this vehicle class' using errcode='23505'; end;$function$;
