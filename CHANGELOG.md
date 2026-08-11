@@ -20,3 +20,9 @@
 - Added one pending, idempotent database migration that repairs the missing `restart_same_vehicle_after_gap` helper by delegating to `start_vehicle_use_state`, secures the existing continuation and reassignment wrappers with authenticated active-user/AAL2 enforcement and exact actor stamping, and restricts their mutating helper chain and dependency tables.
 - Preserved the existing service-action names and operational behavior: no billing segmentation, `vehicle_swaps` insert, frontend, or Edge Function caller was added. The seven relevant live operational tables were empty, and no live SQL was applied by this task.
 - Broad Phase 1/Phase 10 remain incomplete pending manual live application and verification. Amount/tax calculation remains unresolved; Phase 2 pay-type administration is next after Phase 1; late fees remain disabled and deferred with future Admin-editable amounts that must not auto-charge.
+
+## 2026-08-11 — Verified-live pay-type-independent rental rate cards
+
+- Added one idempotent, data-free migration recording the verified live nullable legacy pay-type link, optional weekly/monthly rates, normalized vehicle-class current-card uniqueness, and five secured rate-card RPCs while preserving legacy functions, FK/index, data, and billing snapshots.
+- Updated only Rental Rates administration to use the new shared-client RPCs, remove Pay Type, validate complete card payloads, and present focused Add/Edit for daily, optional weekly, and optional monthly rates with authoritative reloads and no Delete action.
+- Updated the Billing punchlist to distinguish verified engines from the approved but **OPEN / NOT IMPLEMENTED** Quote/Reservation/Walk-in pricing-agreement and downstream block/discount/insurance/ledger work. Live Supabase was not changed by this repository implementation.

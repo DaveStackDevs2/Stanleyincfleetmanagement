@@ -86,7 +86,9 @@ class Phase3RentalRateRulesTest(unittest.TestCase):
         self.assertIn("effective_from=case when p_is_enabled and not is_active then v_effective_at else effective_from end", fn)
 
     def test_frontend_rpc_only_validation_no_delete_no_hardcoded_rates(self):
-        for rpc in ["get_admin_rental_rate_rules_state", "create_admin_rental_rate_rule_state", "update_admin_rental_rate_rule_state", "set_admin_rental_rate_rule_enabled_state"]:
+        # The Phase 3 database contracts remain in the migration for compatibility,
+        # while the deployed Admin surface now uses the verified rate-card successors.
+        for rpc in ["get_admin_rental_rate_cards_state", "create_admin_rental_rate_card_state", "update_admin_rental_rate_card_state", "set_admin_rental_rate_card_enabled_state"]:
             self.assertIn(f"supabase.rpc('{rpc}'", self.frontend)
         self.assertNotIn("rental_rate_rules')", self.frontend)
         self.assertNotIn("Delete", self.frontend)
@@ -94,7 +96,7 @@ class Phase3RentalRateRulesTest(unittest.TestCase):
         self.assertIn("parseRentalRateMutation", self.frontend)
         self.assertIn("No rental rates are configured yet", self.frontend)
         self.assertIn("Number.isFinite(dailyRate)", self.frontend)
-        self.assertIn("Vehicle class is free text", self.frontend)
+        self.assertIn("vehicle class/model", self.frontend)
         self.assertIn("changed, but authoritative settings could not be reloaded", self.frontend)
         self.assertNotRegex(self.frontend, r"dailyRate:\s*\d")
 

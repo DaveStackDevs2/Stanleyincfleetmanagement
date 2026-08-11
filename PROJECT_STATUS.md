@@ -28,3 +28,9 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 **VERIFIED baseline:** The continuation and reassignment/swap engines already existed and are being secured and reconciled, not replaced. The required `restart_same_vehicle_after_gap` dependency was absent both live and in the repository; the checkpoint reuses `start_vehicle_use_state` as the existing event/contract creation engine. No React frontend or deployed `fleet-constraint-engine` caller currently exists. The seven relevant live tables—`reservations`, `vehicle_events`, `contract_periods`, `reservation_vehicle_dependencies`, `reservation_conflicts`, `vehicle_swaps`, and `billing_lines`—were empty.
 
 **NOT APPLICABLE:** No frontend changes were made and Codex did not connect to or apply SQL to live Supabase. **NOT VERIFIED / REQUIRED:** The new migration is pending manual review, application, and live verification; broad Phase 1 and Phase 10 must remain open until then. **UNRESOLVED:** Authoritative amount/tax calculation remains unresolved. Pay-type administration Phase 2 is next after Phase 1 closes. **DEFERRED:** Late fees remain disabled; eventual Admin-editable dollar amounts must not automatically apply charges.
+
+## 2026-08-11 — Rental rate-card checkpoint
+
+- **VERIFIED LIVE / IMPLEMENTED IN REPOSITORY:** the pay-type-independent rental rate-card schema and five new RPC contracts are recorded in an idempotent, data-free migration; the Rental Rates Admin UI calls the new Admin RPCs and supports required daily plus optional weekly/monthly rates.
+- **NOT APPLICABLE:** this repository work did not apply migrations to live Supabase, seed or rewrite business values, change billing snapshots, or remove legacy compatibility contracts.
+- **OPEN / NOT IMPLEMENTED:** Quote/Reservation/Walk-in pricing agreements and all conversion, insurance, discount, override, paid-through, allocation, credit, expected-balance, and ledger runtime behavior.

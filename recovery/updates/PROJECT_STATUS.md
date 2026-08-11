@@ -107,3 +107,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **IMPLEMENTED IN REPOSITORY:** the verified contract is recorded in one idempotent migration, and BillingWorkspace now has a focused Complete / Return flow using only the shared-client wrapper RPC. It validates optional mileage, the full deterministic completion result, and reloads `get_reconciled_billing_workspace_state` before showing success.
 - **OPEN / NOT VERIFIED:** authenticated browser completion and final database readback remain open until deployed and exercised. Live Supabase was not changed by this task.
 - **NOT APPLICABLE:** no new completion engine, direct workflow-table write/delete, controlled production fixture, reservation/quote/swap/extension feature, or billing-money coercion was introduced.
+
+## 2026-08-11 — Pay-type-independent rental rate-card checkpoint
+
+- **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** the new vehicle-class rate-card schema and five RPC signatures are recorded without data mutation; Rental Rates now uses the new Admin contracts with daily/weekly/monthly presentation and focused Add/Edit.
+- **NOT APPLICABLE:** no live Supabase application, value seeding/rewriting, billing snapshot change, or legacy contract removal occurred.
+- **OPEN / NOT IMPLEMENTED:** the Quote/Walk-in through Reservation, pickup, Transportation Event, renewal/swap, and Billing pricing agreement and all approved conversion, insurance, discount, override, allocation, credit, balance, and ledger behavior.

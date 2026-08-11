@@ -77,7 +77,7 @@ The repository and live Supabase now match for extension, completion/return, can
 
 **Phase 2 exit:** Dave can configure and maintain every existing pay type, including its default daily amount.
 
-## Phase 3 — Establish the normal rental-rate source of truth
+## Phase 3 — Establish the normal rental rate-card source of truth
 
 - [ ] Verify the exact model/class keys already used by `reservations.requested_model`, `quotes.vehicle_class`, vehicles, and rental-capacity configuration.
 - [ ] Document the required rate precedence: explicit authorized override, model/class rate, pay-type default, or a safe missing-rate failure.
@@ -89,7 +89,7 @@ The repository and live Supabase now match for extension, completion/return, can
 - [x] Verify rate creation, update, disable/reactivate, missing-rate behavior, historical snapshots, and duplicate-key protection in the pre-existing live Phase 3 backend verification; browser verification remains open.
 - [x] Update this punchlist and recovery documentation in the same commit.
 
-**Phase 3 exit:** The database can resolve the correct configurable daily rate for a requested model/class and pay type without frontend business rules.
+**Phase 3 exit (superseded by the verified 2026-08-11 checkpoint):** The database resolves a pay-type-independent daily/weekly/monthly rate card for a normalized vehicle class without frontend business rules. The legacy daily resolver remains only for compatibility.
 
 ## Phase 4 — Establish authoritative tax calculation
 
@@ -269,7 +269,7 @@ This gate is part of completing Billing. Reservations, Quotes, Walk-ins, calenda
 
 The following work is deliberately ordered. It does not authorize implementation before the Phase 6 populated-case exit is satisfied. Each product area must reuse the live operational engines and permission model rather than creating parallel customer, reservation, transportation-event, vehicle-assignment, contract-period, or billing records.
 
-### First post-Billing product area — planned Reservations through pickup
+### Current Billing workstream — planned Reservations through pickup
 
 A Reservation represents a future transportation need. It may identify a requested model or class, customer, repair-order context, pay type, expected pickup, and expected return, but it must remain model-level until an authorized person assigns a specific VIN at pickup. Creating a Reservation must not start a transportation event, start a vehicle-use timer, start an Extended Warranty coverage timer, create a contract period, or create a billing segment.
 
@@ -307,7 +307,7 @@ A Walk-in is an unscheduled customer who needs a vehicle immediately. It is not 
 
 **Walk-ins exit:** Staff can start an unscheduled loaner or rental immediately without bypassing Reservations-era validation or creating a second transportation-event implementation.
 
-### Third post-Billing product area — non-operational Quotes that convert into Reservations
+### Current Billing workstream — non-operational Quotes that convert into Reservations
 
 A Quote is an estimate. It may use current configured rates and tax rules to explain an expected charge, but it does not represent a vehicle leaving the dealership. It must not start timers, assign a VIN, create a transportation event, create a contract period, or create committed billing lines.
 
@@ -470,7 +470,7 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - **VERIFIED LIVE:** Production currently has zero active transportation events, zero reservations, zero open vehicle events, zero open contract periods, one customer record, one non-retired available vehicle, eight active pay-type rules, zero active rental-rate rules, and zero active pay types with a configured default daily amount.
 - **VERIFIED PRODUCTION BROWSER:** An active authenticated application user can load the deployed Billing Dashboard without an Admin role or AAL2; the authoritative empty state and exact zero totals render successfully.
 - **DECISION:** The first populated Billing card and detail view must be verified and the controlled case must be closed or cancelled through high-level operational workflows before implementation begins in another product area. No production customer, vehicle, rate, reservation, or transportation event may be invented or repurposed without Dave's explicit approval.
-- **ORDERED NEXT PRODUCT WORK AFTER BILLING EXIT:** Complete planned Reservations through pickup and VIN assignment first; add Walk-ins by reusing the same case-start engine second; add non-operational Quotes with explicit conversion into Reservations third; integrate the operational calendar only after those workflows share authoritative state; and add closed-case Billing views after the active-case lifecycle is verified.
+- **CORRECTED CURRENT BILLING WORKSTREAM:** Define the shared Quote/Walk-in pricing agreement and carry it through planned Reservations, pickup/VIN assignment, Transportation Events, renewals/swaps, and Billing. These pricing workflows must not wait for a separate Billing exit. Calendar visualization remains downstream of authoritative shared operational state.
 - This update records sequencing and acceptance criteria only. It does not change live Supabase, production data, application code, permissions, or billing behavior.
 
 ## 2026-08-10 — Verified Customer Pay authoritative start/checkpoint path
@@ -494,3 +494,24 @@ Whenever an item is checked, add a dated entry below containing the GitHub PR/co
 - **IMPLEMENTED IN REPOSITORY:** one idempotent, data-free migration records that exact authorization change. Billing now offers a selected-case focused Complete / Return screen with read-only identity, local return time, optional whole-number mileage and note, strict response validation, sanitized feedback, and authoritative reconciled-workspace reload before a focused success view.
 - **PRESERVED:** Mark billed through, exact-string money, Billing cards and selection, read-only inspection, and the established return/billing-close/transportation-event-close engines. No protected workflow-table write or separate completion engine was added.
 - **OPEN / NOT VERIFIED:** authenticated browser completion and final database readback remain open until the migration and frontend are deployed and exercised. This repository work did not modify live Supabase.
+
+## 2026-08-11 verified-live pay-type-independent rental rate-card checkpoint
+
+### VERIFIED existing database engines
+
+- Transportation Events remain the operational source of truth. Contract-period creation and continuation, renewal, vehicle swap, day 20/25/30 reminders, parent billing lines and separate tax children, billed-through progression, case completion/return, Extended Warranty reconciliation, and `daily_rate_override` groundwork are existing verified engines. This checkpoint does not replace or recalculate them.
+- Normal rental rate cards are keyed by normalized vehicle class, **not pay type**. The verified card supplies required daily and optional weekly/monthly values. The legacy pay-type FK/index, historical data, five pay-type-dependent RPCs, and old billing daily resolver remain for compatibility pending shared pricing-agreement migration.
+- **IMPLEMENTED IN REPOSITORY / VERIFIED LIVE CONTRACT:** one data-free migration records the verified schema, rate-card resolver and Admin contracts. Rental Rates now uses those Admin RPCs, without seeding values or changing billing snapshots.
+
+### Approved Billing workstream — OPEN / NOT IMPLEMENTED
+
+Pricing-related **Quotes, Reservations, and Walk-ins are part of the current Billing workstream**; they are not postponed until Billing is finished. The approved future contract is a Quote/Walk-in pricing agreement carried unchanged through Reservation, pickup, Transportation Event, renewals and swaps, and Billing.
+
+The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rules; quoted-monthly early-return fallback; first manual conversion followed by automatic future blocks; retroactive monthly restructuring with preserved audit history; Corporate Rates; Military/Veterans discount; rental-only insurance caps and authorized days; permission-based overrides; exact paid-through dollar recalculation; Paid/Partial/Unpaid allocation by line; credit advancing only over complete blocks/full days; expected-return balance; and all Quote/Reservation/Walk-in/conversion/insurance/discount/ledger runtime work. There is no cashiering scope.
+
+### Sequence correction
+
+1. Preserve and verify the existing operational and billing engines.
+2. Build the shared pricing-agreement contract across Quote/Walk-in and Reservation before migrating pickup, renewals/swaps, and Billing callers.
+3. Implement and verify block conversion, insurance/discount/override policy, and ledger allocation together with their audit requirements.
+4. Cashiering remains out of scope.
