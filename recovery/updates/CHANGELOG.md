@@ -169,3 +169,9 @@
 - Added the idempotent repository migration for the verified `billing.case_complete` permission, name-based Dev assignment, and effective-permission-protected completion wrapper while preserving the internal completion engines and authenticated-only execution boundary.
 - Added a focused selected-case Complete / Return screen with read-only case identity, local actual-return time, optional validated mileage and note, shared-client RPC-only submission, strict deterministic response checks, sanitized feedback, authoritative Billing reload, and focused success destination.
 - Preserved Mark billed through, existing cards and selection behavior, exact-string monetary handling, and read-only functionality. Live Supabase was not touched; authenticated browser completion and final database readback remain **OPEN / NOT VERIFIED** until deployment and exercise.
+
+## 2026-08-11 — Pay-type-independent rental rate cards
+
+- Recorded the verified live rate-card contract in one data-free compatibility-preserving migration and moved only Rental Rates administration to the five new pay-type-independent RPCs.
+- Added required daily and optional weekly/monthly focused Add/Edit controls, strict complete-payload validation, authoritative reloads, Disable/Reactivate, and no Delete action.
+- Marked pricing-agreement and downstream Quote/Reservation/Walk-in conversion, insurance, discount, override, and ledger work OPEN; this change did not touch live Supabase or business values.

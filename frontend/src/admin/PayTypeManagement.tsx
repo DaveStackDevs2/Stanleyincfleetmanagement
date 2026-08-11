@@ -12,14 +12,13 @@ type PayType = {
 }
 
 type ColorPair = { background_color: string; text_color: string }
-type RentalRateRule = { id: string; vehicleClass: string; payTypeRuleId: string; payType: string; dailyRate: number; sortOrder: number; enabled: boolean; current: boolean }
-type RentalRatePayType = { id: string; payType: string; enabled: boolean; sortOrder: number }
-type RentalRateState = { rateRules: RentalRateRule[]; payTypes: RentalRatePayType[] }
+type RentalRateRule = { id: string; vehicleClass: string; dailyRate: number; weeklyRate: number | null; monthlyRate: number | null; sortOrder: number; enabled: boolean; current: boolean }
+type RentalRateState = { rateRules: RentalRateRule[] }
 type PayTypeState = { payTypes: PayType[]; colors: Record<string, ColorPair> }
 type ColorState = { payTypes: string[]; colors: Record<string, ColorPair> }
 type EditForm = { id: string; payType: string; taxable: boolean; amount: string; sortOrder: string; description: string }
 type TaxState = { taxRate: number; percentage: number }
-type RentalRateForm = { id: string | null; vehicleClass: string; payTypeRuleId: string; dailyRate: string; sortOrder: string }
+type RentalRateForm = { id: string | null; vehicleClass: string; dailyRate: string; weeklyRate: string; monthlyRate: string; sortOrder: string }
 type ExtendedWarrantyProviderRule = { id: string; providerId: string; providerName: string; enabled: boolean; defaultDailyAmount: number | null; coveredDays: number; notes: string }
 type ExtendedWarrantyState = { providerRules: ExtendedWarrantyProviderRule[] }
 type ExtendedWarrantyForm = { id: string | null; providerId: string | null; providerName: string; defaultDailyAmount: string; coveredDays: string; notes: string }
@@ -121,32 +120,16 @@ function parseColors(value: unknown): ColorState {
 
 
 function parseRentalRateRule(item: unknown): RentalRateRule {
-  if (!isRecord(item) || typeof item.rental_rate_rule_id !== 'string' || !UUID.test(item.rental_rate_rule_id) ||
-    typeof item.vehicle_class !== 'string' || !item.vehicle_class.trim() ||
-    typeof item.pay_type_rule_id !== 'string' || !UUID.test(item.pay_type_rule_id) ||
-    typeof item.pay_type !== 'string' || !item.pay_type.trim() ||
-    typeof item.daily_rate !== 'number' || !Number.isFinite(item.daily_rate) || item.daily_rate < 0 ||
-    typeof item.sort_order !== 'number' || !Number.isInteger(item.sort_order) || item.sort_order < 0 ||
-    typeof item.is_active !== 'boolean' || typeof item.is_current !== 'boolean' ||
-    typeof item.effective_from !== 'string' || !(item.effective_to === null || typeof item.effective_to === 'string') ||
-    typeof item.created_at !== 'string' || typeof item.updated_at !== 'string') {
-    throw new Error('invalid-rental-rate-rule')
-  }
-  return { id: item.rental_rate_rule_id, vehicleClass: item.vehicle_class, payTypeRuleId: item.pay_type_rule_id,
-    payType: item.pay_type, dailyRate: item.daily_rate, sortOrder: item.sort_order, enabled: item.is_active, current: item.is_current }
+  const money = (value: unknown) => value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0)
+  if (!isRecord(item) || !hasExactKeys(item, ['rental_rate_rule_id','vehicle_class','daily_rate','weekly_rate','monthly_rate','sort_order','is_active','is_current','effective_from','effective_to','created_at','updated_at']) ||
+    typeof item.rental_rate_rule_id !== 'string' || !UUID.test(item.rental_rate_rule_id) || typeof item.vehicle_class !== 'string' || !item.vehicle_class.trim() ||
+    typeof item.daily_rate !== 'number' || !money(item.daily_rate) || !money(item.weekly_rate) || !money(item.monthly_rate) || typeof item.sort_order !== 'number' || !Number.isInteger(item.sort_order) || item.sort_order < 0 ||
+    typeof item.is_active !== 'boolean' || typeof item.is_current !== 'boolean' || typeof item.effective_from !== 'string' || !(item.effective_to === null || typeof item.effective_to === 'string') || typeof item.created_at !== 'string' || typeof item.updated_at !== 'string') throw new Error('invalid-rental-rate-card')
+  return { id:item.rental_rate_rule_id, vehicleClass:item.vehicle_class, dailyRate:item.daily_rate, weeklyRate:item.weekly_rate as number|null, monthlyRate:item.monthly_rate as number|null, sortOrder:item.sort_order, enabled:item.is_active, current:item.is_current }
 }
-
 function parseRentalRateState(value: unknown): RentalRateState {
-  if (!isRecord(value) || value.status !== 'admin_rental_rate_rules_ready' || value.can_manage !== true ||
-    !Array.isArray(value.rate_rules) || !Array.isArray(value.pay_types)) throw new Error('invalid-rental-rate-state')
-  const rateRules = value.rate_rules.map(parseRentalRateRule)
-  const payTypes = value.pay_types.map((item) => {
-    if (!isRecord(item) || typeof item.pay_type_rule_id !== 'string' || !UUID.test(item.pay_type_rule_id) ||
-      typeof item.pay_type !== 'string' || !item.pay_type.trim() || typeof item.is_enabled !== 'boolean' ||
-      typeof item.sort_order !== 'number' || !Number.isInteger(item.sort_order)) throw new Error('invalid-rental-rate-pay-type')
-    return { id: item.pay_type_rule_id, payType: item.pay_type, enabled: item.is_enabled, sortOrder: item.sort_order }
-  })
-  return { rateRules, payTypes }
+  if (!isRecord(value) || !hasExactKeys(value,['status','can_manage','rate_cards']) || value.status !== 'admin_rental_rate_cards_ready' || value.can_manage !== true || !Array.isArray(value.rate_cards)) throw new Error('invalid-rental-rate-state')
+  return { rateRules:value.rate_cards.map(parseRentalRateRule) }
 }
 
 function parseExtendedWarrantyProviderRule(item: unknown): ExtendedWarrantyProviderRule {
@@ -177,8 +160,8 @@ function parseExtendedWarrantyMutation(value: unknown, expectedStatus: string, e
 }
 
 function parseRentalRateMutation(value: unknown, expectedStatus: string, expectedId?: string): RentalRateRule {
-  if (!isRecord(value) || value.status !== expectedStatus || !isRecord(value.rental_rate_rule)) throw new Error('invalid-rental-rate-mutation')
-  const rule = parseRentalRateRule(value.rental_rate_rule)
+  if (!isRecord(value) || value.status !== expectedStatus || !isRecord(value.rental_rate_card)) throw new Error('invalid-rental-rate-mutation')
+  const rule = parseRentalRateRule(value.rental_rate_card)
   if (expectedId && rule.id !== expectedId) throw new Error('unexpected-rental-rate-rule')
   return rule
 }
@@ -206,7 +189,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [extendedWarrantyState, setExtendedWarrantyState] = useState<ExtendedWarrantyState | null>(null)
   const [extendedWarrantyForm, setExtendedWarrantyForm] = useState<ExtendedWarrantyForm>({ id: null, providerId: null, providerName: '', defaultDailyAmount: '', coveredDays: '', notes: '' })
   const [extendedWarrantyFocusMode, setExtendedWarrantyFocusMode] = useState<ExtendedWarrantyFocusMode>('list')
-  const [rateForm, setRateForm] = useState<RentalRateForm>({ id: null, vehicleClass: '', payTypeRuleId: '', dailyRate: '', sortOrder: '0' })
+  const [rateForm, setRateForm] = useState<RentalRateForm>({ id: null, vehicleClass: '', dailyRate: '', weeklyRate: '', monthlyRate: '', sortOrder: '0' })
   const [draftColors, setDraftColors] = useState<Record<string, ColorPair>>({})
   const [dirtyColorKeys, setDirtyColorKeys] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
@@ -223,7 +206,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     const [rules, palette, rentalRates, extendedWarranty, tax] = await Promise.all([
       supabase.rpc('get_admin_pay_type_rules_state'),
       supabase.rpc('get_fleet_board_pay_type_colors_state'),
-      supabase.rpc('get_admin_rental_rate_rules_state'),
+      supabase.rpc('get_admin_rental_rate_cards_state'),
       supabase.rpc('get_admin_billing_configuration_state'),
       supabase.rpc('get_admin_loaner_rental_tax_state'),
     ])
@@ -341,50 +324,22 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
 
 
 
+  const emptyRateForm = (): RentalRateForm => ({ id:null, vehicleClass:'', dailyRate:'', weeklyRate:'', monthlyRate:'', sortOrder:'0' })
   const validateRateForm = (draft: RentalRateForm) => {
-    const dailyRate = Number(draft.dailyRate)
-    const sortOrder = Number(draft.sortOrder)
-    if (!draft.vehicleClass.trim() || !draft.payTypeRuleId || !Number.isFinite(dailyRate) || dailyRate < 0 || !Number.isInteger(sortOrder) || sortOrder < 0) {
-      setMessage('Enter a vehicle class, enabled pay type, finite non-negative daily rate, and non-negative whole-number sort order.')
-      return null
-    }
-    return { dailyRate, sortOrder }
+    const dailyRate=Number(draft.dailyRate), weeklyRate=draft.weeklyRate.trim()===''?null:Number(draft.weeklyRate), monthlyRate=draft.monthlyRate.trim()===''?null:Number(draft.monthlyRate), sortOrder=Number(draft.sortOrder)
+    if (!draft.vehicleClass.trim() || draft.dailyRate.trim()==='' || !Number.isFinite(dailyRate) || dailyRate<0 || (weeklyRate!==null&&(!Number.isFinite(weeklyRate)||weeklyRate<0)) || (monthlyRate!==null&&(!Number.isFinite(monthlyRate)||monthlyRate<0)) || !Number.isInteger(sortOrder) || sortOrder<0) { setMessage('Enter a vehicle class, required finite non-negative daily rate, optional finite non-negative weekly and monthly rates, and non-negative whole-number sort order.'); return null }
+    return {dailyRate,weeklyRate,monthlyRate,sortOrder}
   }
-
-  const editRentalRate = (item: RentalRateRule) => {
-    setMessage(null); setSuccessMessage(null)
-    setRateForm({ id: item.id, vehicleClass: item.vehicleClass, payTypeRuleId: item.payTypeRuleId, dailyRate: String(item.dailyRate), sortOrder: String(item.sortOrder) })
-  }
-
+  const editRentalRate = (item: RentalRateRule) => { setMessage(null); setSuccessMessage(null); setRateForm({id:item.id,vehicleClass:item.vehicleClass,dailyRate:String(item.dailyRate),weeklyRate:item.weeklyRate===null?'':String(item.weeklyRate),monthlyRate:item.monthlyRate===null?'':String(item.monthlyRate),sortOrder:String(item.sortOrder)}) }
   const saveRentalRate = async (event: FormEvent) => {
-    event.preventDefault()
-    if (busy) return
-    const validated = validateRateForm(rateForm)
-    if (!validated) return
-    setBusy(true); setMessage(null); setSuccessMessage(null)
-    const isEdit = rateForm.id !== null
-    const result = isEdit
-      ? await supabase.rpc('update_admin_rental_rate_rule_state', { p_rental_rate_rule_id: rateForm.id, p_vehicle_class: rateForm.vehicleClass.trim(), p_pay_type_rule_id: rateForm.payTypeRuleId, p_daily_rate: validated.dailyRate, p_sort_order: validated.sortOrder })
-      : await supabase.rpc('create_admin_rental_rate_rule_state', { p_vehicle_class: rateForm.vehicleClass.trim(), p_pay_type_rule_id: rateForm.payTypeRuleId, p_daily_rate: validated.dailyRate, p_sort_order: validated.sortOrder })
-    if (result.error) { setMessage(`The rental rate could not be ${isEdit ? 'updated' : 'added'}. Review the values and try again. No change was confirmed.`); setBusy(false); return }
-    try { parseRentalRateMutation(result.data, isEdit ? 'admin_rental_rate_rule_updated' : 'admin_rental_rate_rule_created', rateForm.id ?? undefined) }
-    catch { setMessage('The rental rate request completed, but its result could not be verified. Refresh before trying again.'); setBusy(false); return }
-    const reloaded = await load()
-    if (reloaded) { setRateForm({ id: null, vehicleClass: '', payTypeRuleId: '', dailyRate: '', sortOrder: '0' }); setSuccessMessage(`Rental rate ${isEdit ? 'updated' : 'added'} successfully.`) }
-    else setMessage('The rental rate changed, but authoritative settings could not be reloaded. Refresh before making another change.')
+    event.preventDefault(); if(busy)return; const values=validateRateForm(rateForm); if(!values)return; setBusy(true);setMessage(null);setSuccessMessage(null); const edit=rateForm.id!==null
+    const payload={p_vehicle_class:rateForm.vehicleClass.trim(),p_daily_rate:values.dailyRate,p_weekly_rate:values.weeklyRate,p_monthly_rate:values.monthlyRate,p_sort_order:values.sortOrder}
+    const result=edit?await supabase.rpc('update_admin_rental_rate_card_state',{p_rental_rate_rule_id:rateForm.id,...payload}):await supabase.rpc('create_admin_rental_rate_card_state',payload)
+    if(result.error){setMessage(`The rental rate could not be ${edit?'updated':'added'}. Review the values and try again. No change was confirmed.`);setBusy(false);return}
+    try{parseRentalRateMutation(result.data,edit?'admin_rental_rate_card_updated':'admin_rental_rate_card_created',rateForm.id??undefined)}catch{setMessage('The rental rate request completed, but its complete result could not be verified. Refresh before trying again.');setBusy(false);return}
+    if(await load()){setRateForm(emptyRateForm());setSuccessMessage(`Rental rate ${edit?'updated':'added'} successfully.`)}else setMessage('The rental rate changed, but authoritative settings could not be reloaded. Refresh before making another change.')
   }
-
-  const setRentalRateEnabled = async (item: RentalRateRule) => {
-    setBusy(true); setMessage(null); setSuccessMessage(null)
-    const enabled = !item.enabled
-    const result = await supabase.rpc('set_admin_rental_rate_rule_enabled_state', { p_rental_rate_rule_id: item.id, p_is_enabled: enabled })
-    if (result.error) { setMessage(`The rental rate could not be ${enabled ? 'reactivated' : 'disabled'}. No changes were applied.`); setBusy(false); return }
-    try { parseRentalRateMutation(result.data, enabled ? 'admin_rental_rate_rule_enabled' : 'admin_rental_rate_rule_disabled', item.id) }
-    catch { setMessage('The rental rate status changed, but its result could not be verified. Refresh before trying again.'); setBusy(false); return }
-    if (await load()) setSuccessMessage(`Rental rate ${enabled ? 'reactivated' : 'disabled'} successfully.`)
-    else setMessage(`The rental rate changed, but authoritative settings could not be reloaded after ${enabled ? 'reactivating' : 'disabling'}. Refresh before making another change.`)
-  }
-
+  const setRentalRateEnabled=async(item:RentalRateRule)=>{setBusy(true);setMessage(null);setSuccessMessage(null);const enabled=!item.enabled;const result=await supabase.rpc('set_admin_rental_rate_card_enabled_state',{p_rental_rate_rule_id:item.id,p_is_enabled:enabled});if(result.error){setMessage(`The rental rate could not be ${enabled?'reactivated':'disabled'}. No change was confirmed.`);setBusy(false);return}try{parseRentalRateMutation(result.data,enabled?'admin_rental_rate_card_enabled':'admin_rental_rate_card_disabled',item.id)}catch{setMessage('The rental rate status result could not be verified. Refresh before trying again.');setBusy(false);return}if(await load())setSuccessMessage(`Rental rate ${enabled?'reactivated':'disabled'} successfully.`);else setMessage('The rental rate changed, but authoritative settings could not be reloaded.')}
 
 
   const editExtendedWarrantyProvider = (item: ExtendedWarrantyProviderRule) => {
@@ -467,7 +422,8 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   }
 
   const extendedWarrantyFocused = extendedWarrantyFocusMode !== 'list'
-  const focused = extendedWarrantyFocused || taxEditing
+  const rateFocused = rateForm.id !== null || rateForm.vehicleClass !== ''
+  const focused = extendedWarrantyFocused || taxEditing || rateFocused
 
   return <main className="content management-page pay-type-page">
     <section className="fleet-header"><div><p className="eyebrow">ADMINISTRATION / BILLING</p>
@@ -490,23 +446,10 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
             </td></tr>)}
         </tbody></table></div></section>}
 
-      {!focused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Rental Rates</h2><p>Configure normal daily rates by Admin-entered vehicle class/model identifier and pay type. No rates are preloaded.</p></div></div>
-        {!rateState && <p className="data-message">Rental rate settings could not be loaded. Pay Type management remains available.</p>}
-        {rateState && <>
-          {rateState.rateRules.length === 0 ? <p className="empty-state">No rental rates are configured yet. Add rates only after the business provides approved values.</p> :
-            <div className="table-wrap"><table><thead><tr><th>Vehicle class</th><th>Pay type</th><th>Daily rate</th><th>Sort order</th><th>Status</th><th>Action</th></tr></thead><tbody>{rateState.rateRules.map((item) => <tr key={item.id}><td><strong>{item.vehicleClass}</strong></td><td>{item.payType}</td><td>{item.dailyRate.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</td><td>{item.sortOrder}</td><td>{item.enabled ? 'Enabled' : 'Disabled'}</td><td><button type="button" disabled={busy} onClick={() => editRentalRate(item)}>Edit</button>{' '}<button type="button" disabled={busy} onClick={() => void setRentalRateEnabled(item)}>{item.enabled ? 'Disable' : 'Reactivate'}</button></td></tr>)}</tbody></table></div>}
-          <form className="details-panel editor-body" onSubmit={saveRentalRate}><div><h2>{rateForm.id ? 'Edit Rental Rate' : 'Add Rental Rate'}</h2><p>Vehicle class is free text. Pay types come from the authoritative Admin RPC.</p></div>
-            <label>Vehicle class / model identifier<input required value={rateForm.vehicleClass} disabled={busy} onChange={(event) => setRateForm({ ...rateForm, vehicleClass: event.target.value })}/></label>
-            <label>Pay type<select required value={rateForm.payTypeRuleId} disabled={busy} onChange={(event) => setRateForm({ ...rateForm, payTypeRuleId: event.target.value })}><option value="">Select an enabled pay type</option>{rateState.payTypes.filter((item) => item.enabled || item.id === rateForm.payTypeRuleId).map((item) => <option disabled={!item.enabled} key={item.id} value={item.id}>{item.payType}{item.enabled ? '' : ' (disabled)'}</option>)}</select></label>
-            <label>Daily rate<input required min="0" step="0.01" type="number" value={rateForm.dailyRate} disabled={busy} onChange={(event) => setRateForm({ ...rateForm, dailyRate: event.target.value })}/></label>
-            <label>Sort order<input required min="0" step="1" type="number" value={rateForm.sortOrder} disabled={busy} onChange={(event) => setRateForm({ ...rateForm, sortOrder: event.target.value })}/></label>
-            <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{rateForm.id ? 'Save Rental Rate' : 'Add Rental Rate'}</button>{rateForm.id && <button type="button" disabled={busy} onClick={() => setRateForm({ id: null, vehicleClass: '', payTypeRuleId: '', dailyRate: '', sortOrder: '0' })}>Cancel</button>}</div>
-          </form>
-        </>}
-      </section>}
+      {rateFocused && <section className="vehicle-table-card"><form className="details-panel editor-body" onSubmit={saveRentalRate}><div><h2>{rateForm.id?'Edit Rental Rate':'Add Rental Rate'}</h2><p>Blank weekly or monthly rates mean not configured, never free.</p></div><label>Vehicle class / model identifier<input required value={rateForm.vehicleClass} disabled={busy} onChange={e=>setRateForm({...rateForm,vehicleClass:e.target.value})}/></label><label>Daily rate<input required min="0" step="0.01" type="number" value={rateForm.dailyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,dailyRate:e.target.value})}/></label><label>Weekly rate (optional)<input min="0" step="0.01" type="number" value={rateForm.weeklyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,weeklyRate:e.target.value})}/></label><label>Monthly rate (optional)<input min="0" step="0.01" type="number" value={rateForm.monthlyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,monthlyRate:e.target.value})}/></label><label>Sort order<input required min="0" step="1" type="number" value={rateForm.sortOrder} disabled={busy} onChange={e=>setRateForm({...rateForm,sortOrder:e.target.value})}/></label><div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{rateForm.id?'Save Rental Rate':'Add Rental Rate'}</button><button type="button" disabled={busy} onClick={async()=>{setMessage(null);await load();setRateForm(emptyRateForm())}}>Cancel / Return to Rates, Fees &amp; Billing Rules</button></div></form></section>}
+      {!focused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Rental Rates</h2><p>Configure pay-type-independent daily, weekly, and monthly rate cards by vehicle class/model. No rates are preloaded.</p></div><button className="primary-action" type="button" disabled={busy} onClick={()=>setRateForm({...emptyRateForm(),vehicleClass:' '})}>Add Rental Rate</button></div>{!rateState&&<p className="data-message">Rental rate settings could not be loaded. Pay Type management remains available.</p>}{rateState&&(rateState.rateRules.length===0?<p className="empty-state">No rental rates are configured yet. Add rates only after the business provides approved values.</p>:<div className="table-wrap"><table><thead><tr><th>Vehicle class</th><th>Daily rate</th><th>Weekly rate</th><th>Monthly rate</th><th>Sort order</th><th>Status</th><th>Action</th></tr></thead><tbody>{rateState.rateRules.map(item=><tr key={item.id}><td><strong>{item.vehicleClass}</strong></td><td>{item.dailyRate.toLocaleString(undefined,{style:'currency',currency:'USD'})}</td><td>{item.weeklyRate===null?'Not configured':item.weeklyRate.toLocaleString(undefined,{style:'currency',currency:'USD'})}</td><td>{item.monthlyRate===null?'Not configured':item.monthlyRate.toLocaleString(undefined,{style:'currency',currency:'USD'})}</td><td>{item.sortOrder}</td><td>{item.enabled?'Enabled':'Disabled'}</td><td><button type="button" disabled={busy} onClick={()=>editRentalRate(item)}>Edit</button>{' '}<button type="button" disabled={busy} onClick={()=>void setRentalRateEnabled(item)}>{item.enabled?'Disable':'Reactivate'}</button></td></tr>)}</tbody></table></div>)}</section>}
 
-
-      <section className="vehicle-table-card extended-warranty-providers"><div className="section-heading"><div><h2>Extended Warranty Providers</h2><p>Configure outside Extended Warranty providers separately from GM Warranty and the single Extended Warranty pay type. Each provider must have a normal covered-day limit. Exceptional shorter or longer coverage uses an authorized case override.</p></div>{extendedWarrantyFocusMode === 'list' && <button className="primary-action" type="button" disabled={busy} onClick={() => { setMessage(null); setSuccessMessage(null); setExtendedWarrantyForm({ id: null, providerId: null, providerName: '', defaultDailyAmount: '', coveredDays: '', notes: '' }); setExtendedWarrantyFocusMode('form') }}>Add Extended Warranty Provider</button>}</div>
+      {!rateFocused && <section className="vehicle-table-card extended-warranty-providers"><div className="section-heading"><div><h2>Extended Warranty Providers</h2><p>Configure outside Extended Warranty providers separately from GM Warranty and the single Extended Warranty pay type. Each provider must have a normal covered-day limit. Exceptional shorter or longer coverage uses an authorized case override.</p></div>{extendedWarrantyFocusMode === 'list' && <button className="primary-action" type="button" disabled={busy} onClick={() => { setMessage(null); setSuccessMessage(null); setExtendedWarrantyForm({ id: null, providerId: null, providerName: '', defaultDailyAmount: '', coveredDays: '', notes: '' }); setExtendedWarrantyFocusMode('form') }}>Add Extended Warranty Provider</button>}</div>
         {!extendedWarrantyState && <p className="data-message">Extended Warranty provider settings could not be loaded. Pay Type management remains available.</p>}
         {extendedWarrantyState && extendedWarrantyFocusMode === 'list' && <>
           {extendedWarrantyState.providerRules.length === 0 ? <p className="empty-state">No Extended Warranty providers are configured yet. Add providers only after approved business values are available.</p> :
@@ -520,7 +463,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
             <label>Notes<textarea value={extendedWarrantyForm.notes} disabled={busy} onChange={(event) => setExtendedWarrantyForm({ ...extendedWarrantyForm, notes: event.target.value })}/></label>
             <div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{extendedWarrantyForm.id ? 'Save Extended Warranty Provider' : 'Add Extended Warranty Provider'}</button><button type="button" disabled={busy} onClick={async () => { setMessage(null); setExtendedWarrantyForm({ id: null, providerId: null, providerName: '', defaultDailyAmount: '', coveredDays: '', notes: '' }); await load(); setExtendedWarrantyFocusMode('list') }}>Cancel / Return to Rates, Fees &amp; Billing Rules</button></div>
           </form>}
-      </section>
+      </section>}
 
       {!focused && <div className="pay-type-grid">
         {editForm && <form className="details-panel editor-body" onSubmit={savePayType}><div><h2>Edit Pay Type</h2><p>Update billing defaults without changing this pay type's identity.</p></div>
