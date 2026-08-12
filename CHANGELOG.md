@@ -26,3 +26,9 @@
 - Added one idempotent, data-free migration recording the verified live nullable legacy pay-type link, optional weekly/monthly rates, normalized vehicle-class current-card uniqueness, and five secured rate-card RPCs while preserving legacy functions, FK/index, data, and billing snapshots.
 - Updated only Rental Rates administration to use the new shared-client RPCs, remove Pay Type, validate complete card payloads, and present focused Add/Edit for daily, optional weekly, and optional monthly rates with authoritative reloads and no Delete action.
 - Updated the Billing punchlist to distinguish verified engines from the approved but **OPEN / NOT IMPLEMENTED** Quote/Reservation/Walk-in pricing-agreement and downstream block/discount/insurance/ledger work. Live Supabase was not changed by this repository implementation.
+
+## 2026-08-12 — Shared rental-pricing-agreement foundation
+
+- **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
+- **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
+- **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.

@@ -113,3 +113,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** the new vehicle-class rate-card schema and five RPC signatures are recorded without data mutation; Rental Rates now uses the new Admin contracts with daily/weekly/monthly presentation and focused Add/Edit.
 - **NOT APPLICABLE:** no live Supabase application, value seeding/rewriting, billing snapshot change, or legacy contract removal occurred.
 - **OPEN / NOT IMPLEMENTED:** the Quote/Walk-in through Reservation, pickup, Transportation Event, renewal/swap, and Billing pricing agreement and all approved conversion, insurance, discount, override, allocation, credit, balance, and ledger behavior.
+
+## 2026-08-12 — Shared rental-pricing-agreement foundation
+
+- **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
+- **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
+- **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.

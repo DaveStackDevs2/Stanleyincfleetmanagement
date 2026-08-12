@@ -34,3 +34,9 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **VERIFIED LIVE / IMPLEMENTED IN REPOSITORY:** the pay-type-independent rental rate-card schema and five new RPC contracts are recorded in an idempotent, data-free migration; the Rental Rates Admin UI calls the new Admin RPCs and supports required daily plus optional weekly/monthly rates.
 - **NOT APPLICABLE:** this repository work did not apply migrations to live Supabase, seed or rewrite business values, change billing snapshots, or remove legacy compatibility contracts.
 - **OPEN / NOT IMPLEMENTED:** Quote/Reservation/Walk-in pricing agreements and all conversion, insurance, discount, override, paid-through, allocation, credit, expected-balance, and ledger runtime behavior.
+
+## 2026-08-12 — Shared rental-pricing-agreement foundation
+
+- **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
+- **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
+- **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.

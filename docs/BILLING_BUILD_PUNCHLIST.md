@@ -515,3 +515,11 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 2. Build the shared pricing-agreement contract across Quote/Walk-in and Reservation before migrating pickup, renewals/swaps, and Billing callers.
 3. Implement and verify block conversion, insurance/discount/override policy, and ledger allocation together with their audit requirements.
 4. Cashiering remains out of scope.
+
+## 2026-08-12 — Shared rental-pricing-agreement foundation
+
+- [x] **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** A Quote, direct Reservation, Walk-in, and Loaner begin with one active Transportation Event. One pricing agreement follows that event; Quote conversion attaches its planned Reservation to the same event and agreement. Pre-pickup Reservation status remains `quote`.
+- [x] **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** Pricing agreements snapshot the vehicle-class rate card separately from pay type, are mutation-protected behind the Dev permission and AAL2 RPC boundary, and use the central audit log. Billing-line compatibility fields remain nullable, so the two existing lines retain three null pricing fields.
+- [x] **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** A configured monthly rate requires a weekly fallback. Admin create/update RPCs and the Rental Rates form return matching guidance.
+- [ ] **OPEN:** Frontend Quote, Reservation, and Walk-in workflows; pickup and VIN assignment; pricing activation; weekly/monthly block calculations; early-return fallback; manual/automatic plan conversion; Corporate Rates; Military/Veterans discount; insurance caps; authorized overrides; payments; cashiering; paid-through allocation; balance calculation; and ledger allocation.
+- **NOT APPLICABLE:** This checkpoint does not apply SQL to Supabase, seed values, start timers, assign a VIN, create a contract period, or create/modify billing lines.

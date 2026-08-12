@@ -48,3 +48,7 @@
 **Decision:** Do not change database files as part of the frontend authentication task. Document the snapshot discrepancy and fail closed if the browser cannot read the contracts.
 
 **Reason:** The snapshot is not verified live-database state, and database changes are explicitly outside this task. Frontend access must not be obtained by weakening security.
+
+## 2026-08-12 — Preserve one Transportation Event and pricing agreement
+
+**VERIFIED:** Quotes, direct Reservations, Walk-ins, and Loaners begin one Transportation Event. Quote conversion creates its Reservation in that same event and attaches the existing pricing agreement. Pickup remains the boundary for VIN assignment, timers, pricing activation, and committed billing.
