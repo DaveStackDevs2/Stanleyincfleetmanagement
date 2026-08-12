@@ -32,7 +32,12 @@ class SharedPricingAgreementContractTests(unittest.TestCase):
             self.assertIn(name, LOWER)
         self.assertIn("enable row level security", LOWER)
         self.assertIn("revoke all on table public.rental_pricing_agreements from public,anon,authenticated", LOWER)
-        self.assertIn("grant select,insert,update on table public.rental_pricing_agreements to service_role", LOWER)
+        self.assertIn("grant all privileges on table public.rental_pricing_agreements to service_role", LOWER)
+        self.assertRegex(LOWER, r"ux_rental_pricing_agreements_transportation_event[^;]+where transportation_event_id is not null")
+        self.assertIn("origin_type='walk_in' and quote_id is null and transportation_event_id is not null", LOWER)
+        self.assertNotIn("origin_type='walk_in' and quote_id is null and reservation_id is not null", LOWER)
+        self.assertIn("pricing_agreement_id is null and rate_plan_snapshot is null and rate_amount_snapshot is null", LOWER)
+        self.assertIn("pricing_agreement_id is not null and rate_plan_snapshot is not null and rate_amount_snapshot is not null", LOWER)
 
     def test_exact_argument_names_order_and_defaults(self):
         patterns = (
@@ -55,6 +60,11 @@ class SharedPricingAgreementContractTests(unittest.TestCase):
         quote = LOWER.split("create or replace function public.create_quote_with_pricing_agreement_state", 1)[1].split("end;$function$;", 1)[0]
         self.assertIn("'active'", quote)
         self.assertNotIn("'quote',nullif", quote)
+        self.assertIn("'reservation_type',p_reservation_type", quote)
+        self.assertEqual(LOWER.count("exception when invalid_text_representation"), 6)
+        self.assertEqual(LOWER.count("'rental rate card not configured' using errcode='p0001'"), 3)
+        self.assertIn("updated_at=v_at", LOWER)
+        self.assertNotIn("updated_at=now()", LOWER)
 
     def test_conversion_continuity_and_idempotency(self):
         fn = LOWER.split("create or replace function public.convert_quote_to_reservation_with_pricing_agreement_state", 1)[1].split("end;$function$;", 1)[0]
@@ -62,6 +72,13 @@ class SharedPricingAgreementContractTests(unittest.TestCase):
             self.assertIn(phrase, fn)
         self.assertNotIn("create_transportation_event_state", fn)
         self.assertNotIn("pay_type_rule_id and is_active=true", fn)
+        self.assertIn("not v_quote.is_active or v_quote.status<>'active'", fn)
+        self.assertIn("v_quote.customer_id is null", fn)
+        self.assertIn("v_quote.customer_id,v_agreement.vehicle_class", fn)
+        self.assertIn("'reservation_status','quote'", fn)
+        self.assertIn("'reservation_type',v_quote.reservation_type", fn)
+        self.assertNotIn("'reservation_status',v_reservation.status", fn)
+        self.assertNotIn("'reservation_type',v_reservation.reservation_type", fn)
 
     def test_audit_and_function_boundaries(self):
         for action in ("pricing_agreement_created", "quote_converted_to_reservation", "pricing_agreement_activated", "pricing_plan_changed", "pricing_agreement_deactivated", "pricing_agreement_reactivated", "pricing_agreement_updated"):
@@ -69,9 +86,26 @@ class SharedPricingAgreementContractTests(unittest.TestCase):
         self.assertIn("coalesce(new.updated_by::text,new.created_by::text,auth.uid()::text,'system:rental_pricing_agreement')", LOWER)
         self.assertIn("revoke all on function public.audit_rental_pricing_agreement_state() from public,anon,authenticated,service_role", LOWER)
         self.assertEqual(LOWER.count("create or replace function public.update_admin_rental_rate_card_state"), 1)
-        self.assertEqual(LOWER.count("create or replace function public.set_admin_rental_rate_card_enabled_state"), 1)
+        self.assertNotIn("set_admin_rental_rate_card_enabled_state", LOWER)
         self.assertIn("effective_from,created_by,updated_by", LOWER)
-        self.assertIn("v_now:=clock_timestamp()", LOWER)
+        self.assertIn("values(btrim(p_vehicle_class),null,p_daily_rate,p_weekly_rate,p_monthly_rate,p_sort_order,true,clock_timestamp()", LOWER)
+        self.assertEqual(LOWER.count("v_observed_at:=clock_timestamp()"), 2)
+        for rate in ("daily", "weekly", "monthly"):
+            self.assertIn(f"{rate} rate must be a finite amount zero or greater", LOWER)
+
+        audit = LOWER.split("create or replace function public.audit_rental_pricing_agreement_state", 1)[1].split("end;$function$;", 1)[0]
+        self.assertNotIn("to_jsonb(", audit)
+        material_fields = (
+            "origin_type", "quote_id", "reservation_id", "transportation_event_id", "vehicle_class",
+            "rental_rate_rule_id", "pay_type_rule_id", "initial_rate_plan", "current_rate_plan",
+            "daily_rate_snapshot", "weekly_rate_snapshot", "monthly_rate_snapshot", "pricing_started_at", "is_active",
+        )
+        for field in material_fields:
+            self.assertIn(f"'{field}'", audit)
+        metadata = audit.split("jsonb_build_object('quote_id'", 1)[1]
+        self.assertNotIn("'origin_type'", metadata)
+        self.assertNotIn("'old'", metadata)
+        self.assertNotIn("'new'", metadata)
 
     def test_frontend_monthly_without_weekly_validation(self):
         message = "Weekly rate is required when a monthly rate is configured"

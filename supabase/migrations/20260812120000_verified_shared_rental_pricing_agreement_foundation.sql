@@ -45,15 +45,15 @@ alter table public.rental_pricing_agreements drop constraint if exists ck_rental
 alter table public.rental_pricing_agreements add constraint ck_rental_pricing_agreements_origin_link check(
  (origin_type='quote' and quote_id is not null)
  or (origin_type='reservation' and quote_id is null and reservation_id is not null)
- or (origin_type='walk_in' and quote_id is null and reservation_id is not null));
+ or (origin_type='walk_in' and quote_id is null and transportation_event_id is not null));
 create unique index if not exists ux_rental_pricing_agreements_quote on public.rental_pricing_agreements(quote_id) where quote_id is not null;
 create unique index if not exists ux_rental_pricing_agreements_reservation on public.rental_pricing_agreements(reservation_id) where reservation_id is not null;
-create unique index if not exists ux_rental_pricing_agreements_transportation_event on public.rental_pricing_agreements(transportation_event_id);
+create unique index if not exists ux_rental_pricing_agreements_transportation_event on public.rental_pricing_agreements(transportation_event_id) where transportation_event_id is not null;
 drop trigger if exists trg_rental_pricing_agreements_set_updated_at on public.rental_pricing_agreements;
 create trigger trg_rental_pricing_agreements_set_updated_at before update on public.rental_pricing_agreements for each row execute function public.set_updated_at();
 alter table public.rental_pricing_agreements enable row level security;
 revoke all on table public.rental_pricing_agreements from public,anon,authenticated;
-grant select,insert,update on table public.rental_pricing_agreements to service_role;
+grant all privileges on table public.rental_pricing_agreements to service_role;
 
 insert into public.permissions(permission_key,description) values('billing.pricing_agreement_manage','Can create and convert Quotes, Reservations, and Walk-ins with shared rental pricing agreements')
 on conflict(permission_key) do update set description=excluded.description;
@@ -70,7 +70,9 @@ alter table public.billing_lines add constraint ck_billing_lines_rate_plan_snaps
 alter table public.billing_lines drop constraint if exists ck_billing_lines_rate_amount_snapshot;
 alter table public.billing_lines add constraint ck_billing_lines_rate_amount_snapshot check(rate_amount_snapshot is null or rate_amount_snapshot >= 0 and rate_amount_snapshot not in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric));
 alter table public.billing_lines drop constraint if exists ck_billing_lines_pricing_snapshot_complete;
-alter table public.billing_lines add constraint ck_billing_lines_pricing_snapshot_complete check(num_nonnulls(pricing_agreement_id,rate_plan_snapshot,rate_amount_snapshot) in (0,3));
+alter table public.billing_lines add constraint ck_billing_lines_pricing_snapshot_complete check(
+ (pricing_agreement_id is null and rate_plan_snapshot is null and rate_amount_snapshot is null)
+ or (pricing_agreement_id is not null and rate_plan_snapshot is not null and rate_amount_snapshot is not null));
 create index if not exists ix_billing_lines_pricing_agreement_id on public.billing_lines(pricing_agreement_id);
 
 alter table public.rental_rate_rules drop constraint if exists ck_rental_rate_rules_monthly_requires_weekly;
@@ -78,76 +80,69 @@ alter table public.rental_rate_rules add constraint ck_rental_rate_rules_monthly
 
 create or replace function public.create_admin_rental_rate_card_state(p_vehicle_class text,p_daily_rate numeric,p_weekly_rate numeric,p_monthly_rate numeric,p_sort_order integer)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_rule public.rental_rate_rules%rowtype; v_now timestamptz;
+declare v_user uuid; v_rule public.rental_rate_rules%rowtype; v_observed_at timestamptz;
 begin
- v_now:=clock_timestamp();
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
  if v_user is null or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='user_admin.manage') then raise exception 'Rental rate administration access denied' using errcode='42501'; end if;
  if p_vehicle_class is null or btrim(p_vehicle_class)='' then raise exception 'Vehicle class cannot be blank' using errcode='22023'; end if;
- if p_daily_rate is null or p_daily_rate<0 or p_daily_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric) then raise exception 'Daily rate must be finite and zero or greater' using errcode='22023'; end if;
- if p_weekly_rate is not null and (p_weekly_rate<0 or p_weekly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Weekly rate must be finite and zero or greater' using errcode='22023'; end if;
- if p_monthly_rate is not null and (p_monthly_rate<0 or p_monthly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Monthly rate must be finite and zero or greater' using errcode='22023'; end if;
+ if p_daily_rate is null or p_daily_rate<0 or p_daily_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric) then raise exception 'Daily rate must be a finite amount zero or greater' using errcode='22023'; end if;
+ if p_weekly_rate is not null and (p_weekly_rate<0 or p_weekly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Weekly rate must be a finite amount zero or greater' using errcode='22023'; end if;
+ if p_monthly_rate is not null and (p_monthly_rate<0 or p_monthly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Monthly rate must be a finite amount zero or greater' using errcode='22023'; end if;
  if p_monthly_rate is not null and p_weekly_rate is null then raise exception 'Weekly rate is required when a monthly rate is configured' using errcode='22023'; end if;
  if p_sort_order is null or p_sort_order<0 then raise exception 'Sort order must be zero or greater' using errcode='22023'; end if;
  insert into public.rental_rate_rules(vehicle_class,pay_type_rule_id,daily_rate,weekly_rate,monthly_rate,sort_order,is_active,effective_from,created_by,updated_by)
- values(btrim(p_vehicle_class),null,p_daily_rate,p_weekly_rate,p_monthly_rate,p_sort_order,true,v_now,v_user,v_user) returning * into v_rule;
- return jsonb_build_object('status','admin_rental_rate_card_created','rental_rate_card',jsonb_build_object('rental_rate_rule_id',v_rule.id,'vehicle_class',v_rule.vehicle_class,'daily_rate',v_rule.daily_rate,'weekly_rate',v_rule.weekly_rate,'monthly_rate',v_rule.monthly_rate,'sort_order',v_rule.sort_order,'is_active',v_rule.is_active,'is_current',v_rule.is_active and v_rule.effective_from<=v_now and (v_rule.effective_to is null or v_rule.effective_to>v_now),'effective_from',v_rule.effective_from,'effective_to',v_rule.effective_to,'created_at',v_rule.created_at,'updated_at',v_rule.updated_at));
+ values(btrim(p_vehicle_class),null,p_daily_rate,p_weekly_rate,p_monthly_rate,p_sort_order,true,clock_timestamp(),v_user,v_user) returning * into v_rule;
+ v_observed_at:=clock_timestamp();
+ return jsonb_build_object('status','admin_rental_rate_card_created','rental_rate_card',jsonb_build_object('rental_rate_rule_id',v_rule.id,'vehicle_class',v_rule.vehicle_class,'daily_rate',v_rule.daily_rate,'weekly_rate',v_rule.weekly_rate,'monthly_rate',v_rule.monthly_rate,'sort_order',v_rule.sort_order,'is_active',v_rule.is_active,'is_current',v_rule.is_active and v_rule.effective_from<=v_observed_at and (v_rule.effective_to is null or v_rule.effective_to>v_observed_at),'effective_from',v_rule.effective_from,'effective_to',v_rule.effective_to,'created_at',v_rule.created_at,'updated_at',v_rule.updated_at));
 exception when unique_violation then raise exception 'A current rental rate card already exists for this vehicle class' using errcode='23505'; end;$function$;
 
 create or replace function public.update_admin_rental_rate_card_state(p_rental_rate_rule_id uuid,p_vehicle_class text,p_daily_rate numeric,p_weekly_rate numeric,p_monthly_rate numeric,p_sort_order integer)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_rule public.rental_rate_rules%rowtype; v_now timestamptz;
+declare v_user uuid; v_rule public.rental_rate_rules%rowtype; v_observed_at timestamptz;
 begin
- v_now:=clock_timestamp();
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
  if v_user is null or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='user_admin.manage') then raise exception 'Rental rate administration access denied' using errcode='42501'; end if;
  if p_rental_rate_rule_id is null then raise exception 'Rental rate rule ID is required' using errcode='22023'; end if;
  if p_vehicle_class is null or btrim(p_vehicle_class)='' then raise exception 'Vehicle class cannot be blank' using errcode='22023'; end if;
- if p_daily_rate is null or p_daily_rate<0 or p_daily_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric) then raise exception 'Daily rate must be finite and zero or greater' using errcode='22023'; end if;
- if p_weekly_rate is not null and (p_weekly_rate<0 or p_weekly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Weekly rate must be finite and zero or greater' using errcode='22023'; end if;
- if p_monthly_rate is not null and (p_monthly_rate<0 or p_monthly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Monthly rate must be finite and zero or greater' using errcode='22023'; end if;
+ if p_daily_rate is null or p_daily_rate<0 or p_daily_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric) then raise exception 'Daily rate must be a finite amount zero or greater' using errcode='22023'; end if;
+ if p_weekly_rate is not null and (p_weekly_rate<0 or p_weekly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Weekly rate must be a finite amount zero or greater' using errcode='22023'; end if;
+ if p_monthly_rate is not null and (p_monthly_rate<0 or p_monthly_rate in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Monthly rate must be a finite amount zero or greater' using errcode='22023'; end if;
  if p_monthly_rate is not null and p_weekly_rate is null then raise exception 'Weekly rate is required when a monthly rate is configured' using errcode='22023'; end if;
  if p_sort_order is null or p_sort_order<0 then raise exception 'Sort order must be zero or greater' using errcode='22023'; end if;
  select * into v_rule from public.rental_rate_rules where id=p_rental_rate_rule_id for update;
  if not found then raise exception 'Rental rate card not found' using errcode='P0002'; end if;
  update public.rental_rate_rules set vehicle_class=btrim(p_vehicle_class),daily_rate=p_daily_rate,weekly_rate=p_weekly_rate,monthly_rate=p_monthly_rate,sort_order=p_sort_order,updated_by=v_user where id=p_rental_rate_rule_id returning * into v_rule;
- return jsonb_build_object('status','admin_rental_rate_card_updated','rental_rate_card',jsonb_build_object('rental_rate_rule_id',v_rule.id,'vehicle_class',v_rule.vehicle_class,'daily_rate',v_rule.daily_rate,'weekly_rate',v_rule.weekly_rate,'monthly_rate',v_rule.monthly_rate,'sort_order',v_rule.sort_order,'is_active',v_rule.is_active,'is_current',v_rule.is_active and v_rule.effective_from<=v_now and (v_rule.effective_to is null or v_rule.effective_to>v_now),'effective_from',v_rule.effective_from,'effective_to',v_rule.effective_to,'created_at',v_rule.created_at,'updated_at',v_rule.updated_at));
-exception when unique_violation then raise exception 'A current rental rate card already exists for this vehicle class' using errcode='23505'; end;$function$;
-
-create or replace function public.set_admin_rental_rate_card_enabled_state(p_rental_rate_rule_id uuid,p_is_enabled boolean)
-returns jsonb language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_rule public.rental_rate_rules%rowtype; v_at timestamptz;
-begin
- select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
- if v_user is null or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='user_admin.manage') then raise exception 'Rental rate administration access denied' using errcode='42501'; end if;
- if p_rental_rate_rule_id is null then raise exception 'Rental rate rule ID is required' using errcode='22023'; end if;
- if p_is_enabled is null then raise exception 'Enabled selection is required' using errcode='22023'; end if;
- select * into v_rule from public.rental_rate_rules where id=p_rental_rate_rule_id for update;
- if not found then raise exception 'Rental rate card not found' using errcode='P0002'; end if;
- v_at:=clock_timestamp();
- if v_at<=v_rule.effective_from then v_at:=v_rule.effective_from+interval '1 microsecond'; end if;
- update public.rental_rate_rules set is_active=p_is_enabled,
- effective_to=case when p_is_enabled then null when is_active then v_at else effective_to end,
- effective_from=case when p_is_enabled and not is_active then v_at else effective_from end,updated_by=v_user where id=p_rental_rate_rule_id returning * into v_rule;
- return jsonb_build_object('status',case when p_is_enabled then 'admin_rental_rate_card_enabled' else 'admin_rental_rate_card_disabled' end,'rental_rate_card',jsonb_build_object('rental_rate_rule_id',v_rule.id,'vehicle_class',v_rule.vehicle_class,'daily_rate',v_rule.daily_rate,'weekly_rate',v_rule.weekly_rate,'monthly_rate',v_rule.monthly_rate,'sort_order',v_rule.sort_order,'is_active',v_rule.is_active,'is_current',v_rule.is_active and v_rule.effective_from<=v_at and (v_rule.effective_to is null or v_rule.effective_to>v_at),'effective_from',v_rule.effective_from,'effective_to',v_rule.effective_to,'created_at',v_rule.created_at,'updated_at',v_rule.updated_at));
+ v_observed_at:=clock_timestamp();
+ return jsonb_build_object('status','admin_rental_rate_card_updated','rental_rate_card',jsonb_build_object('rental_rate_rule_id',v_rule.id,'vehicle_class',v_rule.vehicle_class,'daily_rate',v_rule.daily_rate,'weekly_rate',v_rule.weekly_rate,'monthly_rate',v_rule.monthly_rate,'sort_order',v_rule.sort_order,'is_active',v_rule.is_active,'is_current',v_rule.is_active and v_rule.effective_from<=v_observed_at and (v_rule.effective_to is null or v_rule.effective_to>v_observed_at),'effective_from',v_rule.effective_from,'effective_to',v_rule.effective_to,'created_at',v_rule.created_at,'updated_at',v_rule.updated_at));
 exception when unique_violation then raise exception 'A current rental rate card already exists for this vehicle class' using errcode='23505'; end;$function$;
 
 alter function public.create_admin_rental_rate_card_state(text,numeric,numeric,numeric,integer) owner to postgres;
 alter function public.update_admin_rental_rate_card_state(uuid,text,numeric,numeric,numeric,integer) owner to postgres;
-alter function public.set_admin_rental_rate_card_enabled_state(uuid,boolean) owner to postgres;
 revoke all on function public.create_admin_rental_rate_card_state(text,numeric,numeric,numeric,integer) from public,anon;
 revoke all on function public.update_admin_rental_rate_card_state(uuid,text,numeric,numeric,numeric,integer) from public,anon;
-revoke all on function public.set_admin_rental_rate_card_enabled_state(uuid,boolean) from public,anon;
 grant execute on function public.create_admin_rental_rate_card_state(text,numeric,numeric,numeric,integer) to authenticated,service_role;
 grant execute on function public.update_admin_rental_rate_card_state(uuid,text,numeric,numeric,numeric,integer) to authenticated,service_role;
-grant execute on function public.set_admin_rental_rate_card_enabled_state(uuid,boolean) to authenticated,service_role;
 
 create or replace function public.audit_rental_pricing_agreement_state() returns trigger
 language plpgsql security definer set search_path to '' as $function$
 declare v_action text; v_old jsonb; v_new jsonb; v_actor text;
 begin
- v_old:=case when tg_op='UPDATE' then to_jsonb(old)-array['updated_at','updated_by'] else null end;
- v_new:=to_jsonb(new)-array['updated_at','updated_by'];
+ v_old:=case when tg_op='UPDATE' then jsonb_build_object(
+  'origin_type',old.origin_type,'quote_id',old.quote_id,'reservation_id',old.reservation_id,
+  'transportation_event_id',old.transportation_event_id,'vehicle_class',old.vehicle_class,
+  'rental_rate_rule_id',old.rental_rate_rule_id,'pay_type_rule_id',old.pay_type_rule_id,
+  'initial_rate_plan',old.initial_rate_plan,'current_rate_plan',old.current_rate_plan,
+  'daily_rate_snapshot',old.daily_rate_snapshot::text,'weekly_rate_snapshot',old.weekly_rate_snapshot::text,
+  'monthly_rate_snapshot',old.monthly_rate_snapshot::text,'pricing_started_at',old.pricing_started_at,
+  'is_active',old.is_active) else null end;
+ v_new:=jsonb_build_object(
+  'origin_type',new.origin_type,'quote_id',new.quote_id,'reservation_id',new.reservation_id,
+  'transportation_event_id',new.transportation_event_id,'vehicle_class',new.vehicle_class,
+  'rental_rate_rule_id',new.rental_rate_rule_id,'pay_type_rule_id',new.pay_type_rule_id,
+  'initial_rate_plan',new.initial_rate_plan,'current_rate_plan',new.current_rate_plan,
+  'daily_rate_snapshot',new.daily_rate_snapshot::text,'weekly_rate_snapshot',new.weekly_rate_snapshot::text,
+  'monthly_rate_snapshot',new.monthly_rate_snapshot::text,'pricing_started_at',new.pricing_started_at,
+  'is_active',new.is_active);
  if tg_op='UPDATE' and v_old=v_new then return new; end if;
  v_action:=case when tg_op='INSERT' then 'pricing_agreement_created'
   when old.reservation_id is null and new.reservation_id is not null and new.origin_type='quote' then 'quote_converted_to_reservation'
@@ -159,7 +154,7 @@ begin
  v_actor:=coalesce(new.updated_by::text,new.created_by::text,auth.uid()::text,'system:rental_pricing_agreement');
  insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,metadata,actor_user_id)
  values('rental_pricing_agreement',new.id::text,v_action,'pricing_terms',v_old::text,v_new::text,
- jsonb_build_object('origin_type',new.origin_type,'quote_id',new.quote_id,'reservation_id',new.reservation_id,'transportation_event_id',new.transportation_event_id,'old',v_old,'new',v_new),v_actor);
+ jsonb_build_object('quote_id',new.quote_id,'reservation_id',new.reservation_id,'transportation_event_id',new.transportation_event_id),v_actor);
  return new;
 end;$function$;
 alter function public.audit_rental_pricing_agreement_state() owner to postgres;
@@ -178,7 +173,7 @@ create or replace function public.create_quote_with_pricing_agreement_state(
  p_customer_id uuid,p_vehicle_class text,p_start_date timestamptz,p_expected_return_datetime timestamptz,
  p_reservation_type text,p_pay_type_rule_id uuid,p_initial_rate_plan text,p_notes text default null)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_quote uuid; v_event uuid; v_rate jsonb; v_event_result jsonb; v_pay public.pay_type_rules%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_at timestamptz:=clock_timestamp();
+declare v_user uuid; v_quote uuid; v_event uuid; v_rate jsonb; v_event_result jsonb; v_pay public.pay_type_rules%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_at timestamptz:=clock_timestamp(); v_rate_rule uuid;
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
  if v_user is null then raise exception 'Active application user required' using errcode='42501'; end if;
@@ -196,16 +191,25 @@ begin
  select * into v_pay from public.pay_type_rules where id=p_pay_type_rule_id and is_active=true for share;
  if not found then raise exception 'Active pay type not found' using errcode='P0002'; end if;
  v_rate:=public.resolve_rental_rate_card_state(btrim(p_vehicle_class),v_at);
- if v_rate->>'status'<>'rental_rate_card_resolved' or nullif(v_rate->>'rental_rate_rule_id','') is null then raise exception 'Rental rate card not configured' using errcode='P0002'; end if;
+ if v_rate->>'status'<>'rental_rate_card_resolved' or nullif(v_rate->>'rental_rate_rule_id','') is null then raise exception 'Rental rate card not configured' using errcode='P0001'; end if;
+ begin
+  v_rate_rule:=(v_rate->>'rental_rate_rule_id')::uuid;
+ exception when invalid_text_representation then
+  raise exception 'Rental rate card resolution failed' using errcode='P0001';
+ end;
  if p_initial_rate_plan='weekly' and (v_rate->>'weekly_rate') is null then raise exception 'Weekly rate is not configured' using errcode='22023'; end if;
  if p_initial_rate_plan='monthly' and (v_rate->>'monthly_rate') is null then raise exception 'Monthly rate is not configured' using errcode='22023'; end if;
  insert into public.quotes(customer_id,reservation_type,vehicle_class,start_date,expected_return_datetime,status,notes,is_active) values(p_customer_id,p_reservation_type,btrim(p_vehicle_class),p_start_date,p_expected_return_datetime,'active',nullif(btrim(p_notes),''),true) returning id into v_quote;
  v_event_result:=public.create_transportation_event_state('quote',v_quote,p_customer_id,p_expected_return_datetime,nullif(btrim(p_notes),''),'active');
  if v_event_result->>'status'<>'transportation_event_created' or nullif(v_event_result->>'transportation_event_id','') is null then raise exception 'Transportation Event creation failed' using errcode='P0001'; end if;
- v_event:=(v_event_result->>'transportation_event_id')::uuid;
+ begin
+  v_event:=(v_event_result->>'transportation_event_id')::uuid;
+ exception when invalid_text_representation then
+  raise exception 'Transportation Event creation failed' using errcode='P0001';
+ end;
  insert into public.rental_pricing_agreements(origin_type,quote_id,transportation_event_id,vehicle_class,rental_rate_rule_id,pay_type_rule_id,initial_rate_plan,current_rate_plan,daily_rate_snapshot,weekly_rate_snapshot,monthly_rate_snapshot,created_by,updated_by)
- values('quote',v_quote,v_event,btrim(p_vehicle_class),(v_rate->>'rental_rate_rule_id')::uuid,v_pay.id,p_initial_rate_plan,p_initial_rate_plan,(v_rate->>'daily_rate')::numeric,(v_rate->>'weekly_rate')::numeric,(v_rate->>'monthly_rate')::numeric,v_user,v_user) returning * into v_agreement;
- return jsonb_build_object('status','quote_pricing_agreement_created','quote_id',v_quote,'transportation_event_id',v_event,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'vehicle_class',v_agreement.vehicle_class,'pay_type_rule_id',v_pay.id,'pay_type',v_pay.pay_type,'initial_rate_plan',v_agreement.initial_rate_plan,'current_rate_plan',v_agreement.current_rate_plan,'daily_rate',v_agreement.daily_rate_snapshot,'weekly_rate',v_agreement.weekly_rate_snapshot,'monthly_rate',v_agreement.monthly_rate_snapshot,'pricing_started_at',v_agreement.pricing_started_at);
+ values('quote',v_quote,v_event,btrim(p_vehicle_class),v_rate_rule,v_pay.id,p_initial_rate_plan,p_initial_rate_plan,(v_rate->>'daily_rate')::numeric,(v_rate->>'weekly_rate')::numeric,(v_rate->>'monthly_rate')::numeric,v_user,v_user) returning * into v_agreement;
+ return jsonb_build_object('status','quote_pricing_agreement_created','quote_id',v_quote,'reservation_type',p_reservation_type,'transportation_event_id',v_event,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'vehicle_class',v_agreement.vehicle_class,'pay_type_rule_id',v_pay.id,'pay_type',v_pay.pay_type,'initial_rate_plan',v_agreement.initial_rate_plan,'current_rate_plan',v_agreement.current_rate_plan,'daily_rate',v_agreement.daily_rate_snapshot,'weekly_rate',v_agreement.weekly_rate_snapshot,'monthly_rate',v_agreement.monthly_rate_snapshot,'pricing_started_at',v_agreement.pricing_started_at);
 end;$function$;
 
 create or replace function public.create_reservation_with_pricing_agreement_state(
@@ -213,7 +217,7 @@ create or replace function public.create_reservation_with_pricing_agreement_stat
  p_reservation_type text,p_pay_type_rule_id uuid,p_initial_rate_plan text,p_service_advisor text default null,
  p_ro_number text default null,p_notes text default null)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_created jsonb; v_rate jsonb; v_pay public.pay_type_rules%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_at timestamptz:=clock_timestamp(); v_reservation uuid; v_event uuid;
+declare v_user uuid; v_created jsonb; v_rate jsonb; v_pay public.pay_type_rules%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_at timestamptz:=clock_timestamp(); v_rate_rule uuid; v_reservation uuid; v_event uuid;
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
  if v_user is null then raise exception 'Active application user required' using errcode='42501'; end if;
@@ -229,14 +233,24 @@ begin
  if p_pay_type_rule_id is null then raise exception 'Pay type rule ID is required' using errcode='22023'; end if;
  select * into v_pay from public.pay_type_rules where id=p_pay_type_rule_id and is_active=true for share; if not found then raise exception 'Active pay type not found' using errcode='P0002'; end if;
  v_rate:=public.resolve_rental_rate_card_state(btrim(p_vehicle_class),v_at);
- if v_rate->>'status'<>'rental_rate_card_resolved' or nullif(v_rate->>'rental_rate_rule_id','') is null then raise exception 'Rental rate card not configured' using errcode='P0002'; end if;
+ if v_rate->>'status'<>'rental_rate_card_resolved' or nullif(v_rate->>'rental_rate_rule_id','') is null then raise exception 'Rental rate card not configured' using errcode='P0001'; end if;
+ begin
+  v_rate_rule:=(v_rate->>'rental_rate_rule_id')::uuid;
+ exception when invalid_text_representation then
+  raise exception 'Rental rate card resolution failed' using errcode='P0001';
+ end;
  if p_initial_rate_plan='weekly' and (v_rate->>'weekly_rate') is null then raise exception 'Weekly rate is not configured' using errcode='22023'; end if;
  if p_initial_rate_plan='monthly' and (v_rate->>'monthly_rate') is null then raise exception 'Monthly rate is not configured' using errcode='22023'; end if;
  v_created:=public.create_reservation_with_transportation_event_state(p_start_date,p_expected_return_datetime,btrim(p_vehicle_class),p_reservation_type,'quote',nullif(btrim(p_notes),''),p_customer_id,nullif(btrim(p_service_advisor),''),nullif(btrim(p_ro_number),''),v_pay.pay_type,null);
  if v_created->>'status'<>'reservation_with_transportation_event_created' or nullif(v_created->>'reservation_id','') is null or nullif(v_created->>'transportation_event_id','') is null then raise exception 'Reservation creation failed' using errcode='P0001'; end if;
- v_reservation:=(v_created->>'reservation_id')::uuid; v_event:=(v_created->>'transportation_event_id')::uuid;
+ begin
+  v_reservation:=(v_created->>'reservation_id')::uuid;
+  v_event:=(v_created->>'transportation_event_id')::uuid;
+ exception when invalid_text_representation then
+  raise exception 'Reservation creation failed' using errcode='P0001';
+ end;
  insert into public.rental_pricing_agreements(origin_type,reservation_id,transportation_event_id,vehicle_class,rental_rate_rule_id,pay_type_rule_id,initial_rate_plan,current_rate_plan,daily_rate_snapshot,weekly_rate_snapshot,monthly_rate_snapshot,created_by,updated_by)
- values('reservation',v_reservation,v_event,btrim(p_vehicle_class),(v_rate->>'rental_rate_rule_id')::uuid,v_pay.id,p_initial_rate_plan,p_initial_rate_plan,(v_rate->>'daily_rate')::numeric,(v_rate->>'weekly_rate')::numeric,(v_rate->>'monthly_rate')::numeric,v_user,v_user) returning * into v_agreement;
+ values('reservation',v_reservation,v_event,btrim(p_vehicle_class),v_rate_rule,v_pay.id,p_initial_rate_plan,p_initial_rate_plan,(v_rate->>'daily_rate')::numeric,(v_rate->>'weekly_rate')::numeric,(v_rate->>'monthly_rate')::numeric,v_user,v_user) returning * into v_agreement;
  return jsonb_build_object('status','reservation_pricing_agreement_created','reservation_id',v_reservation,'reservation_status','quote','reservation_type',p_reservation_type,'transportation_event_id',v_event,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'vehicle_class',v_agreement.vehicle_class,'pay_type_rule_id',v_pay.id,'pay_type',v_pay.pay_type,'initial_rate_plan',v_agreement.initial_rate_plan,'current_rate_plan',v_agreement.current_rate_plan,'daily_rate',v_agreement.daily_rate_snapshot,'weekly_rate',v_agreement.weekly_rate_snapshot,'monthly_rate',v_agreement.monthly_rate_snapshot,'pricing_started_at',v_agreement.pricing_started_at);
 end;$function$;
 
@@ -245,7 +259,7 @@ create or replace function public.create_walk_in_with_pricing_agreement_state(
  p_reservation_type text,p_pay_type_rule_id uuid,p_initial_rate_plan text,p_service_advisor text default null,
  p_ro_number text default null,p_notes text default null)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_event_result jsonb; v_rate jsonb; v_pay public.pay_type_rules%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_at timestamptz:=clock_timestamp(); v_reservation uuid; v_event uuid;
+declare v_user uuid; v_event_result jsonb; v_rate jsonb; v_pay public.pay_type_rules%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_at timestamptz:=clock_timestamp(); v_rate_rule uuid; v_reservation uuid; v_event uuid;
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
  if v_user is null then raise exception 'Active application user required' using errcode='42501'; end if;
@@ -261,17 +275,26 @@ begin
  if p_pay_type_rule_id is null then raise exception 'Pay type rule ID is required' using errcode='22023'; end if;
  select * into v_pay from public.pay_type_rules where id=p_pay_type_rule_id and is_active=true for share; if not found then raise exception 'Active pay type not found' using errcode='P0002'; end if;
  v_rate:=public.resolve_rental_rate_card_state(btrim(p_vehicle_class),v_at);
- if v_rate->>'status'<>'rental_rate_card_resolved' or nullif(v_rate->>'rental_rate_rule_id','') is null then raise exception 'Rental rate card not configured' using errcode='P0002'; end if;
+ if v_rate->>'status'<>'rental_rate_card_resolved' or nullif(v_rate->>'rental_rate_rule_id','') is null then raise exception 'Rental rate card not configured' using errcode='P0001'; end if;
+ begin
+  v_rate_rule:=(v_rate->>'rental_rate_rule_id')::uuid;
+ exception when invalid_text_representation then
+  raise exception 'Rental rate card resolution failed' using errcode='P0001';
+ end;
  if p_initial_rate_plan='weekly' and (v_rate->>'weekly_rate') is null then raise exception 'Weekly rate is not configured' using errcode='22023'; end if;
  if p_initial_rate_plan='monthly' and (v_rate->>'monthly_rate') is null then raise exception 'Monthly rate is not configured' using errcode='22023'; end if;
  v_event_result:=public.create_transportation_event_state('walk_in',null,p_customer_id,p_expected_return_datetime,nullif(btrim(p_notes),''),'active');
  if v_event_result->>'status'<>'transportation_event_created' or nullif(v_event_result->>'transportation_event_id','') is null then raise exception 'Transportation Event creation failed' using errcode='P0001'; end if;
- v_event:=(v_event_result->>'transportation_event_id')::uuid;
+ begin
+  v_event:=(v_event_result->>'transportation_event_id')::uuid;
+ exception when invalid_text_representation then
+  raise exception 'Transportation Event creation failed' using errcode='P0001';
+ end;
  insert into public.reservations(vehicle_id,start_date,expected_return_datetime,status,reservation_type,notes,service_advisor,ro_number,pay_type,transportation_event_id,customer_id,requested_model)
  values(null,p_start_date,p_expected_return_datetime,'quote',p_reservation_type,nullif(btrim(p_notes),''),nullif(btrim(p_service_advisor),''),nullif(btrim(p_ro_number),''),v_pay.pay_type,v_event,p_customer_id,btrim(p_vehicle_class)) returning id into v_reservation;
- update public.transportation_events set source_id=v_reservation,updated_at=now() where id=v_event;
+ update public.transportation_events set source_id=v_reservation,updated_at=v_at where id=v_event;
  insert into public.rental_pricing_agreements(origin_type,reservation_id,transportation_event_id,vehicle_class,rental_rate_rule_id,pay_type_rule_id,initial_rate_plan,current_rate_plan,daily_rate_snapshot,weekly_rate_snapshot,monthly_rate_snapshot,created_by,updated_by)
- values('walk_in',v_reservation,v_event,btrim(p_vehicle_class),(v_rate->>'rental_rate_rule_id')::uuid,v_pay.id,p_initial_rate_plan,p_initial_rate_plan,(v_rate->>'daily_rate')::numeric,(v_rate->>'weekly_rate')::numeric,(v_rate->>'monthly_rate')::numeric,v_user,v_user) returning * into v_agreement;
+ values('walk_in',v_reservation,v_event,btrim(p_vehicle_class),v_rate_rule,v_pay.id,p_initial_rate_plan,p_initial_rate_plan,(v_rate->>'daily_rate')::numeric,(v_rate->>'weekly_rate')::numeric,(v_rate->>'monthly_rate')::numeric,v_user,v_user) returning * into v_agreement;
  return jsonb_build_object('status','walk_in_pricing_agreement_created','reservation_id',v_reservation,'reservation_status','quote','reservation_type',p_reservation_type,'transportation_event_id',v_event,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'vehicle_class',v_agreement.vehicle_class,'pay_type_rule_id',v_pay.id,'pay_type',v_pay.pay_type,'initial_rate_plan',v_agreement.initial_rate_plan,'current_rate_plan',v_agreement.current_rate_plan,'daily_rate',v_agreement.daily_rate_snapshot,'weekly_rate',v_agreement.weekly_rate_snapshot,'monthly_rate',v_agreement.monthly_rate_snapshot,'pricing_started_at',v_agreement.pricing_started_at);
 end;$function$;
 
@@ -297,14 +320,16 @@ begin
   if not found or v_reservation.transportation_event_id is distinct from v_event.id then raise exception 'Converted Quote Reservation is inconsistent' using errcode='P0001'; end if;
   v_status:='quote_already_converted';
  else
+  if not v_quote.is_active or v_quote.status<>'active' then raise exception 'Quote is not active' using errcode='P0001'; end if;
+  if v_quote.customer_id is null then raise exception 'Quote customer is required' using errcode='P0001'; end if;
   if v_agreement.reservation_id is not null then raise exception 'Quote pricing agreement conversion is inconsistent' using errcode='P0001'; end if;
   insert into public.reservations(vehicle_id,start_date,expected_return_datetime,status,reservation_type,notes,service_advisor,ro_number,pay_type,transportation_event_id,customer_id,requested_model)
-  values(null,v_quote.start_date,v_quote.expected_return_datetime,'quote',v_quote.reservation_type,coalesce(nullif(btrim(p_notes),''),v_quote.notes),nullif(btrim(p_service_advisor),''),nullif(btrim(p_ro_number),''),v_pay.pay_type,v_event.id,v_quote.customer_id,v_quote.vehicle_class) returning * into v_reservation;
+  values(null,v_quote.start_date,v_quote.expected_return_datetime,'quote',v_quote.reservation_type,coalesce(nullif(btrim(p_notes),''),v_quote.notes),nullif(btrim(p_service_advisor),''),nullif(btrim(p_ro_number),''),v_pay.pay_type,v_event.id,v_quote.customer_id,v_agreement.vehicle_class) returning * into v_reservation;
   update public.quotes set status='converted',is_active=false,converted_to_reservation_id=v_reservation.id where id=v_quote.id;
   update public.rental_pricing_agreements set reservation_id=v_reservation.id,updated_by=v_user where id=v_agreement.id returning * into v_agreement;
   v_status:='quote_converted_to_reservation';
  end if;
- return jsonb_build_object('status',v_status,'quote_id',v_quote.id,'reservation_id',v_reservation.id,'reservation_status',v_reservation.status,'reservation_type',v_reservation.reservation_type,'transportation_event_id',v_event.id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'vehicle_class',v_agreement.vehicle_class,'pay_type_rule_id',v_pay.id,'pay_type',v_pay.pay_type,'initial_rate_plan',v_agreement.initial_rate_plan,'current_rate_plan',v_agreement.current_rate_plan,'daily_rate',v_agreement.daily_rate_snapshot,'weekly_rate',v_agreement.weekly_rate_snapshot,'monthly_rate',v_agreement.monthly_rate_snapshot,'pricing_started_at',v_agreement.pricing_started_at);
+ return jsonb_build_object('status',v_status,'quote_id',v_quote.id,'reservation_id',v_reservation.id,'reservation_status','quote','reservation_type',v_quote.reservation_type,'transportation_event_id',v_event.id,'pricing_agreement_id',v_agreement.id,'origin_type','quote','vehicle_class',v_agreement.vehicle_class,'pay_type_rule_id',v_agreement.pay_type_rule_id,'pay_type',v_pay.pay_type,'initial_rate_plan',v_agreement.initial_rate_plan,'current_rate_plan',v_agreement.current_rate_plan,'daily_rate',v_agreement.daily_rate_snapshot,'weekly_rate',v_agreement.weekly_rate_snapshot,'monthly_rate',v_agreement.monthly_rate_snapshot,'pricing_started_at',v_agreement.pricing_started_at);
 end;$function$;
 
 alter function public.create_quote_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text) owner to postgres;
