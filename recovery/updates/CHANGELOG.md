@@ -175,3 +175,9 @@
 - Recorded the verified live rate-card contract in one data-free compatibility-preserving migration and moved only Rental Rates administration to the five new pay-type-independent RPCs.
 - Added required daily and optional weekly/monthly focused Add/Edit controls, strict complete-payload validation, authoritative reloads, Disable/Reactivate, and no Delete action.
 - Marked pricing-agreement and downstream Quote/Reservation/Walk-in conversion, insurance, discount, override, and ledger work OPEN; this change did not touch live Supabase or business values.
+
+## 2026-08-12 — Shared rental-pricing-agreement foundation
+
+- **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
+- **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
+- **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.
