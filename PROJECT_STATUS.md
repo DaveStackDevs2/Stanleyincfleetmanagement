@@ -40,3 +40,9 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
 - **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
 - **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.
+
+## 2026-08-13 — Operational Reservations intake workspace
+
+- **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** The secured intake read and daily-only pickup read/activation RPCs are recorded with their postgres ownership, security-definer empty-search-path boundary, authenticated/service-role grants, active-user/AAL2/permission enforcement, and weekly/monthly pickup fail-closed rule.
+- **IMPLEMENTED IN REPOSITORY:** Reservations is an operational sidebar destination for existing-customer Quote, direct Reservation, and Walk-in creation, active Quote review, and same-event Quote conversion. It uses only the shared Supabase client and verified pricing-agreement RPCs, reloads authoritative intake after writes, and displays returned exact pricing snapshots.
+- **OPEN / NOT IMPLEMENTED:** Pickup UI, VIN assignment, pricing activation from the browser, and weekly/monthly pickup Billing calculation remain open. No live Supabase change was performed.

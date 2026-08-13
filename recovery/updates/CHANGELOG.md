@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-08-13 — Operational Reservations workspace
+
+- Recorded the verified secured intake and daily-only pickup RPCs in migration history without applying SQL to live Supabase.
+- Implemented the operational Reservations destination with intake-driven existing customers, pay types, vehicle classes, configured plans, Quote/direct Reservation/Walk-in writes, active Quote review, and same-event conversion.
+- Preserved pre-pickup boundaries: no VIN, vehicle use, contract period, pricing timer, billing line, arithmetic, tax, or cashiering action is started by the frontend. Pickup UI remains open.
+
 ## 2026-08-10 — Verified Extended Warranty reconciliation integration
 
 - Added an idempotent, data-free migration recording the verified live `billing.extended_warranty_reconcile` permission, name-based Dev assignment, revoked browser execution of the unchanged payload engine, an explicit wrapper that adds the effective-permission boundary, and a non-AAL2 automatic Billing workspace orchestrator that calls the established lower-level reconciliation engine directly.

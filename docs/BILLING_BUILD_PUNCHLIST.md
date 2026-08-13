@@ -523,3 +523,11 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 - [x] **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** A configured monthly rate requires a weekly fallback. Admin create/update RPCs and the Rental Rates form return matching guidance.
 - [ ] **OPEN:** Frontend Quote, Reservation, and Walk-in workflows; pickup and VIN assignment; pricing activation; weekly/monthly block calculations; early-return fallback; manual/automatic plan conversion; Corporate Rates; Military/Veterans discount; insurance caps; authorized overrides; payments; cashiering; paid-through allocation; balance calculation; and ledger allocation.
 - **NOT APPLICABLE:** This checkpoint does not apply SQL to Supabase, seed values, start timers, assign a VIN, create a contract period, or create/modify billing lines.
+
+## 2026-08-13 — Operational Reservations intake checkpoint
+
+- [x] **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** `get_pricing_agreement_intake_state()`, `get_pricing_agreement_pickup_state(timestamptz)`, and `activate_pricing_agreement_pickup_state(uuid,uuid,timestamptz,integer)` are recorded with the verified security boundary. Activation remains daily-only and fails closed for weekly/monthly plans.
+- [x] **IMPLEMENTED IN REPOSITORY:** The existing operational Reservations navigation now supports existing-customer Quote, direct Reservation, and Walk-in creation; active Quote listing; and Quote conversion through the verified pricing-agreement RPCs. Every successful write reloads authoritative intake and shows returned identifiers and exact pricing snapshots.
+- [x] **PRESERVED:** Pre-pickup frontend work does not assign a VIN, begin vehicle use, create a contract period, start pricing, create billing, calculate rates/tax, mutate protected tables, or create a second Transportation Event.
+- [ ] **OPEN:** Pickup UI and authenticated production browser verification. Weekly/monthly pickup remains blocked on extension of the existing Billing calculation engine; that restriction was not loosened.
+- **NOT APPLICABLE:** No SQL was applied to live Supabase by this repository checkpoint.

@@ -119,3 +119,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
 - **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
 - **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.
+
+## 2026-08-13 — Operational Reservations intake workspace
+
+- **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** The intake and daily-only pickup contracts are recorded with the verified secured browser boundary; weekly/monthly activation still fails closed.
+- **IMPLEMENTED IN REPOSITORY:** The operational Reservations destination creates Quotes, direct Reservations, and Walk-ins, lists active Quotes, and converts a Quote while preserving its Transportation Event and pricing agreement. Existing customers and authoritative configuration are read exclusively from the intake RPC.
+- **OPEN / NOT IMPLEMENTED:** Pickup UI and all weekly/monthly pickup calculation remain open. Live Supabase was not changed.

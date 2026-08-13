@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### 2026-08-13 — Operational Reservations workspace
+
+- Recorded the verified-live pricing-agreement intake and pickup contracts in one data-free, idempotent migration; daily pickup remains the only supported activation plan and the frontend does not call pickup.
+- Wired the existing Reservations navigation to an operational RPC-only workspace for existing-customer Quote, direct Reservation, and Walk-in creation, active Quote listing, and same-Transportation-Event conversion.
+- Added strict pre-submit validation, configured-plan gating, exact snapshot display without frontend arithmetic, sanitized error categories, authoritative post-write reloads, and focused result screens.
+- Live Supabase was not changed. Pickup UI and weekly/monthly pickup calculation remain open.
+
 ### 2026-07-30 — Phase 1 operational RPC security checkpoint
 
 - Added an idempotent migration recording the live-verified security definitions and grants for extension, completion/return, and cancellation operational RPCs.
