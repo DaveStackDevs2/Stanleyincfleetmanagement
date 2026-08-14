@@ -52,3 +52,11 @@
 ## 2026-08-12 — Preserve one Transportation Event and pricing agreement
 
 **VERIFIED:** Quotes, direct Reservations, Walk-ins, and Loaners begin one Transportation Event. Quote conversion creates its Reservation in that same event and attaches the existing pricing agreement. Pickup remains the boundary for VIN assignment, timers, pricing activation, and committed billing.
+
+## 2026-08-14 — Require frontend AAL2 application entry
+
+**Decision:** After the existing password authentication and application-authorization gates pass, require the shared Supabase client to confirm AAL2 before rendering the operational application. Use TOTP enrollment when no verified TOTP factor exists and challenge the first verified TOTP factor in stable creation order otherwise.
+
+**Reason:** Existing protected Reservations and Billing RPCs correctly require an AAL2 JWT, but the frontend previously offered no way for an authorized password-authenticated user to promote an AAL1 session.
+
+**Impact:** The application fails closed while MFA state is unknown or unavailable, and successful verification is followed by session refresh and an explicit assurance-level re-check. Server-side authorization and AAL2 checks remain unchanged and authoritative.

@@ -187,3 +187,9 @@
 - **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
 - **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
 - **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.
+
+## 2026-08-14 — Required TOTP MFA gate
+
+- Added an auth-level, fail-closed Supabase TOTP enrollment/challenge flow after existing application authorization and before operational application rendering.
+- Added QR and manual-secret setup, accessible six-digit verification, sanitized retry/sign-out handling, session refresh, and mandatory AAL2 re-checking.
+- Preserved the shared Supabase client and server-side AAL2 RPC enforcement; no SQL, migration, business logic, or live Supabase change was made. Production-browser MFA and protected-workflow verification remain **NOT VERIFIED**.

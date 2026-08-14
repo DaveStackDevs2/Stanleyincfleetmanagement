@@ -6,6 +6,12 @@ This is the authoritative implementation checklist for completing Stanley Fleet 
 
 Every billing implementation commit must update this file. An item is marked complete only after its code is published to GitHub, required live SQL has been executed and verified, and the relevant build or browser checks pass.
 
+## 2026-08-14 — Frontend AAL2 authentication blocker
+
+- **IMPLEMENTED IN REPOSITORY:** The frontend now provides TOTP enrollment/challenge and requires a confirmed AAL2 session after existing application authorization before rendering operational workflows.
+- **PRESERVED:** Operational Reservations/Billing RPCs continue to enforce AAL2 server-side. No billing, pricing, pickup, Extended Warranty, pay-type, rate, Admin, SQL, or live Supabase behavior changed.
+- **NOT VERIFIED / OPEN:** Production-browser enrollment, later-login challenge, promoted-JWT RPC execution, and Reservations/pickup/billing end-to-end behavior remain to be exercised.
+
 ## Non-negotiable boundaries
 
 - Transportation Events remain the operational source of truth.
