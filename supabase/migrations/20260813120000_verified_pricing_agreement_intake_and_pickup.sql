@@ -6,9 +6,9 @@ returns jsonb language plpgsql security definer set search_path to '' as $functi
 declare v_user uuid; v_at timestamptz:=clock_timestamp();
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
- if v_user is null then raise exception 'Active application user required' using errcode='42501'; end if;
- if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication required' using errcode='42501'; end if;
- if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing agreement management permission required' using errcode='42501'; end if;
+  if v_user is null then raise exception 'An active application user is required' using errcode='42501'; end if;
+  if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication is required' using errcode='42501'; end if;
+  if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing-agreement permission is required' using errcode='42501'; end if;
  return jsonb_build_object(
   'status','pricing_agreement_intake_ready','observed_at',v_at,
   'customers',coalesce((select jsonb_agg(jsonb_build_object('customer_id',c.id,'tekion_customer_number',c.tekion_customer_number,'name',c.name,'phone',c.phone,'email',c.email,'created_at',c.created_at) order by lower(btrim(c.name)),c.tekion_customer_number,c.id) from public.customers c),'[]'::jsonb),
@@ -37,9 +37,9 @@ declare v_user uuid; v_vin_lock_lead_days integer:=0; v_items jsonb;
 begin
  if p_reference_at is null then raise exception 'Reference timestamp is required' using errcode='22023'; end if;
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
- if v_user is null then raise exception 'Active application user required' using errcode='42501'; end if;
- if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication required' using errcode='42501'; end if;
- if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing agreement management permission required' using errcode='42501'; end if;
+  if v_user is null then raise exception 'An active application user is required' using errcode='42501'; end if;
+  if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication is required' using errcode='42501'; end if;
+  if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing-agreement permission is required' using errcode='42501'; end if;
  select coalesce((setting_value #>> '{}')::integer,0) into v_vin_lock_lead_days from public.admin_settings where setting_key='reservation_vin_lock_lead_days';
  v_vin_lock_lead_days:=coalesce(v_vin_lock_lead_days,0);
  select coalesce(jsonb_agg(jsonb_build_object(
@@ -78,28 +78,30 @@ declare
  v_current_vehicle_id uuid; v_existing_line uuid;
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
- if v_user is null then raise exception 'Active application user required' using errcode='42501'; end if;
- if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication required' using errcode='42501'; end if;
- if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.case_start')
-    or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then
-  raise exception 'Case start and pricing agreement management permissions required' using errcode='42501';
- end if;
- if p_reservation_id is null or p_vehicle_id is null or p_actual_out_at is null then raise exception 'Reservation, vehicle, and actual-out timestamp are required' using errcode='22023'; end if;
- if p_start_mileage is not null and p_start_mileage<0 then raise exception 'Start mileage must be zero or greater' using errcode='22023'; end if;
- select * into v_reservation from public.reservations where id=p_reservation_id for update;
- if not found then raise exception 'Reservation not found' using errcode='P0002'; end if;
- select * into v_agreement from public.rental_pricing_agreements where reservation_id=v_reservation.id and transportation_event_id=v_reservation.transportation_event_id and is_active=true for update;
- if not found then raise exception 'Active pricing agreement not found' using errcode='P0002'; end if;
- if lower(btrim(v_reservation.status))='cancelled' or v_reservation.actual_return_datetime is not null then raise exception 'Cancelled or returned reservations cannot be activated' using errcode='P0001'; end if;
- if p_actual_out_at<v_reservation.start_date then raise exception 'Actual out timestamp cannot precede reservation start' using errcode='22023'; end if;
- if v_agreement.current_rate_plan<>'daily' then raise exception 'Weekly and monthly pickup pricing are not yet supported' using errcode='0A000'; end if;
- if v_agreement.daily_rate_snapshot is null or v_agreement.daily_rate_snapshot<0 or v_agreement.daily_rate_snapshot in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric) then raise exception 'Daily pricing snapshot is invalid' using errcode='P0001'; end if;
+  if v_user is null then raise exception 'An active application user is required' using errcode='42501'; end if;
+  if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication is required' using errcode='42501'; end if;
+  if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.case_start') then
+   raise exception 'Billing case-start permission is required' using errcode='42501';
+  end if;
+  if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then
+   raise exception 'Pricing-agreement permission is required' using errcode='42501';
+  end if;
+  if p_reservation_id is null or p_vehicle_id is null or p_actual_out_at is null then raise exception 'Reservation, vehicle, and actual-out time are required' using errcode='22023'; end if;
+  if p_start_mileage is not null and p_start_mileage<0 then raise exception 'Start mileage must be nonnegative' using errcode='22023'; end if;
+  select * into v_reservation from public.reservations where id=p_reservation_id for update;
+  if not found then raise exception 'Reservation was not found' using errcode='P0002'; end if;
+  if lower(coalesce(v_reservation.status,''))='cancelled' or v_reservation.actual_return_datetime is not null then raise exception 'Reservation is not eligible for pickup' using errcode='P0001'; end if;
+  if p_actual_out_at<v_reservation.start_date then raise exception 'Actual-out time cannot precede reservation start' using errcode='22023'; end if;
+  select * into v_agreement from public.rental_pricing_agreements where reservation_id=v_reservation.id and transportation_event_id=v_reservation.transportation_event_id and is_active=true for update;
+  if not found then raise exception 'Active pricing agreement was not found' using errcode='P0002'; end if;
+  if v_agreement.current_rate_plan<>'daily' then raise exception 'Weekly/monthly pickup billing is not implemented yet' using errcode='P0001'; end if;
+  if v_agreement.daily_rate_snapshot is null or v_agreement.daily_rate_snapshot<0 or v_agreement.daily_rate_snapshot in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric) then raise exception 'Pricing agreement daily-rate snapshot is invalid' using errcode='P0001'; end if;
  select p.pay_type into v_pay_type from public.pay_type_rules p where p.id=v_agreement.pay_type_rule_id;
- if v_pay_type is null then raise exception 'Pricing pay type not found' using errcode='P0002'; end if;
- select * into v_vehicle from public.vehicles where id=p_vehicle_id and is_retired=false for update;
- if not found then raise exception 'Vehicle is unavailable' using errcode='P0002'; end if;
- if lower(btrim(v_vehicle.model))<>lower(btrim(v_agreement.vehicle_class)) then raise exception 'Vehicle does not match pricing agreement vehicle class' using errcode='22023'; end if;
- if v_reservation.vehicle_id is not null and v_reservation.vehicle_id is distinct from p_vehicle_id then raise exception 'Reservation has a different preassigned vehicle' using errcode='P0001'; end if;
+  if v_pay_type is null then raise exception 'Pricing-agreement pay type was not found' using errcode='P0002'; end if;
+  select * into v_vehicle from public.vehicles where id=p_vehicle_id and is_retired=false for update;
+  if not found then raise exception 'Pickup vehicle was not found or is retired' using errcode='P0002'; end if;
+  if lower(btrim(v_vehicle.model))<>lower(btrim(v_agreement.vehicle_class)) then raise exception 'Pickup vehicle does not match the pricing-agreement vehicle class' using errcode='22023'; end if;
+  if v_reservation.vehicle_id is not null and v_reservation.vehicle_id is distinct from p_vehicle_id then raise exception 'Reservation is assigned to a different vehicle' using errcode='P0001'; end if;
  select c.vehicle_id into v_current_vehicle_id
  from public.v_current_vehicle_continuity c where c.transportation_event_id=v_reservation.transportation_event_id limit 1;
  select bl.id into v_existing_line from public.billing_lines bl where bl.transportation_event_id=v_reservation.transportation_event_id
@@ -109,10 +111,10 @@ begin
   if v_current_vehicle_id=p_vehicle_id and v_existing_line is not null then
    return jsonb_build_object('status','pricing_agreement_pickup_already_active','reservation_id',p_reservation_id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'vehicle_id',p_vehicle_id,'billing_line_id',v_existing_line,'pricing_started_at',v_agreement.pricing_started_at);
   end if;
-  raise exception 'Existing pickup continuity or billing is inconsistent' using errcode='P0001';
+   raise exception 'Existing pickup state is inconsistent' using errcode='P0001';
  end if;
  if v_current_vehicle_id is not null or v_existing_line is not null then raise exception 'Pre-pickup case already has continuity or billing' using errcode='P0001'; end if;
- if exists(select 1 from public.v_current_vehicle_continuity c where c.vehicle_id=p_vehicle_id) then raise exception 'Vehicle is currently assigned to another case' using errcode='P0001'; end if;
+  if exists(select 1 from public.v_current_vehicle_continuity c where c.vehicle_id=p_vehicle_id) then raise exception 'Selected vehicle is currently assigned to another case' using errcode='P0001'; end if;
  v_started:=public.start_reservation_vehicle_use_state(p_reservation_id,p_vehicle_id,p_actual_out_at);
  v_continuity:=v_started->'continuity_result';
  begin v_vehicle_event:=(v_continuity->>'vehicle_event_id')::uuid; v_contract_period:=(v_continuity->>'contract_period_id')::uuid;
@@ -128,7 +130,7 @@ begin
  update public.billing_lines set pricing_agreement_id=v_agreement.id,rate_plan_snapshot='daily',rate_amount_snapshot=v_agreement.daily_rate_snapshot where id=v_line_id;
  update public.rental_pricing_agreements set pricing_started_at=p_actual_out_at,updated_by=v_user,updated_at=clock_timestamp() where id=v_agreement.id returning * into v_agreement;
  v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,clock_timestamp());
- if v_preview->>'status'<>'billing_preview_ready' then raise exception 'Current authoritative billing preview is not ready' using errcode='P0001'; end if;
+  if v_preview->>'status'<>'billing_preview_ready' then raise exception 'Activated pickup could not be loaded by Billing' using errcode='P0001'; end if;
  return jsonb_build_object('status','pricing_agreement_pickup_activated','reservation_id',p_reservation_id,'transportation_event_id',v_reservation.transportation_event_id,'vehicle_id',p_vehicle_id,'vehicle_event_id',v_vehicle_event,'contract_period_id',v_contract_period,'pricing_agreement_id',v_agreement.id,'billing_line_id',v_line_id,'rate_plan','daily','rate_amount',v_agreement.daily_rate_snapshot::text,'pricing_started_at',v_agreement.pricing_started_at,'billing_preview',v_preview);
 end;$function$;
 
