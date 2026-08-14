@@ -50,7 +50,21 @@ export function MfaGate({ children }: { children: ReactNode }) {
     }
 
     if (!enrollmentRef.current) {
+      const unverifiedTotpFactors = [...(factors.all ?? [])]
+        .filter((factor) => factor.factor_type === 'totp' && factor.status === 'unverified')
+        .sort(compareFactors)
+
       enrollmentRef.current = (async () => {
+        for (const factor of unverifiedTotpFactors) {
+          const { error: unenrollmentError } = await supabase.auth.mfa.unenroll({
+            factorId: factor.id,
+          })
+
+          if (unenrollmentError) {
+            throw new Error('MFA enrollment cleanup failed')
+          }
+        }
+
         const { data, error: enrollmentError } = await supabase.auth.mfa.enroll({
           factorType: 'totp',
           friendlyName: 'Stanley TMS',
