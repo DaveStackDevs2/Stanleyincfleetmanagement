@@ -88,6 +88,9 @@ export function MfaGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true
 
+    setGateState({ kind: 'checking' })
+    setError(null)
+
     void determineGateState()
       .then((nextState) => {
         if (active) setGateState(nextState)
