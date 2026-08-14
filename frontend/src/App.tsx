@@ -6,6 +6,7 @@ import { supabase } from './lib/supabase'
 import { FleetBoard } from './fleet-board/FleetBoard'
 import { PayTypeManagement } from './admin/PayTypeManagement'
 import { BillingWorkspace } from './billing/BillingWorkspace'
+import { ReservationsWorkspace } from './reservations/ReservationsWorkspace'
 
 type AdminFeature = {
   title: string
@@ -13,7 +14,7 @@ type AdminFeature = {
   status: 'Foundation' | 'Planned' | 'Coming Soon'
 }
 
-type Page = 'dashboard' | 'admin' | 'fleet' | 'access' | 'fleet-board' | 'pay-types'
+type Page = 'dashboard' | 'admin' | 'fleet' | 'access' | 'fleet-board' | 'pay-types' | 'reservations'
 type FleetFilter =
   | 'All'
   | 'Active'
@@ -299,7 +300,7 @@ function App() {
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <button type="button" className={page === 'dashboard' ? 'active' : ''} onClick={() => setPage('dashboard')}>Dashboard</button>
           <button type="button" className={page === 'fleet-board' ? 'active' : ''} onClick={() => setPage('fleet-board')}>Fleet Board</button>
-          <button type="button">Reservations</button>
+          <button type="button" className={page === 'reservations' ? 'active' : ''} onClick={() => setPage('reservations')}>Reservations</button>
           <button type="button">Active Transportation</button>
 
           <button
@@ -347,6 +348,8 @@ function App() {
                   ? 'Fleet Administration'
                   : page === 'fleet-board'
                     ? 'Fleet Board'
+                  : page === 'reservations'
+                    ? 'Reservations'
                   : page === 'access'
                     ? 'User & Role Management'
                   : page === 'pay-types'
@@ -361,6 +364,8 @@ function App() {
                   ? 'Connected to the vehicle master view'
                   : page === 'fleet-board'
                     ? 'Operational fleet availability'
+                  : page === 'reservations'
+                    ? 'Operational pricing intake'
                   : page === 'access'
                     ? 'Effective permission administration'
                   : page === 'pay-types'
@@ -381,6 +386,8 @@ function App() {
 
         {page === 'dashboard' ? (
           <BillingWorkspace />
+        ) : page === 'reservations' ? (
+          <ReservationsWorkspace />
         ) : page === 'fleet-board' ? (
           <FleetBoard />
         ) : page === 'access' ? (
