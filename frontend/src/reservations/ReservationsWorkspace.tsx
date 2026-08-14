@@ -70,12 +70,12 @@ export function ReservationsWorkspace() {
   const [result, setResult] = useState<Json | null>(null)
   const [conversion, setConversion] = useState<Quote | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null)
+  const load = useCallback(async (): Promise<boolean> => {
+    setLoading(true); setError(null); setIntake(null)
     const { data, error: rpcError } = await supabase.rpc('get_pricing_agreement_intake_state')
-    if (rpcError) setError(friendlyError(rpcError.message))
-    else { try { setIntake(parseIntake(data)) } catch { setError('Unexpected failure: Supabase returned an unrecognized Reservations response.') } }
-    setLoading(false)
+    if (rpcError) { setError(friendlyError(rpcError.message)); setLoading(false); return false }
+    try { setIntake(parseIntake(data)); setLoading(false); return true }
+    catch { setError('Unexpected failure: Supabase returned an unrecognized Reservations response.'); setLoading(false); return false }
   }, [])
   useEffect(() => { void load() }, [load])
   const selectedRate = intake?.rateCards.find(card => card.vehicleClass === vehicleClass) ?? null
@@ -102,14 +102,18 @@ export function ReservationsWorkspace() {
       ? supabase.rpc('create_quote_with_pricing_agreement_state', { ...common, p_notes:optional(notes) })
       : supabase.rpc(workflow === 'reservation' ? 'create_reservation_with_pricing_agreement_state' : 'create_walk_in_with_pricing_agreement_state', { ...common, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes) })
     const { data, error: rpcError } = await call
-    if (rpcError) setError(friendlyError(rpcError.message)); else { await load(); setResult(record(data)); }
+    if (rpcError) setError(friendlyError(rpcError.message));
+    else if (await load()) setResult(record(data));
+    else setError('State sync failed: the write completed, but Reservations could not reload authoritative intake. Refresh before continuing.')
     setBusy(false)
   }
   const convert = async (event: FormEvent) => {
     event.preventDefault(); if (!conversion) return
     setBusy(true); setError(null)
     const { data, error: rpcError } = await supabase.rpc('convert_quote_to_reservation_with_pricing_agreement_state', { p_quote_id:conversion.id, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes) })
-    if (rpcError) setError(friendlyError(rpcError.message)); else { await load(); setConversion(null); setResult(record(data)); }
+    if (rpcError) setError(friendlyError(rpcError.message));
+    else if (await load()) { setConversion(null); setResult(record(data)); }
+    else { setConversion(null); setError('State sync failed: the conversion completed, but Reservations could not reload authoritative intake. Refresh before continuing.') }
     setBusy(false)
   }
 
