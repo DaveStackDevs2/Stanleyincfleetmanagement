@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { supabase } from '../lib/supabase'
 import './ReservationsWorkspace.css'
 import { AuthoritativeFields, PickupWorkspace } from './PickupWorkspace'
+import { EditReservationWorkspace } from './EditReservationWorkspace'
 
-type Workflow = 'quote' | 'reservation' | 'walk_in' | 'pickup'
+type Workflow = 'quote' | 'reservation' | 'walk_in' | 'edit' | 'pickup'
 type Plan = 'daily' | 'weekly' | 'monthly'
 type Json = Record<string, unknown>
 type Customer = { id: string; name: string; number: string | null }
@@ -134,8 +135,8 @@ export function ReservationsWorkspace() {
     <section className="page-heading"><div><p className="eyebrow">OPERATIONS / RESERVATIONS</p><h1>Reservations</h1><p>Create pre-pickup Quotes, Reservations, and Walk-ins from authoritative pricing configuration.</p></div><button type="button" onClick={()=>void load()} disabled={loading}>Refresh</button></section>
     {error && <div className="data-message error-message"><strong>Reservations needs attention</strong><span>{error}</span></div>}
     {loading ? <div className="reservation-card">Loading authoritative intake…</div> : intake && <>
-      <div className="reservation-tabs" role="tablist">{(['quote','reservation','walk_in','pickup'] as Workflow[]).map(item=><button type="button" className={workflow===item?'active':''} onClick={()=>setWorkflow(item)} key={item}>{item==='walk_in'?'Walk-in':item==='pickup'?'Check-in / Pickup':item[0].toUpperCase()+item.slice(1)}</button>)}</div>
-      {workflow==='pickup'?<PickupWorkspace onError={setError}/>:<>
+      <div className="reservation-tabs" role="tablist">{(['quote','reservation','walk_in','edit','pickup'] as Workflow[]).map(item=><button type="button" className={workflow===item?'active':''} onClick={()=>setWorkflow(item)} key={item}>{item==='walk_in'?'Walk-in':item==='edit'?'Edit Reservation':item==='pickup'?'Check-in / Pickup':item[0].toUpperCase()+item.slice(1)}</button>)}</div>
+      {workflow==='pickup'?<PickupWorkspace onError={setError}/>:workflow==='edit'?<EditReservationWorkspace onError={setError}/>:<>
       <form className="reservation-card reservation-form" onSubmit={submit}>
         <label className="wide">Find existing customer<input type="search" value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} placeholder="Search name or Tekion customer number" /></label>
         <label className="wide">Customer<select required value={customerId} onChange={e=>setCustomerId(e.target.value)}><option value="">Select an existing customer</option>{shownCustomers.map(c=><option value={c.id} key={c.id}>{c.name}{c.number?` · ${c.number}`:''}</option>)}</select></label>
