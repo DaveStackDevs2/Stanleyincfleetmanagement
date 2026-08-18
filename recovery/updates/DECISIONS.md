@@ -60,3 +60,11 @@
 **Reason:** Existing protected Reservations and Billing RPCs correctly require an AAL2 JWT, but the frontend previously offered no way for an authorized password-authenticated user to promote an AAL1 session.
 
 **Impact:** The application fails closed while MFA state is unknown or unavailable, and successful verification is followed by session refresh and an explicit assurance-level re-check. Server-side authorization and AAL2 checks remain unchanged and authoritative.
+
+## 2026-08-18 — Treat Vehicle Model and Rental pay type as intake invariants
+
+**Decision:** The Reservations user-facing concept is Vehicle Model. Existing database columns, RPC arguments, and JSON keys named `vehicle_class` remain compatibility identifiers for now and continue carrying model values.
+
+**Decision:** Rental transportation must use the single active, Admin-managed pay type whose trimmed name is `Rental` case-insensitively. The Rental pay type cannot be used for non-Rental intake. The frontend fails closed and the pricing-agreement trigger remains the final authority in both directions; no UUID or price is hardcoded.
+
+**Verified context and impact:** Production MFA/AAL2 and authoritative Reservations intake were exercised successfully in a real browser. Admin configured Rental with a NULL default amount. Live Supabase already has the `create_vehicle_state` `vin_last8` repair and invariant trigger; the repository migration only records them. Controlled live vehicles `TEST-STOCK-002` and `TEST-STOCK-003` are not seeds. Pickup/VIN remains the next frontend checkpoint, and weekly/monthly pickup billing remains unimplemented and fail-closed.

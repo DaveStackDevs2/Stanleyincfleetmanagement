@@ -193,3 +193,11 @@
 - Added an auth-level, fail-closed Supabase TOTP enrollment/challenge flow after existing application authorization and before operational application rendering.
 - Added QR and manual-secret setup, accessible six-digit verification, sanitized retry/sign-out handling, session refresh, and mandatory AAL2 re-checking.
 - Preserved the shared Supabase client and server-side AAL2 RPC enforcement; no SQL, migration, business logic, or live Supabase change was made. Production-browser MFA and protected-workflow verification remain **NOT VERIFIED**.
+
+## 2026-08-18 — Reservations vehicle-model and Rental pay-type invariant
+
+- **VERIFIED LIVE:** Production MFA/AAL2 and Reservations authoritative intake succeeded in a real browser. Admin configured the canonical active/taxable `Rental` pay type with NULL default amount.
+- **IMPLEMENTED:** User-facing Reservations uses Vehicle Model, while backend `vehicle_class` and `p_vehicle_class` compatibility names remain unchanged. Rental auto-selects and exclusively offers authoritative `Rental`; Loaner excludes it and switching clears the selection.
+- **VERIFIED LIVE / REPOSITORY RECORD:** Live already has the `create_vehicle_state` `vin_last8` repair and bidirectional Rental/pay-type pricing-agreement trigger. One idempotent data-free migration records them without live application.
+- **NOT SEEDED:** `TEST-STOCK-002` and `TEST-STOCK-003` are controlled live verification vehicles, not repository data.
+- **OPEN:** Pickup/VIN frontend is next; weekly/monthly pickup billing remains unimplemented and fail-closed.
