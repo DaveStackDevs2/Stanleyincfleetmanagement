@@ -46,6 +46,8 @@ class ReservationsModelRentalPayTypeTests(unittest.TestCase):
         self.assertIn("vin_last8", LOWER_SQL)
         self.assertIn("right(btrim(p_vin), 8)", LOWER_SQL)
         self.assertIn("char_length(btrim(p_vin)) < 8", LOWER_SQL)
+        self.assertIn("vin must contain at least 8 characters", LOWER_SQL)
+        self.assertNotIn("vin must be at least 8 characters", LOWER_SQL)
         self.assertIn("security invoker", LOWER_SQL)
         self.assertIn("set search_path to ''", LOWER_SQL)
         self.assertIn("from public, anon, authenticated", LOWER_SQL)
@@ -56,11 +58,38 @@ class ReservationsModelRentalPayTypeTests(unittest.TestCase):
         self.assertIn("rental pay type requires a rental workflow", LOWER_SQL)
         self.assertIn("if new.reservation_id is not null", LOWER_SQL)
         self.assertIn("elsif new.quote_id is not null", LOWER_SQL)
-        self.assertIn("r.transportation_event_id = new.transportation_event_id", LOWER_SQL)
+        fallback = re.sub(r"\s+", " ", LOWER_SQL)
+        self.assertIn(
+            "select reservation_record.reservation_type into v_transportation_type "
+            "from public.reservations as reservation_record "
+            "where reservation_record.transportation_event_id = new.transportation_event_id "
+            "order by reservation_record.created_at, reservation_record.id limit 1;",
+            fallback,
+        )
         self.assertIn("from public.pay_type_rules", LOWER_SQL)
+        self.assertIn("pricing agreement transportation type was not found", LOWER_SQL)
+        self.assertIn("pricing agreement pay type was not found", LOWER_SQL)
+        self.assertEqual(LOWER_SQL.count("using errcode = '22023'"), 4)
         self.assertIn("drop trigger if exists trg_rental_pricing_agreements_transportation_pay_type", LOWER_SQL)
         self.assertIn("on public.rental_pricing_agreements", LOWER_SQL)
         self.assertIn("before insert or update of pay_type_rule_id, reservation_id, quote_id, transportation_event_id", LOWER_SQL)
+
+    def test_verified_live_function_security_metadata_is_recorded(self):
+        compact = re.sub(r"\s+", " ", LOWER_SQL)
+        create_vehicle_signature = "public.create_vehicle_state(text,text,text,text,integer,text,text,text,text,text,text)"
+        trigger_signature = "public.enforce_pricing_agreement_transportation_pay_type_state()"
+        self.assertIn(f"alter function {create_vehicle_signature} owner to postgres", compact)
+        self.assertIn(
+            f"revoke all on function {create_vehicle_signature} from public, anon, authenticated; "
+            f"grant execute on function {create_vehicle_signature} to service_role;",
+            compact,
+        )
+        self.assertIn(f"alter function {trigger_signature} owner to postgres", compact)
+        self.assertIn(
+            f"revoke all on function {trigger_signature} from public, anon, authenticated, service_role; "
+            f"grant execute on function {trigger_signature} to public, service_role;",
+            compact,
+        )
 
     def test_migration_is_data_free(self):
         self.assertNotRegex(LOWER_SQL, r"insert into public\.(pay_type_rules|customers|reservations|quotes|rental_pricing_agreements|rental_rate_rules)")

@@ -22,7 +22,7 @@ declare
     v_id uuid;
 begin
     if p_vin is null or btrim(p_vin) = '' then raise exception 'vin cannot be blank'; end if;
-    if char_length(btrim(p_vin)) < 8 then raise exception 'vin must be at least 8 characters'; end if;
+    if char_length(btrim(p_vin)) < 8 then raise exception 'vin must contain at least 8 characters'; end if;
     if p_stock_number is null or btrim(p_stock_number) = '' then raise exception 'stock_number cannot be blank'; end if;
     if p_model is null or btrim(p_model) = '' then raise exception 'model cannot be blank'; end if;
     if p_fleet_type is null or btrim(p_fleet_type) = '' then raise exception 'fleet_type cannot be blank'; end if;
@@ -56,6 +56,7 @@ grant execute on function public.create_vehicle_state(text,text,text,text,intege
 create or replace function public.enforce_pricing_agreement_transportation_pay_type_state()
 returns trigger
 language plpgsql
+security invoker
 set search_path to ''
 as $function$
 declare
@@ -69,19 +70,22 @@ begin
         select q.reservation_type into v_transportation_type
         from public.quotes q where q.id = new.quote_id;
     else
-        select r.reservation_type into v_transportation_type
-        from public.reservations r
-        where r.transportation_event_id = new.transportation_event_id;
+        select reservation_record.reservation_type
+        into v_transportation_type
+        from public.reservations as reservation_record
+        where reservation_record.transportation_event_id = new.transportation_event_id
+        order by reservation_record.created_at, reservation_record.id
+        limit 1;
     end if;
 
     select p.pay_type into v_pay_type
     from public.pay_type_rules p where p.id = new.pay_type_rule_id;
 
     if nullif(btrim(v_transportation_type), '') is null then
-        raise exception 'Transportation type could not be resolved' using errcode = '22023';
+        raise exception 'Pricing agreement transportation type was not found' using errcode = '22023';
     end if;
     if nullif(btrim(v_pay_type), '') is null then
-        raise exception 'Pay type could not be resolved' using errcode = '22023';
+        raise exception 'Pricing agreement pay type was not found' using errcode = '22023';
     end if;
     if lower(btrim(v_transportation_type)) = 'rental' and lower(btrim(v_pay_type)) <> 'rental' then
         raise exception 'Rental workflow requires the Rental pay type' using errcode = '22023';
@@ -95,6 +99,7 @@ $function$;
 
 alter function public.enforce_pricing_agreement_transportation_pay_type_state() owner to postgres;
 revoke all on function public.enforce_pricing_agreement_transportation_pay_type_state() from public, anon, authenticated, service_role;
+grant execute on function public.enforce_pricing_agreement_transportation_pay_type_state() to public, service_role;
 
 drop trigger if exists trg_rental_pricing_agreements_transportation_pay_type on public.rental_pricing_agreements;
 create trigger trg_rental_pricing_agreements_transportation_pay_type
