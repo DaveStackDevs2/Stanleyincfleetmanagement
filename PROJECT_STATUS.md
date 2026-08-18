@@ -4,6 +4,8 @@
 
 **VERIFIED live / IMPLEMENTED IN REPOSITORY:** Reservations reserve scheduled capacity, model/workflow, and pricing snapshots without VIN, continuity, contract period, or billing. At Check-in / Pickup, physical continuity uses actual handoff while billing and pricing begin at the Reservation scheduled start. Late arrival does not move scheduled start or expected return. Billing excludes pre-check-in Reservations by reusing authoritative current-continuity/current-billing operational state.
 
+**VERIFIED live / RECORDED HARDENING:** The authoritative candidate view excludes retired vehicles. Activation locks the selected non-retired vehicle and revalidates that it is `available` before assignment, continuity, or billing writes, preventing stale candidate state from starting pickup or billing.
+
 **NEXT / NOT IMPLEMENTED:** Reservation editing before Check-in is required, but no verified browser-safe general edit RPC exists. Scheduled start, expected return, advisor, RO number, and notes are expected fields; model/workflow/pay type/rate plan require authoritative pricing and availability. No direct table update or penalty cutoff was invented; the cutoff remains TBD. Weekly/monthly and “Now” remain deferred. Production browser Check-in activation is **NOT VERIFIED**.
 
 

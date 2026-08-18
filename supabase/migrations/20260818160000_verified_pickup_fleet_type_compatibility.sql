@@ -14,8 +14,13 @@ begin
  select fleet_type into v_vehicle_fleet_type from public.vehicles where id=p_vehicle_id;
  if not found then raise exception 'Vehicle % does not exist',p_vehicle_id; end if;
 
- if lower(btrim(v_vehicle_fleet_type))<>lower(btrim(v_reservation.reservation_type)) then
-  raise exception 'Vehicle fleet type % does not match reservation type %',v_vehicle_fleet_type,v_reservation.reservation_type using errcode='22023';
+ if nullif(lower(btrim(v_vehicle_fleet_type)), '') is distinct from
+    nullif(lower(btrim(v_reservation.reservation_type)), '') then
+    raise exception
+        'Vehicle fleet type % does not match reservation type %',
+        v_vehicle_fleet_type,
+        v_reservation.reservation_type
+        using errcode = '22023';
  end if;
  if p_actual_out_at is null then raise exception 'actual_out_at cannot be null'; end if;
  if p_actual_out_at<v_reservation.start_date then
@@ -37,9 +42,10 @@ select r.id as reservation_id,r.transportation_event_id as reservation_transport
  c.transportation_event_id as source_transportation_event_id,te.expected_return_at as expected_return_snapshot,
  case when c.vehicle_event_id is not null then 'pending_return'::text when v.status='available'::text then 'ready'::text else 'unavailable'::text end as candidate_state
 from public.reservations r
-join public.vehicles as v
-  on v.model = r.requested_model
- and lower(btrim(v.fleet_type)) = lower(btrim(r.reservation_type))
+JOIN public.vehicles AS v
+  ON v.model = r.requested_model
+ AND lower(btrim(v.fleet_type)) = lower(btrim(r.reservation_type))
+ AND v.is_retired = false
 left join public.v_current_vehicle_continuity c on c.vehicle_id=v.id
 left join public.transportation_events te on te.id=c.transportation_event_id
 where r.status is distinct from 'cancelled'::text;

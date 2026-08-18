@@ -3,6 +3,7 @@
 ## 2026-08-18 — Check-in / Pickup scheduled-start billing reconciliation
 
 - **VERIFIED live / RECORDED:** Check-in starts physical continuity at actual handoff but delegates initial billing to the established engine with no start override, so billing and `pricing_started_at` use the Reservation scheduled start. Late arrival does not slide scheduled start or scheduled return.
+- **VERIFIED live / RECORDED HARDENING:** Authoritative pickup candidates exclude retired vehicles. Activation locks the selected non-retired vehicle and immediately revalidates `available` before assignment, continuity, or billing writes, protecting activation from stale candidate state.
 - **VERIFIED live / RECORDED:** Billing workspace eligibility reuses the Transportation Event operational payload and excludes normal pre-check-in Reservations only when both current continuity and current billing lines are empty. Reservation creation itself does not start billing.
 - **REQUIRED NEXT / NOT IMPLEMENTED:** pre-check-in Reservation editing must support scheduled start, expected return, service advisor, RO number, and notes; model, workflow type, pay type, and rate-plan changes require authoritative pricing/availability logic. No verified browser-safe general edit RPC exists, and the future penalty-free cutoff is TBD. Weekly/monthly pickup billing and the “Now” button remain deferred. Production browser Check-in activation is **NOT VERIFIED**.
 

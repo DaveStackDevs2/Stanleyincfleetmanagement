@@ -3,6 +3,7 @@
 ## 2026-08-18 — Check-in / Pickup lifecycle reconciliation
 
 - **VERIFIED live / RECORDED:** Reservation creation reserves scheduled capacity and pricing state without starting continuity or Billing. Check-in starts continuity at actual handoff and Billing/pricing at the Reservation scheduled start; a late arrival does not slide scheduled return.
+- **VERIFIED live / RECORDED HARDENING:** Authoritative pickup candidates exclude retired vehicles. Activation locks the selected non-retired vehicle and immediately revalidates `available` before assignment, continuity, or billing writes so stale candidate state cannot start continuity or Billing.
 - **VERIFIED live / RECORDED:** Billing workspace reuses Transportation Event operational state and skips a pre-check-in Reservation only when both current continuity and current billing lines are empty.
 - **OPEN:** a dedicated browser-safe Reservation-edit checkpoint is required for scheduled start/return, advisor, RO number, and notes; pricing/availability fields need authoritative reconciliation. The future no-penalty cutoff is TBD. Weekly/monthly and “Now” remain deferred. Production browser Check-in activation is not verified.
 

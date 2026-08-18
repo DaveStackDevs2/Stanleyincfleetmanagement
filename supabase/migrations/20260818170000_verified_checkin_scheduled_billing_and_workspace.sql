@@ -32,6 +32,11 @@ begin
   if not found then raise exception 'Pricing-agreement pay type was not found' using errcode='P0002'; end if;
   select * into v_vehicle from public.vehicles where id=p_vehicle_id and is_retired=false for update;
   if not found then raise exception 'Pickup vehicle was not found or is retired' using errcode='P0002'; end if;
+  IF v_vehicle.status IS DISTINCT FROM 'available' THEN
+    RAISE EXCEPTION
+        'Selected vehicle is not available for pickup'
+        USING ERRCODE = 'P0001';
+  END IF;
   if lower(btrim(v_vehicle.model))<>lower(btrim(v_agreement.vehicle_class)) then raise exception 'Pickup vehicle does not match the pricing-agreement vehicle class' using errcode='22023'; end if;
   if v_reservation.vehicle_id is not null and v_reservation.vehicle_id is distinct from p_vehicle_id then raise exception 'Reservation is assigned to a different vehicle' using errcode='P0001'; end if;
  select c.vehicle_id into v_current_vehicle_id

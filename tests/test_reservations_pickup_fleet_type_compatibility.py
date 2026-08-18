@@ -21,12 +21,16 @@ class ReservationsPickupTests(unittest.TestCase):
 class FleetCompatibilityMigrationTests(unittest.TestCase):
  def test_helper_boundary_and_guard(self):
   self.assertRegex(LOWER,r'function public\.start_reservation_vehicle_use_state\(p_reservation_id uuid,p_vehicle_id uuid,p_actual_out_at timestamptz\)')
-  self.assertIn('select fleet_type into v_vehicle_fleet_type from public.vehicles',LOWER);self.assertIn('lower(btrim(v_vehicle_fleet_type))<>lower(btrim(v_reservation.reservation_type))',LOWER)
-  self.assertIn("vehicle fleet type % does not match reservation type %",LOWER);self.assertIn("errcode='22023'",LOWER)
-  self.assertLess(LOWER.index("errcode='22023'"),LOWER.index('public.start_vehicle_use_state'))
+  self.assertIn('select fleet_type into v_vehicle_fleet_type from public.vehicles',LOWER)
+  guard="nullif(lower(btrim(v_vehicle_fleet_type)), '') is distinct from\n    nullif(lower(btrim(v_reservation.reservation_type)), '')"
+  self.assertIn(guard,LOWER);self.assertNotIn('lower(btrim(v_vehicle_fleet_type))<>lower(btrim(v_reservation.reservation_type))',LOWER)
+  self.assertIn("vehicle fleet type % does not match reservation type %",LOWER);self.assertIn("errcode = '22023'",LOWER)
+  self.assertLess(LOWER.index("errcode = '22023'"),LOWER.index('public.start_vehicle_use_state'))
   self.assertIn('from public,anon,authenticated',LOWER);self.assertIn('to postgres,service_role',LOWER);self.assertNotIn('security definer',LOWER)
  def test_candidate_view(self):
   self.assertIn('with (security_invoker=true)',LOWER);self.assertIn('v.model = r.requested_model',LOWER);self.assertIn('lower(btrim(v.fleet_type)) = lower(btrim(r.reservation_type))',LOWER)
+  vehicle_join=LOWER[LOWER.index('join public.vehicles as v'):LOWER.index('left join public.v_current_vehicle_continuity')]
+  self.assertIn('and v.is_retired = false',vehicle_join)
   for state in ('pending_return','ready','unavailable'):self.assertIn(state,LOWER)
   self.assertNotIn('update public.vehicles',LOWER);self.assertNotRegex(LOWER,r'1e6be455|test-stock|test-vin')
 if __name__=='__main__':unittest.main()

@@ -26,6 +26,13 @@ class ScheduledBillingMigrationTests(unittest.TestCase):
   for snapshot in ('pricing_agreement_id=v_agreement.id',"rate_plan_snapshot='daily'",'rate_amount_snapshot=v_rate_amount','default_daily_rate_snapshot=v_agreement.daily_rate_snapshot'):self.assertIn(snapshot,PICKUP)
  def test_pickup_security_boundary(self):
   self.assertIn("security definer set search_path to ''",PICKUP);self.assertIn('owner to postgres',LOWER);self.assertIn('from public,anon',LOWER);self.assertIn('to authenticated,service_role',LOWER)
+ def test_locked_vehicle_is_currently_available(self):
+  lookup='select * into v_vehicle from public.vehicles where id=p_vehicle_id and is_retired=false for update;'
+  availability="if v_vehicle.status is distinct from 'available' then"
+  start='public.start_reservation_vehicle_use_state(v_reservation.id,p_vehicle_id,p_actual_out_at)'
+  self.assertIn(lookup,PICKUP);self.assertIn(availability,PICKUP)
+  self.assertLess(PICKUP.index(lookup),PICKUP.index(availability));self.assertLess(PICKUP.index(availability),PICKUP.index(start))
+  self.assertIn("'selected vehicle is not available for pickup'",PICKUP)
  def test_workspace_reuses_operational_eligibility(self):
   self.assertIn('v_operational jsonb',WORKSPACE);self.assertIn('get_transportation_event_operational_payload_state(v_case.transportation_event_id)',WORKSPACE)
   check=WORKSPACE.index("v_operational -> 'current_continuity'");billing=WORKSPACE.index("v_operational -> 'current_billing_lines'");cont=WORKSPACE.index('continue;',billing);count=WORKSPACE.index('v_case_count := v_case_count + 1;',cont)
