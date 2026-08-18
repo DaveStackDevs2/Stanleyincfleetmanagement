@@ -125,3 +125,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** The intake and daily-only pickup contracts are recorded with the verified secured browser boundary; weekly/monthly activation still fails closed.
 - **IMPLEMENTED IN REPOSITORY:** The operational Reservations destination creates Quotes, direct Reservations, and Walk-ins, lists active Quotes, and converts a Quote while preserving its Transportation Event and pricing agreement. Existing customers and authoritative configuration are read exclusively from the intake RPC.
 - **OPEN / NOT IMPLEMENTED:** Pickup UI and all weekly/monthly pickup calculation remain open. Live Supabase was not changed.
+
+## 2026-08-14 — Frontend TOTP MFA gate
+
+- **IMPLEMENTED IN REPOSITORY:** Authenticated and application-authorized users are now held at a fail-closed TOTP gate until the shared Supabase client confirms the session is AAL2. The gate supports first-time enrollment and deterministic use of an existing verified TOTP factor.
+- **VERIFIED STATIC BOUNDARY:** The frontend does not alter or bypass the operational Reservations/Billing RPC authorization boundary; server-side AAL2 enforcement remains authoritative. No live Supabase or SQL change was made.
+- **NOT VERIFIED:** Real production-browser enrollment, fresh-login challenge, JWT promotion, and protected-RPC execution remain open. Reservations/pickup/billing end-to-end is not complete.

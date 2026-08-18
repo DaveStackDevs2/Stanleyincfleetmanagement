@@ -147,6 +147,41 @@ textarea:focus-visible {
   opacity: 0.7;
 }
 
+.access-card .secondary-button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--heading);
+}
+
+.access-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mfa-qr-code {
+  display: block;
+  width: min(100%, 240px);
+  height: auto;
+  margin: 20px auto;
+  border-radius: 8px;
+}
+
+.access-card .mfa-secret-label {
+  margin-bottom: 6px;
+}
+
+.mfa-secret {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--page-bg);
+  color: var(--heading);
+  text-align: center;
+}
+
 .access-error {
   margin-top: 4px;
   color: #a52222;

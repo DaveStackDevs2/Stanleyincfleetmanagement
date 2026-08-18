@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useAuthorization } from '../authorization/useAuthorization'
 import { useAuth } from './useAuth'
 import { SignInPage } from './SignInPage'
+import { MfaGate } from './MfaGate'
 
 function setPathname(pathname: string) {
   if (window.location.pathname !== pathname) {
@@ -64,5 +65,5 @@ export function AuthGate({ children }: { children: ReactNode }) {
     )
   }
 
-  return children
+  return <MfaGate>{children}</MfaGate>
 }

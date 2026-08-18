@@ -46,3 +46,9 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **VERIFIED LIVE CONTRACT / RECORDED IN REPOSITORY:** The secured intake read and daily-only pickup read/activation RPCs are recorded with their postgres ownership, security-definer empty-search-path boundary, authenticated/service-role grants, active-user/AAL2/permission enforcement, and weekly/monthly pickup fail-closed rule.
 - **IMPLEMENTED IN REPOSITORY:** Reservations is an operational sidebar destination for existing-customer Quote, direct Reservation, and Walk-in creation, active Quote review, and same-event Quote conversion. It uses only the shared Supabase client and verified pricing-agreement RPCs, reloads authoritative intake after writes, and displays returned exact pricing snapshots.
 - **OPEN / NOT IMPLEMENTED:** Pickup UI, VIN assignment, pricing activation from the browser, and weekly/monthly pickup Billing calculation remain open. No live Supabase change was performed.
+
+## 2026-08-14 — Frontend TOTP MFA gate
+
+- **IMPLEMENTED IN REPOSITORY:** After password authentication and existing application authorization, the frontend now fails closed until Supabase reports the current session at AAL2. It supports deterministic verified-TOTP challenge and first-time TOTP enrollment through the shared client.
+- **PRESERVED:** AAL2 enforcement for operational Reservations/Billing RPCs remains server-side. No SQL, migration, pricing, pickup, billing, Extended Warranty, pay-type, rate, or Admin behavior changed.
+- **NOT VERIFIED:** Enrollment, later-login challenge, session promotion, and protected-RPC success still require real production-browser verification. Reservations/pickup/billing end-to-end completion is not claimed.

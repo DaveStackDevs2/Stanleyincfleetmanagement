@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### 2026-08-14 — Required TOTP MFA gate
+
+- Added a fail-closed auth-level TOTP enrollment and verification gate after existing application authorization, including QR/manual setup, sanitized retry states, sign out, session refresh, and an explicit AAL2 re-check before application entry.
+- Continued using the shared Supabase client and preserved all server-side AAL2 checks. No backend, migration, pricing, pickup, billing, Extended Warranty, pay-type, rate, or Admin changes were made.
+- This closes the frontend authentication blocker found during production Reservations review, but real production-browser MFA and protected-workflow verification remain open; Reservations/pickup/billing end-to-end is not complete.
+
 ### 2026-08-13 — Operational Reservations workspace
 
 - Recorded the verified-live pricing-agreement intake and pickup contracts in one data-free, idempotent migration; daily pickup remains the only supported activation plan and the frontend does not call pickup.
