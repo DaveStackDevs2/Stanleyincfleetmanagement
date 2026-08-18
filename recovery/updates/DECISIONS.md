@@ -1,5 +1,23 @@
 # Decisions
 
+## 2026-08-18 — Separate Reservation schedule, physical handoff, and Billing eligibility
+
+**Decision:** Reservation creation reserves capacity and authoritative schedule/pricing snapshots only. Check-in / Pickup starts physical continuity at actual handoff, while the existing Billing engine starts billing and pricing at the Reservation scheduled start. Late arrival does not automatically change scheduled start or return.
+
+**Decision:** Exclude normal pre-check-in Reservations from Billing by reusing the existing Transportation Event operational payload; skip only when both current continuity and current billing lines are empty. Do not invent a raw billing-table eligibility rule.
+
+**Impact:** Pre-check-in Reservation editing is the next dedicated checkpoint. No verified browser-safe general edit RPC exists, so this work adds no direct table update. Future change-without-penalty rules remain TBD.
+
+
+## 2026-08-18 — Enforce fleet compatibility at Pickup
+
+**Decision:** Keep model-level Reservations and assign VIN only through the authoritative Pickup RPC. Candidate discovery matches normalized fleet type as well as model, while the invoker low-level start boundary independently rejects a reservation/vehicle fleet-type mismatch before continuity starts.
+
+**Reason:** Production overlap testing after PR #31 proved model matching alone could offer Loaner vehicles for Rental pickup. Defense at both read and write boundaries prevents stale or bypassed candidate state from crossing fleet types.
+
+**Impact:** Browser code receives candidates and activation/Billing results only from authoritative RPC payloads and performs no billing arithmetic. `vehicle_class` remains a backend compatibility identifier, with Vehicle model as product wording. Weekly/monthly activation remains fail-closed; “Now” and the Admin taxable-checkbox cosmetic adjustment remain deferred.
+
+
 ## 2026-07-29 — Fleet Board data and palette boundaries
 
 **Decision:** Load all operational Fleet Board data through `get_fleet_board_state(timestamptz, timestamptz)` so authenticated access and visible-period filtering remain backend-owned. Store pay-type colors in the existing Admin settings system, protect writes with `user_admin.manage`, and render only valid six-digit hex values with one neutral fallback. The Admin palette editor is the next task.

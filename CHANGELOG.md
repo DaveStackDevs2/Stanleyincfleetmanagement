@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-08-18 — Check-in / Pickup scheduled-start billing reconciliation
+
+- **VERIFIED live / RECORDED:** Check-in starts physical continuity at actual handoff but delegates initial billing to the established engine with no start override, so billing and `pricing_started_at` use the Reservation scheduled start. Late arrival does not slide scheduled start or scheduled return.
+- **VERIFIED live / RECORDED:** Billing workspace eligibility reuses the Transportation Event operational payload and excludes normal pre-check-in Reservations only when both current continuity and current billing lines are empty. Reservation creation itself does not start billing.
+- **REQUIRED NEXT / NOT IMPLEMENTED:** pre-check-in Reservation editing must support scheduled start, expected return, service advisor, RO number, and notes; model, workflow type, pay type, and rate-plan changes require authoritative pricing/availability logic. No verified browser-safe general edit RPC exists, and the future penalty-free cutoff is TBD. Weekly/monthly pickup billing and the “Now” button remain deferred. Production browser Check-in activation is **NOT VERIFIED**.
+
+
+## 2026-08-18 — Reservations Pickup / VIN activation
+
+- **VERIFIED production context:** PR #31 is merged on `main` at `a910472a6b66e59c1959c0c0e9502b9da1d366cf`; Rental intake was browser-tested and created one Reservation, pricing agreement, and Transportation Event with no pre-pickup VIN, continuity, or billing.
+- **VERIFIED live repair / RECORDED HERE:** overlap testing found same-model Loaner vehicles in Rental candidates. The low-level vehicle-start boundary now rejects normalized fleet-type mismatches, and the candidate view filters by model plus fleet type. The negative Rental-to-Loaner test wrote no continuity or billing; the controlled candidate list now contains only `TEST-STOCK-003` (an operational controlled record, not seed data).
+- **IMPLEMENTED / NOT YET BROWSER-VERIFIED:** Reservations now has authoritative Pickup/VIN activation and renders the returned Billing preview without frontend arithmetic. Weekly/monthly pickup remains fail-closed; production browser activation is required after merge. The datetime “Now” button and Admin taxable-checkbox alignment remain deferred. `vehicle_class` remains a backend compatibility key displayed as “Vehicle model.”
+
+
 ## Unreleased
 
 ### 2026-08-14 — Required TOTP MFA gate

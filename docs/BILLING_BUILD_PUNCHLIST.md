@@ -1,5 +1,19 @@
 # Billing Build Punchlist
 
+## 2026-08-18 — Check-in / Pickup lifecycle reconciliation
+
+- **VERIFIED live / RECORDED:** Reservation creation reserves scheduled capacity and pricing state without starting continuity or Billing. Check-in starts continuity at actual handoff and Billing/pricing at the Reservation scheduled start; a late arrival does not slide scheduled return.
+- **VERIFIED live / RECORDED:** Billing workspace reuses Transportation Event operational state and skips a pre-check-in Reservation only when both current continuity and current billing lines are empty.
+- **OPEN:** a dedicated browser-safe Reservation-edit checkpoint is required for scheduled start/return, advisor, RO number, and notes; pricing/availability fields need authoritative reconciliation. The future no-penalty cutoff is TBD. Weekly/monthly and “Now” remain deferred. Production browser Check-in activation is not verified.
+
+
+## 2026-08-18 — Pickup / VIN activation checkpoint
+
+- **VERIFIED live:** Rental intake and the pre-pickup no-VIN/no-continuity/no-billing boundary; fleet-type mismatch rejection before writes; model-plus-fleet-type candidates (controlled Rental case returns only `TEST-STOCK-003`, not seed data).
+- **IMPLEMENTED / production browser verification pending:** Reservations Pickup uses the authoritative read/activation RPCs, starts the existing billing path, and displays its exact returned preview without client arithmetic.
+- **OPEN:** real production browser activation after merge. Weekly/monthly pickup stays fail-closed. “Now” and taxable-checkbox alignment remain deferred.
+
+
 ## Purpose
 
 This is the authoritative implementation checklist for completing Stanley Fleet Management billing. It is based on the live Supabase schema and the current `main` frontend, not on assumed or redesigned behavior.

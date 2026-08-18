@@ -1,5 +1,19 @@
 # Project Status
 
+## 2026-08-18 — Check-in / Pickup lifecycle correction
+
+**VERIFIED live / IMPLEMENTED IN REPOSITORY:** Reservations reserve scheduled capacity, model/workflow, and pricing snapshots without VIN, continuity, contract period, or billing. At Check-in / Pickup, physical continuity uses actual handoff while billing and pricing begin at the Reservation scheduled start. Late arrival does not move scheduled start or expected return. Billing excludes pre-check-in Reservations by reusing authoritative current-continuity/current-billing operational state.
+
+**NEXT / NOT IMPLEMENTED:** Reservation editing before Check-in is required, but no verified browser-safe general edit RPC exists. Scheduled start, expected return, advisor, RO number, and notes are expected fields; model/workflow/pay type/rate plan require authoritative pricing and availability. No direct table update or penalty cutoff was invented; the cutoff remains TBD. Weekly/monthly and “Now” remain deferred. Production browser Check-in activation is **NOT VERIFIED**.
+
+
+## 2026-08-18 — Reservations Pickup checkpoint
+
+**VERIFIED:** PR #31 is on main at `a910472a6b66e59c1959c0c0e9502b9da1d366cf`. Production Rental intake created one Reservation, pricing agreement, and Transportation Event without pre-pickup VIN/continuity/billing. Production overlap testing exposed and live repair closed a fleet-type compatibility hole: the write boundary rejects Rental-to-Loaner activation before writes and candidates now match model plus fleet type. The controlled Rental candidate list returns only `TEST-STOCK-003`; controlled records are not seeds.
+
+**IMPLEMENTED / NOT VERIFIED IN PRODUCTION BROWSER:** the Reservations Pickup tab reads and activates only through authoritative pickup RPCs, then reloads state and presents the returned Billing preview. Weekly/monthly activation remains unimplemented and fail-closed. A real production browser activation remains required after merge. The “Now” datetime convenience and taxable-checkbox alignment are intentionally deferred. Product wording is Vehicle model while `vehicle_class` remains the compatibility identifier.
+
+
 ## 2026-07-30 Phase 1 checkpoint
 
 - **VERIFIED:** Live Supabase project `ycwejunodgnnkickjvsk` has the operational RPC security state captured by this checkpoint, and production SQL was already applied and verified manually.

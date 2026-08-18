@@ -1,5 +1,19 @@
 # Project Status
 
+## 2026-08-18 — Check-in / Pickup lifecycle
+
+**VERIFIED live / RECORDED:** A Reservation reserves scheduled time/model/workflow/pricing without starting VIN continuity, contract periods, or Billing. Check-in records physical handoff at actual-out while Billing and `pricing_started_at` begin at scheduled start. Late arrival does not slide scheduled return. Billing workspace excludes pre-check-in Reservations by reusing authoritative current continuity/current billing arrays.
+
+**NEXT / NOT IMPLEMENTED:** Reservation editing needs a dedicated verified browser-safe RPC. Expected fields are scheduled start/return, advisor, RO number, and notes; model/workflow/pay type/rate plan require authoritative pricing/availability. No penalty cutoff was invented; it remains TBD. Weekly/monthly and “Now” remain deferred. Production browser Check-in activation is not verified.
+
+
+## 2026-08-18 — Pickup / VIN activation
+
+**VERIFIED production context:** PR #31 merged at `a910472a6b66e59c1959c0c0e9502b9da1d366cf`; Rental intake created one Reservation, one pricing agreement, and one Transportation Event with no pre-pickup VIN, continuity, or billing. Overlap testing exposed same-model Loaners as Rental candidates. Live now rejects fleet-type mismatch at the vehicle-start boundary and filters candidates by model plus fleet type; the negative test failed before writes and the controlled Rental list now returns only `TEST-STOCK-003` (not seed data).
+
+**IMPLEMENTED / NOT VERIFIED in production browser:** Reservations Pickup calls only the authoritative pickup RPCs, reloads state, and displays returned activation and Billing preview values. Real activation verification remains after merge. Weekly/monthly is fail-closed; “Now” and taxable-checkbox alignment remain deferred; `vehicle_class` remains a compatibility identifier with Vehicle model product wording.
+
+
 Last updated: 2026-08-04
 
 ## Current focus

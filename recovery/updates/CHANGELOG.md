@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-08-18 — Check-in / Pickup timing and Billing eligibility
+
+- Recorded verified-live Check-in orchestration: actual handoff starts continuity, while the established billing engine starts Billing and pricing at the Reservation scheduled start and preserves the scheduled return.
+- Recorded verified-live Billing workspace eligibility through existing Transportation Event operational state, excluding normal pre-check-in Reservations with neither continuity nor billing.
+- Recorded pre-check-in Reservation editing as the next checkpoint; no browser-safe general edit RPC or penalty cutoff exists yet. Weekly/monthly and “Now” remain deferred, and production browser Check-in activation is not verified.
+
+
+## 2026-08-18 — Reservations Pickup and fleet compatibility
+
+- Recorded the verified-live normalized reservation/vehicle fleet-type guard and model-plus-fleet-type candidate view after production overlap testing found Loaners in a Rental candidate list. The failed Rental-to-Loaner check produced no continuity or billing.
+- Added RPC-only Pickup/VIN activation to Reservations with authoritative result/Billing preview display. This frontend is **NOT VERIFIED** by a production browser activation until after merge; weekly/monthly remains fail-closed and “Now” remains deferred. `vehicle_class` is retained but displayed as Vehicle model.
+
+
 ## 2026-08-13 — Operational Reservations workspace
 
 - Recorded the verified secured intake and daily-only pickup RPCs in migration history without applying SQL to live Supabase.

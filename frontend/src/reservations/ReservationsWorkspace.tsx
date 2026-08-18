@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import './ReservationsWorkspace.css'
+import { AuthoritativeFields, PickupWorkspace } from './PickupWorkspace'
 
-type Workflow = 'quote' | 'reservation' | 'walk_in'
+type Workflow = 'quote' | 'reservation' | 'walk_in' | 'pickup'
 type Plan = 'daily' | 'weekly' | 'monthly'
 type Json = Record<string, unknown>
 type Customer = { id: string; name: string; number: string | null }
@@ -127,13 +128,14 @@ export function ReservationsWorkspace() {
     setBusy(false)
   }
 
-  if (result) return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">AUTHORITATIVE RESULT</p><h1>Reservations update complete</h1><p>Supabase completed the workflow. No VIN, vehicle use, contract period, pricing timer, or billing was started.</p><div className="snapshot-grid">{Object.entries(result).filter(([, value]) => ['string','number'].includes(typeof value) || value === null).map(([key,value]) => <div key={key}><span>{key.replaceAll('_',' ')}</span><strong>{value === null ? 'Not configured' : String(value)}</strong></div>)}</div><button className="primary-action" type="button" onClick={reset}>Return to Reservations</button></section></main>
+  if (result) return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">AUTHORITATIVE RESULT</p><h1>Reservations update complete</h1><p>Supabase completed the workflow. No VIN, vehicle use, contract period, pricing timer, or billing was started.</p><AuthoritativeFields value={result} /><button className="primary-action" type="button" onClick={reset}>Return to Reservations</button></section></main>
   if (conversion) return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">QUOTE CONVERSION</p><h1>Convert Quote to Reservation</h1><p>The existing Transportation Event <code>{conversion.eventId}</code> and pricing agreement will be preserved.</p>{error && <div className="data-message error-message">{error}</div>}<form className="reservation-form" onSubmit={convert}><label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label><label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label><div className="form-actions wide"><button type="button" onClick={()=>setConversion(null)}>Cancel</button><button className="primary-action" disabled={busy}>{busy?'Converting…':'Convert to Reservation'}</button></div></form></section></main>
   return <main className="content reservations-page">
     <section className="page-heading"><div><p className="eyebrow">OPERATIONS / RESERVATIONS</p><h1>Reservations</h1><p>Create pre-pickup Quotes, Reservations, and Walk-ins from authoritative pricing configuration.</p></div><button type="button" onClick={()=>void load()} disabled={loading}>Refresh</button></section>
     {error && <div className="data-message error-message"><strong>Reservations needs attention</strong><span>{error}</span></div>}
     {loading ? <div className="reservation-card">Loading authoritative intake…</div> : intake && <>
-      <div className="reservation-tabs" role="tablist">{(['quote','reservation','walk_in'] as Workflow[]).map(item=><button type="button" className={workflow===item?'active':''} onClick={()=>setWorkflow(item)} key={item}>{item==='walk_in'?'Walk-in':item[0].toUpperCase()+item.slice(1)}</button>)}</div>
+      <div className="reservation-tabs" role="tablist">{(['quote','reservation','walk_in','pickup'] as Workflow[]).map(item=><button type="button" className={workflow===item?'active':''} onClick={()=>setWorkflow(item)} key={item}>{item==='walk_in'?'Walk-in':item==='pickup'?'Check-in / Pickup':item[0].toUpperCase()+item.slice(1)}</button>)}</div>
+      {workflow==='pickup'?<PickupWorkspace onError={setError}/>:<>
       <form className="reservation-card reservation-form" onSubmit={submit}>
         <label className="wide">Find existing customer<input type="search" value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} placeholder="Search name or Tekion customer number" /></label>
         <label className="wide">Customer<select required value={customerId} onChange={e=>setCustomerId(e.target.value)}><option value="">Select an existing customer</option>{shownCustomers.map(c=><option value={c.id} key={c.id}>{c.name}{c.number?` · ${c.number}`:''}</option>)}</select></label>
@@ -148,6 +150,7 @@ export function ReservationsWorkspace() {
         <div className="form-actions wide"><button className="primary-action" disabled={busy}>{busy?'Submitting…':`Create ${workflow==='walk_in'?'Walk-in':workflow[0].toUpperCase()+workflow.slice(1)}`}</button></div>
       </form>
       <section className="reservation-card quote-list"><div className="section-heading"><div><h2>Active Quotes</h2><p>Authoritative Quotes available for same-event conversion.</p></div><strong>{intake.quotes.length}</strong></div>{intake.quotes.length===0?<p className="empty-state">No active Quotes.</p>:intake.quotes.map(q=><article key={q.id}><div><h3>{q.customerName||'Customer'}</h3><small>Quote ID {q.id}</small><small>Transportation Event ID {q.eventId}</small></div><dl><div><dt>Schedule</dt><dd>{dateTime(q.start)} — {dateTime(q.expectedReturn)}</dd></div><div><dt>Type / model</dt><dd>{q.reservationType} · {q.vehicleModel}</dd></div><div><dt>Pay type / plan</dt><dd>{q.payType} · {q.initialPlan} / {q.currentPlan}</dd></div><div><dt>Pricing snapshots</dt><dd>Daily {money(q.daily)} · Weekly {money(q.weekly)} · Monthly {money(q.monthly)}</dd></div></dl><button className="primary-action" type="button" onClick={()=>{setAdvisor('');setRoNumber('');setNotes('');setConversion(q)}}>Convert to Reservation</button></article>)}</section>
+      </>}
     </>}
   </main>
 }
