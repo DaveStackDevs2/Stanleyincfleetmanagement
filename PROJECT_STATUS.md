@@ -52,3 +52,11 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **IMPLEMENTED IN REPOSITORY:** After password authentication and existing application authorization, the frontend now fails closed until Supabase reports the current session at AAL2. It supports deterministic verified-TOTP challenge and first-time TOTP enrollment through the shared client.
 - **PRESERVED:** AAL2 enforcement for operational Reservations/Billing RPCs remains server-side. No SQL, migration, pricing, pickup, billing, Extended Warranty, pay-type, rate, or Admin behavior changed.
 - **NOT VERIFIED:** Enrollment, later-login challenge, session promotion, and protected-RPC success still require real production-browser verification. Reservations/pickup/billing end-to-end completion is not claimed.
+
+## 2026-08-18 — Reservations model/Rental invariant checkpoint
+
+- **VERIFIED LIVE:** Production MFA/AAL2 completed in a real browser and the authoritative Reservations intake loaded under AAL2. Admin configured the canonical active, taxable `Rental` pay type with a NULL default amount.
+- **IMPLEMENTED IN REPOSITORY:** User-facing Reservations terminology is Vehicle Model. Existing `vehicle_class` response keys, pricing-agreement fields, and `p_vehicle_class` RPC arguments remain compatibility contracts. Rental requires the authoritative name-matched Rental pay type; non-Rental intake cannot use it.
+- **VERIFIED LIVE / RECORDED IN REPOSITORY:** The live `create_vehicle_state` repair populates `vin_last8`, and a pricing-agreement trigger enforces both directions of the transportation/pay-type invariant. This repository migration records rather than applies those definitions.
+- **NOT APPLICABLE AS SEEDS:** Controlled live vehicles `TEST-STOCK-002` (loaner) and `TEST-STOCK-003` (rental) are not fixtures or migration data.
+- **OPEN / FAIL CLOSED:** Pickup/VIN frontend is next. Weekly/monthly pickup billing is not implemented and continues to fail closed.

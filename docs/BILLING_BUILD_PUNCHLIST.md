@@ -537,3 +537,12 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 - [x] **PRESERVED:** Pre-pickup frontend work does not assign a VIN, begin vehicle use, create a contract period, start pricing, create billing, calculate rates/tax, mutate protected tables, or create a second Transportation Event.
 - [ ] **OPEN:** Pickup UI and authenticated production browser verification. Weekly/monthly pickup remains blocked on extension of the existing Billing calculation engine; that restriction was not loosened.
 - **NOT APPLICABLE:** No SQL was applied to live Supabase by this repository checkpoint.
+
+## 2026-08-18 — Reservations semantics checkpoint
+
+- [x] **VERIFIED LIVE:** Production browser MFA/AAL2 and authoritative Reservations intake loading succeeded.
+- [x] **IMPLEMENTED:** Reservations displays Vehicle Model while preserving backend `vehicle_class` compatibility names.
+- [x] **IMPLEMENTED / VERIFIED-LIVE CONTRACT:** Rental intake exclusively uses the active canonical Admin-managed `Rental` pay type; Loaner excludes it, and the database trigger rejects both mismatch directions.
+- [x] **RECORDED ONLY:** The data-free migration records the already-live `create_vehicle_state` `vin_last8` repair and Rental/pay-type trigger. It does not seed the live Rental configuration or controlled `TEST-STOCK-002`/`TEST-STOCK-003` verification vehicles.
+- [ ] **NEXT:** Implement and verify Pickup/VIN frontend without moving VIN assignment, use start, timers, contract periods, or billing into Reservations intake.
+- [ ] **OPEN / MUST FAIL CLOSED:** Implement authoritative weekly/monthly pickup billing; it remains unavailable.

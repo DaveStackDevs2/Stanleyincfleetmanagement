@@ -131,3 +131,11 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **IMPLEMENTED IN REPOSITORY:** Authenticated and application-authorized users are now held at a fail-closed TOTP gate until the shared Supabase client confirms the session is AAL2. The gate supports first-time enrollment and deterministic use of an existing verified TOTP factor.
 - **VERIFIED STATIC BOUNDARY:** The frontend does not alter or bypass the operational Reservations/Billing RPC authorization boundary; server-side AAL2 enforcement remains authoritative. No live Supabase or SQL change was made.
 - **NOT VERIFIED:** Real production-browser enrollment, fresh-login challenge, JWT promotion, and protected-RPC execution remain open. Reservations/pickup/billing end-to-end is not complete.
+
+## 2026-08-18 — Reservations model and Rental pay-type checkpoint
+
+- **VERIFIED LIVE:** Real-browser production MFA reached AAL2 and authoritative Reservations intake loaded successfully. The canonical `Rental` pay type was configured through Admin as active/taxable with a NULL default amount.
+- **IMPLEMENTED IN REPOSITORY:** Vehicle Model is the Reservations user-facing concept. Existing backend `vehicle_class` identifiers remain compatibility names. Rental intake derives the canonical pay type by authoritative name, offers only it, and fails closed when absent; Loaner excludes it.
+- **VERIFIED LIVE / RECORDED ONLY:** Live Supabase contains the vehicle-helper `vin_last8` repair and bidirectional pricing-agreement Rental/pay-type trigger. The repository migration records that live state and does not apply SQL or seed configuration/vehicles.
+- **CONTROLLED LIVE DATA, NOT SEEDS:** `TEST-STOCK-002` is the loaner verification vehicle and `TEST-STOCK-003` is the rental verification vehicle.
+- **OPEN / NOT IMPLEMENTED:** Pickup/VIN frontend remains next. Weekly/monthly pickup billing continues to fail closed.

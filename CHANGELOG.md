@@ -45,3 +45,11 @@
 - **VERIFIED LIVE CONTRACT / IMPLEMENTED IN REPOSITORY:** The data-free migration records the shared pricing agreement, one-Transportation-Event Quote/direct Reservation/Walk-in architecture, same-event Quote conversion, secured Dev/AAL2 RPC boundary, billing compatibility snapshots, monthly-requires-weekly prerequisite, central audit trail, and protected-table privilege corrections.
 - **NOT APPLICABLE:** No live Supabase change or production seed was performed; no pickup, VIN, timer, contract-period, pricing activation, calculation, discount, insurance, payment, cashiering, allocation, or billing-line workflow was started.
 - **OPEN / NOT IMPLEMENTED:** Frontend Quote/Reservation/Walk-in workflows and every post-pickup pricing and payment capability listed in the Billing Build Punchlist remain open.
+
+### 2026-08-18 — Reservations vehicle-model and Rental pay-type checkpoint
+
+- **VERIFIED LIVE:** Production TOTP MFA/AAL2 was successfully exercised in a real browser, and Reservations authoritative intake loaded successfully under AAL2. The canonical Admin-managed `Rental` pay type is active, taxable, and configured with a NULL default amount.
+- **IMPLEMENTED IN REPOSITORY:** Reservations now presents the user-facing concept as Vehicle Model while retaining backend `vehicle_class` compatibility identifiers. Rental intake derives and exclusively selects the authoritative active `Rental` pay type by name; Loaner intake excludes it and all mismatches fail closed.
+- **VERIFIED LIVE / RECORDED ONLY:** Live Supabase already contains the `create_vehicle_state` `vin_last8` repair and the bidirectional Rental-workflow/pay-type pricing-agreement trigger. The new idempotent, data-free migration records that state and was not applied to live Supabase here.
+- **NOT REPOSITORY SEED DATA:** `TEST-STOCK-002` (loaner) and `TEST-STOCK-003` (rental) remain controlled live verification vehicles only.
+- **OPEN / NOT IMPLEMENTED:** Pickup/VIN frontend is the next checkpoint. Weekly/monthly pickup billing remains unimplemented and must fail closed.
