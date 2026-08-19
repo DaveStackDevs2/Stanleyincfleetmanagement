@@ -1,3 +1,9 @@
+## 2026-08-18 — Preserve pre-check-in Reservation identities
+
+**Decision:** Pre-check-in Reservation edits preserve the existing Reservation, Transportation Event, and pricing agreement. Scheduled-return mirroring delegates to the existing expected-return engine; only scheduled start/return, service advisor, RO number, and notes are editable.
+
+**Impact:** Editing does not assign a VIN or start continuity, a contract period, pricing, or billing. Model/workflow/pay/rate changes and the future penalty-free cutoff remain deferred.
+
 # Decisions
 
 ## 2026-08-18 — Separate Reservation schedule, physical handoff, and Billing eligibility
