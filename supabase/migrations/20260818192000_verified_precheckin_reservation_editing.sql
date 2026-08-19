@@ -1,11 +1,11 @@
 -- Repository reconciliation of definitions already applied and independently verified live.
 -- Data-free: no production records or controlled-test fixtures are included.
 
-create or replace function public.update_precheckin_reservation_state(p_reservation_id uuid,p_start_date timestamptz,p_expected_return_datetime timestamptz,p_service_advisor text,p_ro_number text,p_notes text)
+create or replace function public.update_precheckin_reservation_state(p_reservation_id uuid,p_start_date timestamptz,p_expected_return_datetime timestamptz,p_service_advisor text default null,p_ro_number text default null,p_notes text default null)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare
  v_user uuid; v_reservation public.reservations%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_event public.transportation_events%rowtype;
- v_at timestamptz:=clock_timestamp(); v_expected jsonb; v_changed text[]:='{}';
+ v_at timestamptz:=clock_timestamp(); v_expected jsonb; v_changed_fields integer:=0; v_changed text[]:='{}';
  v_advisor text:=nullif(btrim(p_service_advisor),''); v_ro text:=nullif(btrim(p_ro_number),''); v_notes text:=nullif(btrim(p_notes),''); v_field text;
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
@@ -19,30 +19,30 @@ begin
  if lower(coalesce(v_reservation.status,'')) in ('cancelled','returned') or v_reservation.actual_return_datetime is not null then raise exception 'Reservation is not eligible for pre-check-in editing' using errcode='P0001'; end if;
  select * into v_agreement from public.rental_pricing_agreements where reservation_id=v_reservation.id and transportation_event_id=v_reservation.transportation_event_id and is_active=true for update;
  if not found then raise exception 'Active pricing agreement was not found' using errcode='P0002'; end if;
- select * into v_event from public.transportation_events where id=v_reservation.transportation_event_id and status='active' for update;
- if not found then raise exception 'Active Transportation Event was not found' using errcode='P0002'; end if;
+ select * into v_event from public.transportation_events where id=v_reservation.transportation_event_id for update;
+ if not found then raise exception 'Transportation Event was not found' using errcode='P0002'; end if;
+ if lower(btrim(coalesce(v_event.status,'')))<>'active' or v_event.closed_at is not null then raise exception 'Active Transportation Event was not found' using errcode='P0002'; end if;
  if v_agreement.pricing_started_at is not null then raise exception 'Pricing has already started' using errcode='P0001'; end if;
  if exists(select 1 from public.v_current_vehicle_continuity c where c.transportation_event_id=v_reservation.transportation_event_id) then raise exception 'Current vehicle continuity prevents pre-check-in editing' using errcode='P0001'; end if;
- if exists(select 1 from public.billing_lines bl where bl.transportation_event_id=v_reservation.transportation_event_id and bl.is_open=true) then raise exception 'Current open billing prevents pre-check-in editing' using errcode='P0001'; end if;
+ if exists(select 1 from public.v_current_open_billing_lines bl where bl.transportation_event_id=v_reservation.transportation_event_id) then raise exception 'Current open billing prevents pre-check-in editing' using errcode='P0001'; end if;
  if v_reservation.start_date is distinct from p_start_date then v_changed:=array_append(v_changed,'scheduled_start'); end if;
  if v_reservation.expected_return_datetime is distinct from p_expected_return_datetime then v_changed:=array_append(v_changed,'scheduled_return'); end if;
  if v_reservation.service_advisor is distinct from v_advisor then v_changed:=array_append(v_changed,'service_advisor'); end if;
  if v_reservation.ro_number is distinct from v_ro then v_changed:=array_append(v_changed,'ro_number'); end if;
  if v_reservation.notes is distinct from v_notes then v_changed:=array_append(v_changed,'notes'); end if;
- if cardinality(v_changed)>0 then
-  update public.reservations set start_date=p_start_date,expected_return_datetime=p_expected_return_datetime,service_advisor=v_advisor,ro_number=v_ro,notes=v_notes where id=v_reservation.id;
-  v_expected:=public.set_expected_return_state(v_reservation.transportation_event_id,p_expected_return_datetime);
-  if v_expected->>'status'<>'expected_return_updated' then raise exception 'Expected-return engine did not update the schedule' using errcode='P0001'; end if;
-  update public.transportation_events set notes=v_notes,updated_at=v_at where id=v_reservation.transportation_event_id;
-  foreach v_field in array v_changed loop
+ foreach v_field in array v_changed loop
+   v_changed_fields:=v_changed_fields+1;
    insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) values
    ('reservation',v_reservation.id::text,'precheckin_reservation_updated',v_field,
     case v_field when 'scheduled_start' then v_reservation.start_date::text when 'scheduled_return' then v_reservation.expected_return_datetime::text when 'service_advisor' then v_reservation.service_advisor when 'ro_number' then v_reservation.ro_number else v_reservation.notes end,
     case v_field when 'scheduled_start' then p_start_date::text when 'scheduled_return' then p_expected_return_datetime::text when 'service_advisor' then v_advisor when 'ro_number' then v_ro else v_notes end,
     v_user::text,jsonb_build_object('transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'changed_at',v_at));
-  end loop;
- end if;
- return jsonb_build_object('status',case when cardinality(v_changed)=0 then 'precheckin_reservation_unchanged' else 'precheckin_reservation_updated' end,'reservation_id',v_reservation.id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'changed_fields',to_jsonb(v_changed),'changed_at',v_at,
+ end loop;
+ update public.reservations set start_date=p_start_date,expected_return_datetime=p_expected_return_datetime,service_advisor=v_advisor,ro_number=v_ro,notes=v_notes where id=v_reservation.id;
+ v_expected:=public.set_expected_return_state(v_reservation.transportation_event_id,p_expected_return_datetime);
+ if v_expected->>'status'<>'expected_return_updated' then raise exception 'Expected-return engine did not update the schedule' using errcode='P0001'; end if;
+ update public.transportation_events set notes=v_notes,updated_at=v_at where id=v_reservation.transportation_event_id;
+ return jsonb_build_object('status',case when v_changed_fields=0 then 'precheckin_reservation_unchanged' else 'precheckin_reservation_updated' end,'reservation_id',v_reservation.id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'changed_fields',v_changed_fields,'changed_at',v_at,
  'reservation',jsonb_build_object('scheduled_start',p_start_date,'scheduled_return',p_expected_return_datetime,'service_advisor',v_advisor,'ro_number',v_ro,'notes',v_notes,'vehicle_id',v_reservation.vehicle_id,'status',v_reservation.status),
  'transportation_event',jsonb_build_object('status',v_event.status,'source_type',v_event.source_type,'source_id',v_event.source_id,'scheduled_return',p_expected_return_datetime,'notes',v_notes));
 end;$function$;
@@ -77,7 +77,7 @@ begin
         'fleet_type',vc.fleet_type,'vehicle_status',vc.vehicle_status,'recon_status',vc.recon_status,'location',vc.location,
         'source_transportation_event_id',vc.source_transportation_event_id,'expected_return_snapshot',vc.expected_return_snapshot,
         'candidate_state',vc.candidate_state)
-      order by case vc.candidate_state when 'ready' then 0 when 'pending_return' then 1 else 2 end,
+      order by case vc.candidate_state when 'ready' then 1 when 'pending_return' then 2 else 3 end,
         vc.expected_return_snapshot asc nulls last,vc.stock_number asc nulls last,vc.vin asc nulls last)
       from public.v_reservation_vehicle_candidates vc where vc.reservation_id=r.id),'[]'::jsonb)) order by r.start_date,r.id),'[]'::jsonb)
  into v_items
