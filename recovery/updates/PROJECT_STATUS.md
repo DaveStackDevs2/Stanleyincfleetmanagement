@@ -161,3 +161,8 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED LIVE / RECORDED ONLY:** Live Supabase contains the vehicle-helper `vin_last8` repair and bidirectional pricing-agreement Rental/pay-type trigger. The repository migration records that live state and does not apply SQL or seed configuration/vehicles.
 - **CONTROLLED LIVE DATA, NOT SEEDS:** `TEST-STOCK-002` is the loaner verification vehicle and `TEST-STOCK-003` is the rental verification vehicle.
 - **OPEN / NOT IMPLEMENTED:** Pickup/VIN frontend remains next. Weekly/monthly pickup billing continues to fail closed.
+
+## 2026-08-19 — Closed Billing review
+
+- **VERIFIED LIVE BACKEND:** Production Edit Reservation, Pickup, Return/Completion, closed stored-history preview, and All/Rental/Loaner/closed-date wrapper filtering are verified. The controlled closed Rental is exactly 40 + 4 = 44.
+- **IMPLEMENTED / BROWSER VERIFICATION PENDING:** Closed cases is now present in the existing Billing Dashboard. No controlled closed Loaner exists, so Loaner browser behavior remains unverified.

@@ -92,3 +92,7 @@
 **Decision:** Rental transportation must use the single active, Admin-managed pay type whose trimmed name is `Rental` case-insensitively. The Rental pay type cannot be used for non-Rental intake. The frontend fails closed and the pricing-agreement trigger remains the final authority in both directions; no UUID or price is hardcoded.
 
 **Verified context and impact:** Production MFA/AAL2 and authoritative Reservations intake were exercised successfully in a real browser. Admin configured Rental with a NULL default amount. Live Supabase already has the `create_vehicle_state` `vin_last8` repair and invariant trigger; the repository migration only records them. Controlled live vehicles `TEST-STOCK-002` and `TEST-STOCK-003` are not seeds. Pickup/VIN remains the next frontend checkpoint, and weekly/monthly pickup billing remains unimplemented and fail-closed.
+
+## 2026-08-19 — Closed Billing historical boundary
+
+**Decision:** Closed-case filtering uses `transportation_events.closed_at`. `p_closed_from` is inclusive and `p_closed_before` is exclusive. Historical money always comes from stored billing-line and tax snapshots, never current rate or tax configuration. The browser only supplies query boundaries and renders returned exact strings; closed review is read-only Tekion reconciliation, not cashiering.

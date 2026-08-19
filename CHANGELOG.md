@@ -76,3 +76,8 @@
 - **VERIFIED LIVE / RECORDED ONLY:** Live Supabase already contains the `create_vehicle_state` `vin_last8` repair and the bidirectional Rental-workflow/pay-type pricing-agreement trigger. The new idempotent, data-free migration records that state and was not applied to live Supabase here.
 - **NOT REPOSITORY SEED DATA:** `TEST-STOCK-002` (loaner) and `TEST-STOCK-003` (rental) remain controlled live verification vehicles only.
 - **OPEN / NOT IMPLEMENTED:** Pickup/VIN frontend is the next checkpoint. Weekly/monthly pickup billing remains unimplemented and must fail closed.
+
+## 2026-08-19 — Closed Billing review
+
+- Reconciled the verified-live stored-snapshot branch in the existing Billing preview and the secured four-argument closed workspace wrapper without changing data or active Billing calculation behavior.
+- Added bounded All/Rental/Loaner and closed-date filtering plus read-only historical cards and complete stored segment detail to the existing Billing Dashboard. Production browser verification remains pending.

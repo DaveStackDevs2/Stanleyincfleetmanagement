@@ -222,3 +222,7 @@
 - **VERIFIED LIVE / REPOSITORY RECORD:** Live already has the `create_vehicle_state` `vin_last8` repair and bidirectional Rental/pay-type pricing-agreement trigger. One idempotent data-free migration records them without live application.
 - **NOT SEEDED:** `TEST-STOCK-002` and `TEST-STOCK-003` are controlled live verification vehicles, not repository data.
 - **OPEN:** Pickup/VIN frontend is next; weekly/monthly pickup billing remains unimplemented and fail-closed.
+
+## 2026-08-19 — Closed Billing review
+
+- Recorded the verified-live closed stored-snapshot preview and secured bounded wrapper, and added an RPC-only read-only Closed cases mode with complete segment history to Billing.

@@ -84,3 +84,8 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **VERIFIED LIVE / RECORDED IN REPOSITORY:** The live `create_vehicle_state` repair populates `vin_last8`, and a pricing-agreement trigger enforces both directions of the transportation/pay-type invariant. This repository migration records rather than applies those definitions.
 - **NOT APPLICABLE AS SEEDS:** Controlled live vehicles `TEST-STOCK-002` (loaner) and `TEST-STOCK-003` (rental) are not fixtures or migration data.
 - **OPEN / FAIL CLOSED:** Pickup/VIN frontend is next. Weekly/monthly pickup billing is not implemented and continues to fail closed.
+
+## 2026-08-19 — Closed Billing review
+
+- **VERIFIED LIVE BACKEND:** Late Rental pickup, production Edit Reservation, Pickup, Return/Completion, the stored-history closed preview, and the secured closed workspace filters are verified. The controlled closed Rental stored total is exactly 40 + 4 = 44.
+- **IMPLEMENTED / BROWSER VERIFICATION PENDING:** The existing Billing Dashboard now includes an RPC-only, read-only Closed cases mode. A controlled closed Loaner is not available and no Loaner browser verification is claimed.
