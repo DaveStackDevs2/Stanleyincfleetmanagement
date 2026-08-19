@@ -5,44 +5,47 @@ create or replace function public.update_precheckin_reservation_state(p_reservat
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare
  v_user uuid; v_reservation public.reservations%rowtype; v_agreement public.rental_pricing_agreements%rowtype; v_event public.transportation_events%rowtype;
- v_at timestamptz:=clock_timestamp(); v_expected jsonb; v_changed_fields integer:=0; v_changed text[]:='{}';
- v_advisor text:=nullif(btrim(p_service_advisor),''); v_ro text:=nullif(btrim(p_ro_number),''); v_notes text:=nullif(btrim(p_notes),''); v_field text;
+ v_at timestamptz:=clock_timestamp(); v_expected jsonb; v_audit_count integer:=0;
+ v_advisor text:=nullif(btrim(p_service_advisor),''); v_ro text:=nullif(btrim(p_ro_number),''); v_notes text:=nullif(btrim(p_notes),'');
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
  if v_user is null then raise exception 'An active application user is required' using errcode='42501'; end if;
  if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication is required' using errcode='42501'; end if;
  if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing-agreement permission is required' using errcode='42501'; end if;
- if p_reservation_id is null or p_start_date is null or p_expected_return_datetime is null then raise exception 'Reservation and schedule are required' using errcode='22023'; end if;
+ if p_reservation_id is null then raise exception 'Reservation is required' using errcode='22023'; end if;
+ if p_start_date is null or p_expected_return_datetime is null then raise exception 'Scheduled start and scheduled return are required' using errcode='22023'; end if;
  if p_expected_return_datetime<=p_start_date then raise exception 'Scheduled return must be after scheduled start' using errcode='22023'; end if;
  select * into v_reservation from public.reservations where id=p_reservation_id for update;
  if not found then raise exception 'Reservation was not found' using errcode='P0002'; end if;
- if v_reservation.status='cancelled' or v_reservation.actual_return_datetime is not null then raise exception 'Reservation is not eligible for pre-check-in editing' using errcode='P0001'; end if;
+ if lower(coalesce(v_reservation.status,''))='cancelled' or v_reservation.actual_return_datetime is not null then raise exception 'Reservation is not eligible for pre-check-in editing' using errcode='P0001'; end if;
  select * into v_agreement from public.rental_pricing_agreements where reservation_id=v_reservation.id and transportation_event_id=v_reservation.transportation_event_id and is_active=true for update;
  if not found then raise exception 'Active pricing agreement was not found' using errcode='P0002'; end if;
+ if v_agreement.pricing_started_at is not null then raise exception 'Reservation can no longer be edited after check-in' using errcode='P0001'; end if;
  select * into v_event from public.transportation_events where id=v_reservation.transportation_event_id for update;
  if not found then raise exception 'Transportation Event was not found' using errcode='P0002'; end if;
  if lower(btrim(v_event.status))<>'active' or v_event.closed_at is not null then raise exception 'Reservation Transportation Event is not active' using errcode='P0001'; end if;
- if v_agreement.pricing_started_at is not null then raise exception 'Pricing has already started' using errcode='P0001'; end if;
- if exists(select 1 from public.v_current_vehicle_continuity c where c.transportation_event_id=v_reservation.transportation_event_id) then raise exception 'Current vehicle continuity prevents pre-check-in editing' using errcode='P0001'; end if;
- if exists(select 1 from public.v_current_open_billing_lines bl where bl.transportation_event_id=v_reservation.transportation_event_id) then raise exception 'Current open billing prevents pre-check-in editing' using errcode='P0001'; end if;
- if v_reservation.start_date is distinct from p_start_date then v_changed:=array_append(v_changed,'scheduled_start'); end if;
- if v_reservation.expected_return_datetime is distinct from p_expected_return_datetime then v_changed:=array_append(v_changed,'scheduled_return'); end if;
- if v_reservation.service_advisor is distinct from v_advisor then v_changed:=array_append(v_changed,'service_advisor'); end if;
- if v_reservation.ro_number is distinct from v_ro then v_changed:=array_append(v_changed,'ro_number'); end if;
- if v_reservation.notes is distinct from v_notes then v_changed:=array_append(v_changed,'notes'); end if;
- foreach v_field in array v_changed loop
-   v_changed_fields:=v_changed_fields+1;
-   insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) values
-   ('reservation',v_reservation.id::text,'precheckin_reservation_updated',v_field,
-    case v_field when 'scheduled_start' then v_reservation.start_date::text when 'scheduled_return' then v_reservation.expected_return_datetime::text when 'service_advisor' then v_reservation.service_advisor when 'ro_number' then v_reservation.ro_number else v_reservation.notes end,
-    case v_field when 'scheduled_start' then p_start_date::text when 'scheduled_return' then p_expected_return_datetime::text when 'service_advisor' then v_advisor when 'ro_number' then v_ro else v_notes end,
-    v_user::text,jsonb_build_object('transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'changed_at',v_at));
- end loop;
+ if exists(select 1 from public.v_current_vehicle_continuity c where c.transportation_event_id=v_reservation.transportation_event_id) then raise exception 'Reservation can no longer be edited after vehicle check-in' using errcode='P0001'; end if;
+ if exists(select 1 from public.v_current_open_billing_lines bl where bl.transportation_event_id=v_reservation.transportation_event_id) then raise exception 'Reservation can no longer be edited after billing starts' using errcode='P0001'; end if;
+ if v_reservation.start_date is distinct from p_start_date then
+   insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) values ('reservation',v_reservation.id::text,'precheckin_reservation_updated','scheduled_start',v_reservation.start_date::text,p_start_date::text,v_user::text,jsonb_build_object('transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'changed_at',v_at)); v_audit_count:=v_audit_count+1;
+ end if;
+ if v_reservation.expected_return_datetime is distinct from p_expected_return_datetime then
+   insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) values ('reservation',v_reservation.id::text,'precheckin_reservation_updated','scheduled_return',v_reservation.expected_return_datetime::text,p_expected_return_datetime::text,v_user::text,jsonb_build_object('transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'changed_at',v_at)); v_audit_count:=v_audit_count+1;
+ end if;
+ if v_reservation.service_advisor is distinct from v_advisor then
+   insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) values ('reservation',v_reservation.id::text,'precheckin_reservation_updated','service_advisor',v_reservation.service_advisor,v_advisor,v_user::text,jsonb_build_object('transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'changed_at',v_at)); v_audit_count:=v_audit_count+1;
+ end if;
+ if v_reservation.ro_number is distinct from v_ro then
+   insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) values ('reservation',v_reservation.id::text,'precheckin_reservation_updated','ro_number',v_reservation.ro_number,v_ro,v_user::text,jsonb_build_object('transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'changed_at',v_at)); v_audit_count:=v_audit_count+1;
+ end if;
+ if v_reservation.notes is distinct from v_notes then
+   insert into public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) values ('reservation',v_reservation.id::text,'precheckin_reservation_updated','notes',v_reservation.notes,v_notes,v_user::text,jsonb_build_object('transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'origin_type',v_agreement.origin_type,'changed_at',v_at)); v_audit_count:=v_audit_count+1;
+ end if;
  update public.reservations set start_date=p_start_date,expected_return_datetime=p_expected_return_datetime,service_advisor=v_advisor,ro_number=v_ro,notes=v_notes where id=v_reservation.id returning * into v_reservation;
  v_expected:=public.set_expected_return_state(v_reservation.transportation_event_id,p_expected_return_datetime);
- if v_expected->>'status'<>'expected_return_updated' then raise exception 'Expected-return engine did not update the schedule' using errcode='P0001'; end if;
+ if v_expected->>'status'<>'expected_return_updated' then raise exception 'Expected-return engine did not update the Transportation Event'; end if;
  update public.transportation_events set notes=v_notes,updated_at=v_at where id=v_reservation.transportation_event_id returning * into v_event;
- return jsonb_build_object('status',case when v_changed_fields=0 then 'precheckin_reservation_unchanged' else 'precheckin_reservation_updated' end,'reservation_id',v_reservation.id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'changed_fields',v_changed_fields,'changed_at',v_at,
+ return jsonb_build_object('status',case when v_audit_count=0 then 'precheckin_reservation_unchanged' else 'precheckin_reservation_updated' end,'reservation_id',v_reservation.id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'changed_fields',v_audit_count,'changed_at',v_at,
  'reservation',jsonb_build_object('scheduled_start',v_reservation.start_date,'scheduled_return',v_reservation.expected_return_datetime,'service_advisor',v_reservation.service_advisor,'ro_number',v_reservation.ro_number,'notes',v_reservation.notes,'vehicle_id',v_reservation.vehicle_id,'status',v_reservation.status),
  'transportation_event',jsonb_build_object('status',v_event.status,'source_type',v_event.source_type,'source_id',v_event.source_id,'scheduled_return',v_event.expected_return_at,'notes',v_event.notes));
 end;$function$;
