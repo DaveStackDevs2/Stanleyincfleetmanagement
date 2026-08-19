@@ -3,7 +3,7 @@
 
 - **VERIFIED LIVE / RECORDED:** The browser-safe five-field edit backend preserves the existing Reservation, Transportation Event, and pricing agreement, and delegates the Transportation Event schedule mirror to the existing expected-return engine.
 - **VERIFIED LIVE:** A controlled scheduled start, scheduled return, service advisor, RO number, and notes edit produced exactly five matching audit rows without VIN, continuity, contract period, pricing, billing, snapshot, or identity changes.
-- **IMPLEMENTED / NOT YET VERIFIED IN PRODUCTION BROWSER:** Reservations now includes an RPC-only Edit Reservation workspace. Check-in / Pickup browser activation also remains **NOT YET VERIFIED**.
+- **VERIFIED LIVE:** The production Edit Reservation UI and Pickup activation have both been browser-tested successfully.
 - **TBD / DEFERRED:** The future penalty-free edit cutoff remains TBD. Model, workflow, pay-type, and rate-plan edits remain deferred pending authoritative pricing and availability policy.
 
 # Billing Build Punchlist
@@ -13,13 +13,13 @@
 - **VERIFIED live / RECORDED:** Reservation creation reserves scheduled capacity and pricing state without starting continuity or Billing. Check-in starts continuity at actual handoff and Billing/pricing at the Reservation scheduled start; a late arrival does not slide scheduled return.
 - **VERIFIED live / RECORDED HARDENING:** Authoritative pickup candidates exclude retired vehicles. Activation locks the selected non-retired vehicle and immediately revalidates `available` before assignment, continuity, or billing writes so stale candidate state cannot start continuity or Billing.
 - **VERIFIED live / RECORDED:** Billing workspace reuses Transportation Event operational state and skips a pre-check-in Reservation only when both current continuity and current billing lines are empty.
-- **OPEN:** a dedicated browser-safe Reservation-edit checkpoint is required for scheduled start/return, advisor, RO number, and notes; pricing/availability fields need authoritative reconciliation. The future no-penalty cutoff is TBD. Weekly/monthly and “Now” remain deferred. Production browser Check-in activation is not verified.
+- **VERIFIED LIVE:** Production Edit Reservation and Pickup were browser-tested. The future no-penalty cutoff is TBD; weekly/monthly and “Now” remain deferred.
 
 
 ## 2026-08-18 — Pickup / VIN activation checkpoint
 
 - **VERIFIED live:** Rental intake and the pre-pickup no-VIN/no-continuity/no-billing boundary; fleet-type mismatch rejection before writes; model-plus-fleet-type candidates (controlled Rental case returns only `TEST-STOCK-003`, not seed data).
-- **IMPLEMENTED / production browser verification pending:** Reservations Pickup uses the authoritative read/activation RPCs, starts the existing billing path, and displays its exact returned preview without client arithmetic.
+- **VERIFIED LIVE:** Reservations Pickup uses the authoritative read/activation RPCs, starts the existing billing path, and displays its exact returned preview without client arithmetic.
 - **OPEN:** real production browser activation after merge. Weekly/monthly pickup stays fail-closed. “Now” and taxable-checkbox alignment remain deferred.
 
 
@@ -372,13 +372,13 @@ The calendar is a visualization and navigation surface over authoritative Reserv
 
 Closed-case review is historical operational reporting for dealership reconciliation with Tekion. It is not cashiering, accounts receivable, payment processing, or a replacement dealership ledger.
 
-- [ ] Define a secured read-only backend query for closed Transportation Events that reuses stored Billing snapshots and does not recalculate historical charges from current rate or tax configuration.
-- [ ] Provide explicit views for all closed rentals, all closed loaners, a user-selected closed-date range, and all closed cases.
-- [ ] Define whether the date filter applies to actual return, transportation-event closure, billed-through, or another verified business timestamp before implementation. Display the selected meaning clearly.
-- [ ] Return the RO number for repair-order loaners, Rental classification for rentals, customer context, out and return dates, pay-type segments, exact historical contract days, stored rates, pre-tax amounts, separate tax, and exact accumulated totals.
-- [ ] Preserve split pay types, Extended Warranty exhaustion and override history, vehicle swaps, same-vehicle continuations, and historical segment boundaries without collapsing them into a misleading single current pay type.
-- [ ] Allow each historical row or card to open the same read-only individual Billing detail structure used by active cases, with closed-state context and no active-case mutation controls.
-- [ ] Add pagination or bounded result loading before supporting an unrestricted All view on material production history.
+- [x] Define a secured read-only backend query for closed Transportation Events that reuses stored Billing snapshots and does not recalculate historical charges from current rate or tax configuration.
+- [x] Provide explicit views for all closed rentals, all closed loaners, a user-selected closed-date range, and all closed cases.
+- [x] Define whether the date filter applies to actual return, transportation-event closure, billed-through, or another verified business timestamp before implementation. Display the selected meaning clearly.
+- [x] Return the RO number for repair-order loaners, Rental classification for rentals, customer context, out and return dates, pay-type segments, exact historical contract days, stored rates, pre-tax amounts, separate tax, and exact accumulated totals.
+- [x] Preserve split pay types, Extended Warranty exhaustion and override history, vehicle swaps, same-vehicle continuations, and historical segment boundaries without collapsing them into a misleading single current pay type.
+- [x] Allow each historical row or card to open the same read-only individual Billing detail structure used by active cases, with closed-state context and no active-case mutation controls.
+- [x] Add pagination or bounded result loading before supporting an unrestricted All view on material production history.
 - [ ] Define export requirements only after the on-screen historical contract is verified. Do not assume CSV, spreadsheet, PDF, or Tekion integration requirements.
 - [ ] Verify empty results, single and multiple segments, rentals, loaners, taxable and non-taxable lines, Extended Warranty split, vehicle swap, date boundaries, unauthorized access, large result sets, exact no-rounding display, and sanitized failures.
 
@@ -569,3 +569,16 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 - [x] **RECORDED ONLY:** The data-free migration records the already-live `create_vehicle_state` `vin_last8` repair and Rental/pay-type trigger. It does not seed the live Rental configuration or controlled `TEST-STOCK-002`/`TEST-STOCK-003` verification vehicles.
 - [ ] **NEXT:** Implement and verify Pickup/VIN frontend without moving VIN assignment, use start, timers, contract periods, or billing into Reservations intake.
 - [ ] **OPEN / MUST FAIL CLOSED:** Implement authoritative weekly/monthly pickup billing; it remains unavailable.
+
+
+### 2026-08-19 — Closed Billing review repository checkpoint
+
+- **VERIFIED LIVE BACKEND:** The existing preview has a stored closed-history branch and the secured wrapper supports All/Rental/Loaner plus inclusive `closed_at` from and exclusive before filtering. The controlled closed Rental returns stored 40 + 4 = 44.
+- **IMPLEMENTED / BROWSER VERIFICATION PENDING:** The closed-cases Billing UI is read-only, bounded to 50, RPC-only, and preserves every returned segment. No controlled closed Loaner exists, so Loaner browser behavior is not claimed.
+
+## 2026-08-19 — Return/Complete final-charge persistence and closed review
+
+- **VERIFIED LIVE / RECONCILED:** Closed-review inspection exposed a stale-final-amount defect in Return/Complete: an uncheckpointed multi-day case could close with the parent line's earlier stored amount. The authoritative live completion engine now obtains the existing Billing preview at the actual return timestamp and persists its current-segment subtotal and tax before synchronizing the existing tax child and closing continuity, Billing, and the Transportation Event. It does not add a calculator or require `billing.mark_billed_through`.
+- **VERIFIED LIVE READ-ONLY:** Active multi-day Transportation Event `a5757d9d-8234-40bf-86e3-9d02d70e28dc`, billing line `db1c4f05-7c38-40a1-a0ae-13d463bfae95`, has a stored checkpoint of `$400 + $40`; its authoritative 19-contract-day preview is `$760 + $76 = $836` and identifies that same current billing line.
+- **VERIFIED LIVE DEFINITION:** Completion ordering and metadata are verified: final preview persistence precedes Return/Complete closure; the function remains owned by `postgres`, `SECURITY INVOKER`, has no function search-path override, and remains executable only by `postgres` and `service_role`.
+- **OPEN PRODUCTION VERIFICATION:** No production multi-day Return mutation/browser test has been completed. That is the next production verification after deployment/reconciliation. Closed Cases browser verification also remains pending; the controlled closed Rental `$40 + $4 = $44` is verified, and no closed Loaner browser verification has been completed.

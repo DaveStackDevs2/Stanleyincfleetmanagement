@@ -76,3 +76,14 @@
 - **VERIFIED LIVE / RECORDED ONLY:** Live Supabase already contains the `create_vehicle_state` `vin_last8` repair and the bidirectional Rental-workflow/pay-type pricing-agreement trigger. The new idempotent, data-free migration records that state and was not applied to live Supabase here.
 - **NOT REPOSITORY SEED DATA:** `TEST-STOCK-002` (loaner) and `TEST-STOCK-003` (rental) remain controlled live verification vehicles only.
 - **OPEN / NOT IMPLEMENTED:** Pickup/VIN frontend is the next checkpoint. Weekly/monthly pickup billing remains unimplemented and must fail closed.
+
+## 2026-08-19 — Closed Billing review
+
+- Reconciled the verified-live stored-snapshot branch in the existing Billing preview and the secured four-argument closed workspace wrapper without changing data or active Billing calculation behavior.
+- Added bounded All/Rental/Loaner and closed-date filtering plus read-only historical cards and complete stored segment detail to the existing Billing Dashboard. Production browser verification remains pending.
+
+### 2026-08-19 — Return/Complete final Billing persistence
+
+- Reconciled the verified live completion engine fix discovered during closed-review inspection: authoritative return-time preview subtotal/tax are persisted to the existing parent and its tax child before the normal return and close helpers run.
+- Recorded read-only verification for active multi-day TE `a5757d9d-8234-40bf-86e3-9d02d70e28dc` / line `db1c4f05-7c38-40a1-a0ae-13d463bfae95`: stored `$400 + $40`; same-line 19-contract-day preview `$760 + $76 = $836`.
+- The live function definition, order, owner, invoker security, null `proconfig`, and postgres/service-role-only ACL were verified. No production multi-day Return mutation/browser test has yet been completed. Closed Cases browser verification remains pending; controlled closed Rental `$40 + $4 = $44` remains verified, and closed Loaner browser verification has not occurred.

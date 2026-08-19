@@ -26,3 +26,7 @@ Top-level browser-callable wrappers are `SECURITY DEFINER`, owned by `postgres`,
 - **Decision:** Preserve old-row `created_by`, stamp exact closed and new continuity rows, and load the unified payload only after validation and stamping. Do not add billing segmentation or a `vehicle_swaps` insert.
 - **Evidence:** No frontend or deployed Edge caller exists, and all seven relevant live operational tables were empty. Dave separately applied PR #11's earlier migration and passed all six checks; this Codex task applied no live SQL.
 - **Pending:** Manual application and verification are required before broad Phase 1 or Phase 10 can close. Authoritative amount/tax calculation remains unresolved; pay-type administration Phase 2 follows Phase 1. Late fees remain disabled/deferred, and future editable Admin amounts must never auto-charge.
+
+## 2026-08-19 — Closed Billing historical boundary
+
+**Decision:** Closed-case filtering uses `transportation_events.closed_at`. `p_closed_from` is inclusive and `p_closed_before` is exclusive. Historical money always comes from stored billing-line and tax snapshots, never current rate or tax configuration. The browser only supplies query boundaries and renders returned exact strings; closed review is read-only Tekion reconciliation, not cashiering.
