@@ -89,3 +89,9 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 
 - **VERIFIED LIVE BACKEND:** Late Rental pickup, production Edit Reservation, Pickup, Return/Completion, the stored-history closed preview, and the secured closed workspace filters are verified. The controlled closed Rental stored total is exactly 40 + 4 = 44.
 - **IMPLEMENTED / BROWSER VERIFICATION PENDING:** The existing Billing Dashboard now includes an RPC-only, read-only Closed cases mode. A controlled closed Loaner is not available and no Loaner browser verification is claimed.
+
+## 2026-08-19 — Verified Return/Complete final amount reconciliation
+
+- Closed-review inspection found that Return/Complete could close an uncheckpointed multi-day parent with stale stored money. The verified live completion definition now persists the authoritative return-time preview subtotal/tax and reconciles its tax child before the established return/close sequence.
+- Read-only verification on active TE `a5757d9d-8234-40bf-86e3-9d02d70e28dc` / line `db1c4f05-7c38-40a1-a0ae-13d463bfae95` compared the `$400 + $40` stored checkpoint with the same-line 19-day preview of `$760 + $76 = $836`.
+- Live order and metadata are verified. Production multi-day Return mutation/browser verification remains pending after deployment; Closed Cases browser verification remains pending. The controlled closed Rental `$40 + $4 = $44` is verified; no closed Loaner browser verification has occurred.

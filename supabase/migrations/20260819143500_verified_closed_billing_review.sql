@@ -43,7 +43,7 @@ DECLARE
             WHERE vehicle_event.transportation_event_id=p_transportation_event_id
             ORDER BY coalesce(vehicle_event.actual_in_at,vehicle_event.actual_out_at) DESC NULLS LAST,vehicle_event.id DESC LIMIT 1;
         END IF;
-        IF v_vehicle_event.id IS NULL THEN
+        IF v_vehicle_event.id IS NULL OR v_vehicle_event.actual_out_at IS NULL THEN
             RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','historical_vehicle_assignment');
         END IF;
 
@@ -54,7 +54,7 @@ DECLARE
             WHERE contract_period.vehicle_event_id=v_vehicle_event.id
             ORDER BY contract_period.renewal_sequence DESC,contract_period.contract_out_at DESC,contract_period.id DESC LIMIT 1;
         END IF;
-        IF v_contract_period.id IS NULL THEN
+        IF v_contract_period.id IS NULL OR v_contract_period.contract_out_at IS NULL THEN
             RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'vehicle_event_id',v_vehicle_event.id,'effective_at',p_effective_at,'missing_dependency','historical_contract_period');
         END IF;
 
@@ -92,9 +92,18 @@ DECLARE
           'can_override',EXISTS(SELECT 1 FROM public.v_user_effective_permissions permission WHERE permission.user_id=v_actor_user_id AND permission.permission_key='billing.extended_warranty_override'))
         INTO v_extended_warranty FROM public.warranty_cases w WHERE w.transportation_event_id=p_transportation_event_id;
 
-        v_daily_rate := coalesce(v_current_line.daily_rate_override,v_current_line.default_daily_rate_snapshot,0);
-        v_tax_rate := coalesce(v_current_line.tax_rate_snapshot,0);
-        v_is_taxable := coalesce(v_current_line.is_taxable_snapshot,false);
+        v_pay_type := coalesce(v_current_line.pay_type, v_reservation.pay_type);
+        v_daily_rate := coalesce(v_current_line.daily_rate_override, v_current_line.default_daily_rate_snapshot, v_current_line.rate_amount_snapshot);
+        v_tax_rate := v_current_line.tax_rate_snapshot;
+        v_is_taxable := v_current_line.is_taxable_snapshot;
+        IF v_current_line.pay_type_rule_id IS NULL OR v_pay_type IS NULL OR v_daily_rate IS NULL
+           OR v_is_taxable IS NULL OR v_tax_rate IS NULL OR v_current_line.amount IS NULL
+           OR v_current_line.tax_amount IS NULL THEN
+            RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','historical_billing_snapshot');
+        END IF;
+        v_subtotal := v_current_line.amount;
+        v_tax_amount := v_current_line.tax_amount;
+        v_total := v_subtotal + v_tax_amount;
         v_contract_days := public.business_contract_days(v_billing_start,v_preview_end);
         RETURN jsonb_build_object(
           'status','billing_preview_ready','transportation_event_id',p_transportation_event_id,'transportation_event_status',v_event.status,
@@ -104,13 +113,13 @@ DECLARE
           'vehicle_event_id',v_vehicle_event.id,'contract_period_id',v_contract_period.id,'vehicle_out_at',v_vehicle_event.actual_out_at,
           'contract_out_at',v_contract_period.contract_out_at,'expected_return_at',coalesce(v_event.expected_return_at,v_reservation.expected_return_datetime),
           'actual_return_at',coalesce(v_vehicle_event.actual_in_at,v_reservation.actual_return_datetime,v_event.closed_at),
-          'billed_through_at',coalesce(v_current_line.paid_through_at,v_reservation.billed_through_datetime),'current_billing_line_id',NULL,
-          'line_type',v_current_line.line_type,'pay_type_rule_id',v_current_line.pay_type_rule_id,'pay_type',v_current_line.pay_type,
+          'billed_through_at',coalesce(v_current_line.paid_through_at,v_reservation.billed_through_datetime),'current_billing_line_id',v_current_line.id,
+          'line_type',v_current_line.line_type,'pay_type_rule_id',v_current_line.pay_type_rule_id,'pay_type',v_pay_type,
           'vehicle_class',v_reservation.requested_model,'billing_start',v_billing_start,'preview_end',v_preview_end,'effective_at',p_effective_at,
           'contract_days',v_contract_days,'daily_rate',v_daily_rate::text,'rate_source','stored_closed_billing_snapshot',
-          'subtotal',v_accumulated_subtotal::text,'is_taxable',v_is_taxable,'tax_rate',v_tax_rate::text,'tax_amount',v_accumulated_tax::text,
+          'subtotal',v_subtotal::text,'is_taxable',v_is_taxable,'tax_rate',v_tax_rate::text,'tax_amount',v_tax_amount::text,
           'tax_rate_source',v_current_line.tax_rate_source_snapshot,'tax_explanation','Closed billing uses stored historical line snapshots without recalculation.',
-          'total',v_accumulated_total::text,'historical_subtotal',v_accumulated_subtotal::text,'historical_tax',v_accumulated_tax::text,
+          'total',v_total::text,'historical_subtotal',v_accumulated_subtotal::text,'historical_tax',v_accumulated_tax::text,
           'accumulated_subtotal',v_accumulated_subtotal::text,'accumulated_tax',v_accumulated_tax::text,'accumulated_total',v_accumulated_total::text,
           'segments',v_segments,'extended_warranty',v_extended_warranty);
     END IF;
@@ -140,7 +149,7 @@ CREATE OR REPLACE FUNCTION public.get_closed_billing_workspace_state(
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $function$
 DECLARE
   v_actor_user_id uuid; v_lifecycle jsonb; v_case jsonb; v_preview jsonb; v_items jsonb := '[]'::jsonb;
-  v_scope text := lower(btrim(coalesce(p_case_scope,'all'))); v_limit integer := coalesce(p_limit,50);
+  v_scope text := lower(btrim(coalesce(p_case_scope,'all'))); v_limit integer := p_limit;
   v_case_count integer := 0; v_ready_count integer := 0; v_attention_count integer := 0;
   v_accumulated_subtotal numeric := 0; v_accumulated_tax numeric := 0; v_accumulated_total numeric := 0;
 BEGIN
@@ -148,11 +157,15 @@ BEGIN
   IF v_actor_user_id IS NULL THEN RAISE EXCEPTION 'An active application user is required' USING ERRCODE='42501'; END IF;
   IF coalesce(auth.jwt()->>'aal','') <> 'aal2' THEN RAISE EXCEPTION 'AAL2 authentication is required' USING ERRCODE='42501'; END IF;
   IF v_scope NOT IN ('all','rental','loaner') THEN RAISE EXCEPTION 'Case scope must be all, rental, or loaner' USING ERRCODE='22023'; END IF;
-  IF v_limit < 1 OR v_limit > 200 THEN RAISE EXCEPTION 'Limit must be between 1 and 200' USING ERRCODE='22023'; END IF;
+  IF p_limit IS NULL OR p_limit < 1 OR p_limit > 200 THEN RAISE EXCEPTION 'Limit must be between 1 and 200' USING ERRCODE='22023'; END IF;
   IF p_closed_from IS NOT NULL AND p_closed_before IS NOT NULL AND p_closed_from >= p_closed_before THEN RAISE EXCEPTION 'Closed date range is invalid' USING ERRCODE='22023'; END IF;
   v_lifecycle := public.get_reservation_lifecycle_list_state();
+  IF v_lifecycle->>'status' <> 'reservation_lifecycle_list_ready' THEN
+    RAISE EXCEPTION 'Reservation lifecycle list is unavailable';
+  END IF;
   FOR v_case IN SELECT value FROM jsonb_array_elements(coalesce(v_lifecycle->'items','[]'::jsonb)) value
     WHERE lower(btrim(value->>'transportation_event_status'))='closed'
+      AND value->>'closed_at' IS NOT NULL
       AND (v_scope='all' OR lower(btrim(value->>'reservation_type'))=v_scope)
       AND (p_closed_from IS NULL OR (value->>'closed_at')::timestamptz >= p_closed_from)
       AND (p_closed_before IS NULL OR (value->>'closed_at')::timestamptz < p_closed_before)
