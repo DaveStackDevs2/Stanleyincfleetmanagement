@@ -78,7 +78,7 @@ def test_repeated_extension_requires_billed_through_progress():
 
 def test_frontend_uses_existing_rpcs_without_billing_arithmetic():
     extension = UI[UI.index("function ExtensionAction"):UI.index("function CompletionAction")]
-    assert "Mark billed through" in extension
+    assert "Mark Tekion updated" in UI
     assert "get_billing_preview_state" in extension
     assert "accept_case_extension_and_get_unified_payload_state" in extension
     assert "p_extension_amount:0" in extension
@@ -102,3 +102,52 @@ def test_frontend_guards_duplicate_and_reloads_authoritative_state():
     assert "setCommitted(true)" in extension
     assert "await onReload(item.transportation_event_id)" in extension
     assert "parseExtensionResponse(result.data,item,proposed)" in extension
+
+FOLLOWUP_SQL = (ROOT / "supabase/migrations/20260820173000_correct_estimated_return_note_columns.sql").read_text()
+
+
+def test_note_helper_uses_live_transportation_event_note_columns_without_widening_access():
+    insert_columns = FOLLOWUP_SQL[FOLLOWUP_SQL.index("INSERT INTO public.transportation_event_notes"):FOLLOWUP_SQL.index("VALUES", FOLLOWUP_SQL.index("INSERT INTO public.transportation_event_notes"))]
+    assert "old_estimated_return" in insert_columns
+    assert "new_estimated_return" in insert_columns
+    assert "old_expected_return_at" not in insert_columns
+    assert "new_expected_return_at" not in insert_columns
+    assert "old_expected_return_at" in FOLLOWUP_SQL  # signature and JSON contract stay stable
+    assert "new_expected_return_at" in FOLLOWUP_SQL
+    assert "SECURITY INVOKER" in FOLLOWUP_SQL
+    assert "GRANT " not in FOLLOWUP_SQL and "REVOKE " not in FOLLOWUP_SQL
+
+
+def test_active_case_session_navigation_contract():
+    assert "sessionStorage.getItem(ACTIVE_CASE_STORAGE_KEY)" in UI
+    assert "useState<string|null>(rememberedActiveCase)" in UI
+    assert "const candidate=keepSelected??current" in UI
+    assert "parsed?.items.some" in UI
+    assert "rememberActiveCase(item.transportation_event_id)" in UI
+    assert "Back to active cases" in UI and "forgetActiveCase()" in UI
+    assert "setMode('closed');setSelected(null);forgetActiveCase()" in UI
+    assert "if(reloaded){forgetActiveCase();setCompletionItem(null)" in UI
+
+
+def test_active_case_uses_staff_facing_labels_and_compact_history():
+    active = UI[UI.index("function CaseDetail"):UI.index("const closedClassification")]
+    extension = UI[UI.index("function ExtensionAction"):UI.index("function CompletionAction")]
+    for label_text in ("Current rental", "Tekion billing", "Updated through:", "Mark Tekion updated", "Extend rental", "New return", "Billing history"):
+        assert label_text in UI
+    for removed in ("Authoritative Extension preview", "Billed-through boundary", "Stored current parent amount", "Stored current parent tax", "Projected subtotal", "Stored billing segment detail", "final Extension segment"):
+        assert removed not in active and removed not in extension
+    assert "preview.accumulated_subtotal" in extension
+    assert "preview.accumulated_tax" in extension
+    assert "preview.accumulated_total" in extension
+    assert "<table>" not in active
+    assert "{p.extended_warranty&&" in active
+    assert "Not configured" not in active
+
+
+def test_successful_extension_resets_form_and_known_rejection_is_sanitized():
+    extension = UI[UI.index("function ExtensionAction"):UI.index("function CompletionAction")]
+    for reset in ("setPreview(null)", "setAt('')", "setReason('')", "setNote('')", "setCommitted(false)"):
+        assert reset in extension
+    assert "Rental extended to ${showDate(proposed)}." in extension
+    assert "Update Tekion billing through a later time before extending this rental again." in extension
+    assert "result.error?.message" not in extension
