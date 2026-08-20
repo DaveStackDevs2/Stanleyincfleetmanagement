@@ -582,3 +582,10 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 - **VERIFIED LIVE READ-ONLY:** Active multi-day Transportation Event `a5757d9d-8234-40bf-86e3-9d02d70e28dc`, billing line `db1c4f05-7c38-40a1-a0ae-13d463bfae95`, has a stored checkpoint of `$400 + $40`; its authoritative 19-contract-day preview is `$760 + $76 = $836` and identifies that same current billing line.
 - **VERIFIED LIVE DEFINITION:** Completion ordering and metadata are verified: final preview persistence precedes Return/Complete closure; the function remains owned by `postgres`, `SECURITY INVOKER`, has no function search-path override, and remains executable only by `postgres` and `service_role`.
 - **OPEN PRODUCTION VERIFICATION:** No production multi-day Return mutation/browser test has been completed. That is the next production verification after deployment/reconciliation. Closed Cases browser verification also remains pending; the controlled closed Rental `$40 + $4 = $44` is verified, and no closed Loaner browser verification has been completed.
+
+### 2026-08-20 — Phase 8 Extension reconciliation
+
+- **VERIFIED LIVE / RECONCILED IN REPOSITORY:** the authoritative Extension definitions are patched and verified. The existing Billing preview and Extension acceptance/commit/line engines are reused; no second calculator or preview RPC was added.
+- **IMPLEMENTED IN REPOSITORY:** Billing case detail now requires Mark billed through, previews through the existing authoritative Billing preview, and confirms through the compatibility Extension wrapper. Submitted client amount/tax values are ignored and final Extension money is calculated server-side.
+- **NOT VERIFIED / STILL PENDING:** a runtime-persisted Extension. A controlled SQL `DO` workflow returned success, but subsequent live inspection showed no new reservation, pricing agreement, billing line, or audit rows; it is not runtime proof.
+- **NEXT VERIFICATION:** exercise the real deployed production-browser Reservation → Pickup → Mark billed through → Extension flow and inspect persisted operational, Billing, tax-child, ancestry, and audit state.

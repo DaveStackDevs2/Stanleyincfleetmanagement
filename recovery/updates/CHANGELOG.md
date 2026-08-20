@@ -226,3 +226,8 @@
 ## 2026-08-19 — Closed Billing review
 
 - Recorded the verified-live closed stored-snapshot preview and secured bounded wrapper, and added an RPC-only read-only Closed cases mode with complete segment history to Billing.
+
+## 2026-08-20 — Phase 8 Extensions
+
+- Reconciled verified-live Extension definitions while reusing the existing preview and Extension engines, and added the backend-only two-step Billing UI with duplicate protection and authoritative reload.
+- Runtime persistence remains **NOT VERIFIED**: a successful controlled SQL `DO` left no new reservation, pricing agreement, billing line, or audit rows on subsequent live inspection. Production-browser Reservation → Pickup → Mark billed through → Extension is next.

@@ -166,3 +166,10 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 
 - **VERIFIED LIVE BACKEND:** Production Edit Reservation, Pickup, Return/Completion, closed stored-history preview, and All/Rental/Loaner/closed-date wrapper filtering are verified. The controlled closed Rental is exactly 40 + 4 = 44.
 - **IMPLEMENTED / BROWSER VERIFICATION PENDING:** Closed cases is now present in the existing Billing Dashboard. No controlled closed Loaner exists, so Loaner browser behavior remains unverified.
+
+## 2026-08-20 — Phase 8 authoritative Extension reconciliation
+
+- **VERIFIED LIVE / RECONCILED:** authoritative Extension definitions are patched and verified; the existing Billing preview and Extension engines are reused with no second calculator.
+- **IMPLEMENTED IN REPOSITORY:** Extension preview/confirm follows Mark billed through, displays backend values only, ignores compatibility amount/tax input, and reloads authoritative Billing state.
+- **NOT VERIFIED / STILL PENDING:** runtime-persisted Extension. A controlled SQL `DO` returned success, but subsequent live inspection showed no new reservation, pricing agreement, billing line, or audit rows; this is not runtime proof.
+- **NEXT VERIFICATION:** deployed production-browser Reservation → Pickup → Mark billed through → Extension, followed by persisted-record inspection.
