@@ -95,3 +95,10 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - Closed-review inspection found that Return/Complete could close an uncheckpointed multi-day parent with stale stored money. The verified live completion definition now persists the authoritative return-time preview subtotal/tax and reconciles its tax child before the established return/close sequence.
 - Read-only verification on active TE `a5757d9d-8234-40bf-86e3-9d02d70e28dc` / line `db1c4f05-7c38-40a1-a0ae-13d463bfae95` compared the `$400 + $40` stored checkpoint with the same-line 19-day preview of `$760 + $76 = $836`.
 - Live order and metadata are verified. Production multi-day Return mutation/browser verification remains pending after deployment; Closed Cases browser verification remains pending. The controlled closed Rental `$40 + $4 = $44` is verified; no closed Loaner browser verification has occurred.
+
+## 2026-08-20 — Phase 8 authoritative Extension reconciliation
+
+- **VERIFIED LIVE / RECONCILED:** live authoritative Extension definitions are patched and verified. Repository SQL preserves the post-PR34 closed stored-money behavior while applying the shared-boundary day rule only to Extension current/segment calculations.
+- **IMPLEMENTED:** the existing Extension engine and Billing preview are reused; no second calculator or preview RPC was added. Billing case detail now provides backend-only preview and confirmation after a real Mark billed through checkpoint.
+- **NOT VERIFIED / STILL PENDING:** runtime persistence of an Extension. A controlled SQL `DO` workflow reported success, but live inspection afterward found no new reservation, pricing agreement, billing line, or audit rows, so it is not runtime proof.
+- **NEXT:** verify the deployed production-browser Reservation → Pickup → Mark billed through → Extension flow and read back the persisted records.

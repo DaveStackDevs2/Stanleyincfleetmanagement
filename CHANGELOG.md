@@ -87,3 +87,9 @@
 - Reconciled the verified live completion engine fix discovered during closed-review inspection: authoritative return-time preview subtotal/tax are persisted to the existing parent and its tax child before the normal return and close helpers run.
 - Recorded read-only verification for active multi-day TE `a5757d9d-8234-40bf-86e3-9d02d70e28dc` / line `db1c4f05-7c38-40a1-a0ae-13d463bfae95`: stored `$400 + $40`; same-line 19-contract-day preview `$760 + $76 = $836`.
 - The live function definition, order, owner, invoker security, null `proconfig`, and postgres/service-role-only ACL were verified. No production multi-day Return mutation/browser test has yet been completed. Closed Cases browser verification remains pending; controlled closed Rental `$40 + $4 = $44` remains verified, and closed Loaner browser verification has not occurred.
+
+## 2026-08-20 — Phase 8 Extensions
+
+- Reconciled the verified-live Extension boundary behavior into the existing authoritative Billing preview and compatibility wrapper without adding an engine, calculator, or preview RPC.
+- Added the Billing case-detail Preview Extension / Confirm Extension flow using backend-returned money only, duplicate-submit protection, sanitized errors, and authoritative reload.
+- Recorded runtime persisted Extension as still pending: a controlled SQL `DO` reported success, but later live inspection found no new reservation, pricing agreement, billing line, or audit rows. The next proof is the deployed production-browser Reservation → Pickup → Mark billed through → Extension flow.
