@@ -173,3 +173,11 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **IMPLEMENTED IN REPOSITORY:** Extension preview/confirm follows Mark billed through, displays backend values only, ignores compatibility amount/tax input, and reloads authoritative Billing state.
 - **NOT VERIFIED / STILL PENDING:** runtime-persisted Extension. A controlled SQL `DO` returned success, but subsequent live inspection showed no new reservation, pricing agreement, billing line, or audit rows; this is not runtime proof.
 - **NEXT VERIFICATION:** deployed production-browser Reservation → Pickup → Mark billed through → Extension, followed by persisted-record inspection.
+
+### 2026-08-20 — Phase 8 Extension production proof and UX correction
+
+- **VERIFIED PRODUCTION:** The initial production confirmation exposed the stale `transportation_event_notes.old_expected_return_at` / `new_expected_return_at` helper references and rolled back cleanly. The live helper was corrected to use the actual `old_estimated_return` / `new_estimated_return` columns, after which the production Extension succeeded and its note persisted.
+- **VERIFIED PRODUCTION:** The original Billing line closed at `2026-08-20T16:44:00Z` with `$40 + $4` tax. The `rental_extension` line begins at exactly that boundary with `$80 + $8` tax and ancestry pointing to the original Billing line. The Transportation Event expected return became `2026-08-22T16:44:00Z`.
+- **VERIFIED AAL2 PREVIEW:** The resulting preview returned historical subtotal `$40`, current Extension subtotal `$80`, accumulated subtotal `$120`, accumulated tax `$12`, accumulated total `$132`, and Extension `contract_days = 2`. The shared boundary is therefore not double-counted.
+- **IMPLEMENTED IN REPOSITORY:** A follow-up compatibility migration records the live helper correction. Billing now remembers an active case for the browser session, presents a staff-facing rental summary, Tekion checkpoint, Extension decision, and compact Billing history, and clears stale Extension state after confirmation.
+- **NOT VERIFIED / STILL PENDING:** Repeated-Extension rejection and a later successful repeated Extension remain pending after this UX correction. Phase 8 Extension testing is not complete.

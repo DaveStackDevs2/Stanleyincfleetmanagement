@@ -59,7 +59,7 @@ class VerifiedBillingCaseCompletionTests(unittest.TestCase):
         self.assertIn("Number.isNaN(date.getTime())||date.getTime()>Date.now()", UI)
         self.assertIn("valid actual return date and time that is not in the future", UI)
         self.assertRegex(UI, r'Actual return date and time<input[^>]+max=\{localNow\(\)\}')
-        entry = '<CaseHeader item={item}/>{item.reservation.reservation_id&&<button type="button" className="primary-action completion-entry"'
+        entry = '{item.reservation.reservation_id&&<button type="button" className="primary-action completion-entry"'
         attention = "{p.status!=='billing_preview_ready'?"
         self.assertIn(entry, UI)
         self.assertLess(UI.index(entry), UI.index(attention, UI.index(entry)))

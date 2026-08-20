@@ -93,3 +93,10 @@
 - Reconciled the verified-live Extension boundary behavior into the existing authoritative Billing preview and compatibility wrapper without adding an engine, calculator, or preview RPC.
 - Added the Billing case-detail Preview Extension / Confirm Extension flow using backend-returned money only, duplicate-submit protection, sanitized errors, and authoritative reload.
 - Recorded runtime persisted Extension as still pending: a controlled SQL `DO` reported success, but later live inspection found no new reservation, pricing agreement, billing line, or audit rows. The next proof is the deployed production-browser Reservation → Pickup → Mark billed through → Extension flow.
+
+### 2026-08-20 — Phase 8 Extension production proof and UX correction
+
+- **VERIFIED PRODUCTION:** The first production Extension confirmation rolled back cleanly because the note helper referenced stale `transportation_event_notes.old_expected_return_at` / `new_expected_return_at` columns. The live helper was corrected to use `old_estimated_return` / `new_estimated_return`, after which the production Extension succeeded.
+- **VERIFIED PRODUCTION:** The original Billing segment closed with `$40 + $4` tax, and the Extension recorded `$80 + $8` tax. The AAL2 preview returned an accumulated `$120 + $12 = $132`; the shared boundary was verified without double-counting.
+- **IMPLEMENTED IN REPOSITORY / NOT YET BROWSER-VERIFIED:** Billing navigation persistence and the staff-facing Extension UX cleanup are implemented, but browser verification remains pending deployment.
+- **NOT VERIFIED / STILL PENDING:** Repeated-Extension rejection and a subsequent successful repeated Extension remain pending. Phase 8 Extension is **not complete**.

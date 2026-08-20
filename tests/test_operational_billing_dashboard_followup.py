@@ -91,7 +91,7 @@ class OperationalBillingDashboardFollowupContract(unittest.TestCase):
         self.assertNotIn("segment.covered_days_override??segment.default_covered_days_snapshot", UI)
 
     def test_rental_attention_and_read_only_contract(self):
-        for token in ('Current rental rate before tax', 'Accumulated rental charges before tax', 'Billing amounts are unavailable', 'attentionReason(p)', "supabase.rpc('get_reconciled_billing_workspace_state'", "money=(v:unknown):v is string", 'Current-vehicle timer', 'Extended Warranty case timer'):
+        for token in ('Current rental rate before tax', 'Accumulated rental charges before tax', 'Billing amounts are unavailable', 'attentionReason(p)', "supabase.rpc('get_reconciled_billing_workspace_state'", "money=(v:unknown):v is string", 'Current rental', 'Billing history'):
             self.assertIn(token, UI)
         for forbidden in ('cashier', 'payment collected', 'vehicle count', 'swaps', '.from(', '.insert(', '.update(', '.delete(', 'Math.round', 'toFixed', 'parseFloat', 'parseInt'):
             self.assertNotIn(forbidden, UI.lower() if forbidden in ('cashier', 'payment collected', 'vehicle count', 'swaps') else UI)

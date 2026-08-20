@@ -102,3 +102,10 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **IMPLEMENTED:** the existing Extension engine and Billing preview are reused; no second calculator or preview RPC was added. Billing case detail now provides backend-only preview and confirmation after a real Mark billed through checkpoint.
 - **NOT VERIFIED / STILL PENDING:** runtime persistence of an Extension. A controlled SQL `DO` workflow reported success, but live inspection afterward found no new reservation, pricing agreement, billing line, or audit rows, so it is not runtime proof.
 - **NEXT:** verify the deployed production-browser Reservation → Pickup → Mark billed through → Extension flow and read back the persisted records.
+
+### 2026-08-20 — Phase 8 Extension production proof and UX correction
+
+- **VERIFIED PRODUCTION:** The first production Extension confirmation rolled back cleanly because the note helper referenced stale `transportation_event_notes.old_expected_return_at` / `new_expected_return_at` columns. The live helper was corrected to use `old_estimated_return` / `new_estimated_return`, after which the production Extension succeeded.
+- **VERIFIED PRODUCTION:** The original Billing segment closed with `$40 + $4` tax, and the Extension recorded `$80 + $8` tax. The AAL2 preview returned an accumulated `$120 + $12 = $132`; the shared boundary was verified without double-counting.
+- **IMPLEMENTED IN REPOSITORY / NOT YET BROWSER-VERIFIED:** Billing navigation persistence and the staff-facing Extension UX cleanup are implemented, but browser verification remains pending deployment.
+- **NOT VERIFIED / STILL PENDING:** Repeated-Extension rejection and a subsequent successful repeated Extension remain pending. Phase 8 Extension is **not complete**.
