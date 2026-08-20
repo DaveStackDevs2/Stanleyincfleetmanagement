@@ -2,13 +2,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SQL = (ROOT / "supabase/migrations/20260820120000_verified_authoritative_extensions.sql").read_text()
+PR34_SQL = (ROOT / "supabase/migrations/20260819143500_verified_closed_billing_review.sql").read_text()
 UI = (ROOT / "frontend/src/billing/BillingWorkspace.tsx").read_text()
 
 
 def test_extension_boundary_is_scoped_to_three_expected_preview_branches():
     assert "pg_get_functiondef('public.get_billing_preview_state(uuid,timestamptz)'::regprocedure)" in SQL
     assert "chr(13)" in SQL
-    assert "v_boundary_at" in SQL and "v_expression_start" in SQL and "v_expression_end" in SQL
+    assert "v_boundary_at" in SQL
+    assert "v_closed_expression_start" in SQL and "v_closed_expression_end" in SQL
+    assert "v_active_expression_start" in SQL and "v_active_expression_end" in SQL
     assert "Splice back-to-front" in SQL
     assert "v_definition := replace(v_definition" not in SQL
     assert "regexp_count(v_definition" in SQL
@@ -17,6 +20,27 @@ def test_extension_boundary_is_scoped_to_three_expected_preview_branches():
     assert SQL.count("greatest(0, public.business_contract_days") >= 3
     assert "ELSE public.business_contract_days(v_billing_start, v_preview_end)" in SQL
     assert "stored_closed_billing_snapshot" not in SQL  # closed stored-money branch is not replaced
+
+
+def test_closed_splice_anchor_matches_pr34_baseline_structure():
+    closed_anchor = "IF lower(btrim(v_event.status)) = 'closed' THEN"
+    nonexistent_anchor = "IF v_event.status IN ('closed','completed','cancelled') THEN"
+
+    # Exercise the structural assumption against the migration that introduced the
+    # closed branch: its segment contract-days expression must fall inside that branch.
+    closed_start = PR34_SQL.index(closed_anchor)
+    closed_end = PR34_SQL.index("$closed$;", closed_start)
+    contract_days = PR34_SQL.index("'contract_days'", closed_start, closed_end)
+    is_open = PR34_SQL.index("'is_open'", contract_days, closed_end)
+    assert closed_start < contract_days < is_open < closed_end
+
+    # The Extension migration must search for that exact baseline anchor and must
+    # never regress to the status-list branch that exists in neither PR #34 nor live.
+    sql_literal_anchor = "IF lower(btrim(v_event.status)) = ''closed'' THEN"
+    sql_literal_nonexistent = "IF v_event.status IN (''closed'',''completed'',''cancelled'') THEN"
+    assert sql_literal_anchor in SQL
+    assert sql_literal_nonexistent not in SQL
+    assert nonexistent_anchor not in PR34_SQL
 
 
 def test_wrapper_derives_money_from_exact_authoritative_preview_line():

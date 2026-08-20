@@ -6,7 +6,8 @@ DECLARE
   v_definition text;
   v_boundary_at integer; v_current_start integer; v_current_end integer;
   v_closed_start integer; v_closed_key integer; v_active_key integer;
-  v_expression_start integer; v_expression_end integer;
+  v_closed_expression_start integer; v_closed_expression_end integer;
+  v_active_expression_start integer; v_active_expression_end integer;
   v_current_replacement text := E'v_contract_days := CASE\n        WHEN v_current_line.line_type = ''rental_extension''\n         AND v_current_line.extended_from_billing_line_id IS NOT NULL\n        THEN greatest(0, public.business_contract_days(v_billing_start, v_preview_end) - 1)\n        ELSE public.business_contract_days(v_billing_start, v_preview_end)\n    END;';
   v_closed_replacement text := E'CASE\n                            WHEN parent.start_time IS NULL THEN NULL\n                            WHEN parent.line_type = ''rental_extension''\n                             AND parent.extended_from_billing_line_id IS NOT NULL\n                            THEN greatest(0, public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, v_event.closed_at, p_effective_at)) - 1)\n                            ELSE public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, v_event.closed_at, p_effective_at))\n                        END';
   v_active_replacement text := E'CASE\n                        WHEN parent.start_time IS NULL THEN NULL\n                        WHEN parent.line_type = ''rental_extension''\n                         AND parent.extended_from_billing_line_id IS NOT NULL\n                        THEN greatest(0, public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, p_effective_at)) - 1)\n                        ELSE public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, p_effective_at))\n                    END';
@@ -25,7 +26,7 @@ BEGIN
   v_boundary_at := strpos(v_definition, 'IF v_preview_end < v_billing_start THEN');
   v_current_start := v_boundary_at + strpos(substr(v_definition, v_boundary_at), 'v_contract_days :=') - 1;
   v_current_end := v_current_start + strpos(substr(v_definition, v_current_start), ';') - 1;
-  v_closed_start := strpos(v_definition, 'IF v_event.status IN (''closed'',''completed'',''cancelled'') THEN');
+  v_closed_start := strpos(v_definition, 'IF lower(btrim(v_event.status)) = ''closed'' THEN');
   v_closed_key := v_closed_start + strpos(substr(v_definition, v_closed_start), '''contract_days''') - 1;
   v_active_key := v_current_end + strpos(substr(v_definition, v_current_end + 1), '''contract_days''');
   IF v_boundary_at = 0 OR v_current_start < v_boundary_at OR v_current_end < v_current_start
@@ -34,18 +35,24 @@ BEGIN
     RAISE EXCEPTION 'Billing preview structural anchors have drifted';
   END IF;
 
+  -- Resolve and validate every range before changing the function definition.
+  v_closed_expression_start := v_closed_key + strpos(substr(v_definition, v_closed_key), ',');
+  v_closed_expression_end := v_closed_expression_start + strpos(substr(v_definition, v_closed_expression_start + 1), '''is_open''') - 1;
+  v_active_expression_start := v_active_key + strpos(substr(v_definition, v_active_key), ',');
+  v_active_expression_end := v_active_expression_start + strpos(substr(v_definition, v_active_expression_start + 1), '''is_open''') - 1;
+  IF v_closed_expression_start <= v_closed_key OR v_closed_expression_end <= v_closed_expression_start THEN
+    RAISE EXCEPTION 'Closed segment contract-days range has drifted';
+  END IF;
+  IF v_active_expression_start <= v_active_key OR v_active_expression_end <= v_active_expression_start THEN
+    RAISE EXCEPTION 'Active segment contract-days range has drifted';
+  END IF;
+
   -- Splice back-to-front so earlier offsets remain stable.
-  v_expression_start := v_active_key + strpos(substr(v_definition, v_active_key), ',');
-  v_expression_end := v_expression_start + strpos(substr(v_definition, v_expression_start + 1), '''is_open''') - 1;
-  IF v_expression_end <= v_expression_start THEN RAISE EXCEPTION 'Active segment contract-days range has drifted'; END IF;
-  v_definition := substr(v_definition, 1, v_expression_start) || v_active_replacement || ',' || substr(v_definition, v_expression_end + 1);
+  v_definition := substr(v_definition, 1, v_active_expression_start) || v_active_replacement || ',' || substr(v_definition, v_active_expression_end + 1);
 
   v_definition := substr(v_definition, 1, v_current_start - 1) || v_current_replacement || substr(v_definition, v_current_end + 1);
 
-  v_expression_start := v_closed_key + strpos(substr(v_definition, v_closed_key), ',');
-  v_expression_end := v_expression_start + strpos(substr(v_definition, v_expression_start + 1), '''is_open''') - 1;
-  IF v_expression_end <= v_expression_start THEN RAISE EXCEPTION 'Closed segment contract-days range has drifted'; END IF;
-  v_definition := substr(v_definition, 1, v_expression_start) || v_closed_replacement || ',' || substr(v_definition, v_expression_end + 1);
+  v_definition := substr(v_definition, 1, v_closed_expression_start) || v_closed_replacement || ',' || substr(v_definition, v_closed_expression_end + 1);
 
   IF regexp_count(v_definition, 'v_current_line\.line_type = ''rental_extension''') <> 1 THEN
     RAISE EXCEPTION 'Billing preview current-segment definition has drifted';
