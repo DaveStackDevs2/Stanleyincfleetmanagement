@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,19 @@ def at(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
 
 
+def predecessor_replacement(name: str) -> str:
+    encoded = re.search(rf"{name} text := E'((?:''|[^'])*)';", PREDECESSOR).group(1)
+    return encoded.replace("''", "'").replace(r"\n", "\n")
+
+
+def splice_case_arm(definition: str, condition: str, replacement: str, occurrence: int = 1) -> str:
+    starts = [match.start() for match in re.finditer(re.escape(condition), definition)]
+    condition_at = starts[occurrence - 1]
+    then_at = definition.index("THEN", condition_at)
+    else_at = definition.index("ELSE", then_at)
+    return definition[:then_at + 4] + "\n  " + replacement + "\n  " + definition[else_at:]
+
+
 def test_controlled_repeated_extension_timeline_keeps_reservation_anchor():
     anchor = at("2026-08-20T13:00:00Z")
     extension_start = at("2026-08-20T16:44:00Z")
@@ -38,14 +52,35 @@ def test_controlled_repeated_extension_timeline_keeps_reservation_anchor():
 def test_exactly_three_extension_branches_are_anchored_and_old_math_is_removed():
     # The source, idempotent-target, and post-splice guards each require the same
     # one-current/two-history branch shape in the generated function definition.
-    assert SQL.count("v_current_line\\.line_type = ''rental_extension''") == 3
-    assert SQL.count("parent\\.line_type = ''rental_extension''") == 3
+    assert SQL.count("v_current_line\\.line_type = ''rental_extension''") == 2
+    assert SQL.count("parent\\.line_type = ''rental_extension''") == 2
     assert SQL.count("v_current_new text") == 1
     assert SQL.count("v_closed_new text") == 1
     assert SQL.count("v_active_new text") == 1
     assert "business_contract_days(v_reservation.start_date, v_preview_end) - public.business_contract_days(v_reservation.start_date, v_billing_start)" in SQL
     assert "business_contract_days(v_reservation.start_date, parent.start_time)" in SQL
-    assert "do not globally replace SQL" in SQL
+    assert "never globally replace an expression" in SQL
+
+
+def test_structural_splice_transforms_realistically_multiline_predecessor():
+    fixture = "\n".join((
+        predecessor_replacement("v_closed_replacement"),
+        predecessor_replacement("v_current_replacement"),
+        predecessor_replacement("v_active_replacement"),
+    )).replace(", ", ",\n                ")
+    old_current = "greatest(0, public.business_contract_days(v_billing_start, v_preview_end) - 1)"
+    assert old_current not in fixture  # pg_get_functiondef-style wrapping defeats one-line matching.
+
+    targets = re.findall(r"v_(?:current|closed|active)_new text := '([^']+)'", SQL)
+    assert len(targets) == 3
+    transformed = splice_case_arm(fixture, "parent.line_type = 'rental_extension'", targets[2], 2)
+    transformed = splice_case_arm(transformed, "v_current_line.line_type = 'rental_extension'", targets[0])
+    transformed = splice_case_arm(transformed, "parent.line_type = 'rental_extension'", targets[1])
+
+    assert transformed.count("v_current_line.line_type = 'rental_extension'") == 1
+    assert transformed.count("parent.line_type = 'rental_extension'") == 2
+    for target in targets:
+        assert transformed.count(target) == 1
 
 
 def test_non_extension_branches_and_protected_definitions_are_untouched():

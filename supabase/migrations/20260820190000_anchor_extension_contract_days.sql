@@ -4,63 +4,78 @@ DO $migration$
 DECLARE
   v_preview regprocedure := to_regprocedure('public.get_billing_preview_state(uuid,timestamptz)');
   v_definition text;
-  v_current_at integer; v_closed_at integer; v_active_at integer;
-  v_current_old text := E'greatest(0, public.business_contract_days(v_billing_start, v_preview_end) - 1)';
-  v_current_new text := E'greatest(0, public.business_contract_days(v_reservation.start_date, v_preview_end) - public.business_contract_days(v_reservation.start_date, v_billing_start))';
-  v_closed_old text := E'greatest(0, public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, v_event.closed_at, p_effective_at)) - 1)';
-  v_closed_new text := E'greatest(0, public.business_contract_days(v_reservation.start_date, coalesce(parent.end_time, parent.paid_through_at, v_event.closed_at, p_effective_at)) - public.business_contract_days(v_reservation.start_date, parent.start_time))';
-  v_active_old text := E'greatest(0, public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, p_effective_at)) - 1)';
-  v_active_new text := E'greatest(0, public.business_contract_days(v_reservation.start_date, coalesce(parent.end_time, parent.paid_through_at, p_effective_at)) - public.business_contract_days(v_reservation.start_date, parent.start_time))';
+  v_current_condition integer; v_closed_condition integer; v_active_condition integer;
+  v_current_then integer; v_current_else integer;
+  v_closed_then integer; v_closed_else integer;
+  v_active_then integer; v_active_else integer;
+  v_current_expression text; v_closed_expression text; v_active_expression text;
+  v_current_old text := 'greatest(0, public.business_contract_days(v_billing_start, v_preview_end) - 1)';
+  v_current_new text := 'greatest(0, public.business_contract_days(v_reservation.start_date, v_preview_end) - public.business_contract_days(v_reservation.start_date, v_billing_start))';
+  v_closed_old text := 'greatest(0, public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, v_event.closed_at, p_effective_at)) - 1)';
+  v_closed_new text := 'greatest(0, public.business_contract_days(v_reservation.start_date, coalesce(parent.end_time, parent.paid_through_at, v_event.closed_at, p_effective_at)) - public.business_contract_days(v_reservation.start_date, parent.start_time))';
+  v_active_old text := 'greatest(0, public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, p_effective_at)) - 1)';
+  v_active_new text := 'greatest(0, public.business_contract_days(v_reservation.start_date, coalesce(parent.end_time, parent.paid_through_at, p_effective_at)) - public.business_contract_days(v_reservation.start_date, parent.start_time))';
 BEGIN
   IF v_preview IS NULL THEN
     RAISE EXCEPTION 'Expected Billing preview signature is missing';
   END IF;
   v_definition := replace(pg_get_functiondef(v_preview), chr(13), '');
 
-  -- Accept only the complete target state or the exact three verified source branches.
-  IF (length(v_definition) - length(replace(v_definition, v_current_new, ''))) / length(v_current_new) = 1
-     AND (length(v_definition) - length(replace(v_definition, v_closed_new, ''))) / length(v_closed_new) = 1
-     AND (length(v_definition) - length(replace(v_definition, v_active_new, ''))) / length(v_active_new) = 1 THEN
-    IF regexp_count(v_definition, 'v_current_line\.line_type = ''rental_extension''') <> 1
-       OR regexp_count(v_definition, 'parent\.line_type = ''rental_extension''') <> 2
-       OR strpos(v_definition, v_current_old) <> 0
-       OR strpos(v_definition, v_closed_old) <> 0
-       OR strpos(v_definition, v_active_old) <> 0 THEN
-      RAISE EXCEPTION 'Anchored Billing preview target is partial or drifted';
-    END IF;
-    RETURN;
+  -- Locate the three verified Extension CASE arms. Expression whitespace is deliberately
+  -- excluded from the anchors because pg_get_functiondef formats these arms multiline.
+  IF regexp_count(v_definition, 'v_current_line\.line_type = ''rental_extension''') <> 1
+     OR regexp_count(v_definition, 'parent\.line_type = ''rental_extension''') <> 2 THEN
+    RAISE EXCEPTION 'Billing preview Extension branch shape has drifted';
   END IF;
-
-  IF (length(v_definition) - length(replace(v_definition, v_current_old, ''))) / length(v_current_old) <> 1
-     OR (length(v_definition) - length(replace(v_definition, v_closed_old, ''))) / length(v_closed_old) <> 1
-     OR (length(v_definition) - length(replace(v_definition, v_active_old, ''))) / length(v_active_old) <> 1
-     OR regexp_count(v_definition, 'v_current_line\.line_type = ''rental_extension''') <> 1
-     OR regexp_count(v_definition, 'parent\.line_type = ''rental_extension''') <> 2
-     OR strpos(v_definition, v_current_new) <> 0
-     OR strpos(v_definition, v_closed_new) <> 0
-     OR strpos(v_definition, v_active_new) <> 0 THEN
-    RAISE EXCEPTION 'Billing preview Extension anchors are partial or drifted';
-  END IF;
-
-  v_current_at := strpos(v_definition, v_current_old);
-  v_closed_at := strpos(v_definition, v_closed_old);
-  v_active_at := strpos(v_definition, v_active_old);
-  IF NOT (v_closed_at < v_current_at AND v_current_at < v_active_at) THEN
+  v_current_condition := strpos(v_definition, 'v_current_line.line_type = ''rental_extension''');
+  v_closed_condition := strpos(v_definition, 'parent.line_type = ''rental_extension''');
+  v_active_condition := v_closed_condition + strpos(substr(v_definition, v_closed_condition + 1), 'parent.line_type = ''rental_extension''');
+  IF v_current_condition = 0 OR v_closed_condition = 0 OR v_active_condition <= v_closed_condition
+     OR NOT (v_closed_condition < v_current_condition AND v_current_condition < v_active_condition) THEN
     RAISE EXCEPTION 'Billing preview Extension branch order has drifted';
   END IF;
 
-  -- Splice the three validated expressions back-to-front; do not globally replace SQL.
-  v_definition := substr(v_definition, 1, v_active_at - 1) || v_active_new || substr(v_definition, v_active_at + length(v_active_old));
-  v_definition := substr(v_definition, 1, v_current_at - 1) || v_current_new || substr(v_definition, v_current_at + length(v_current_old));
-  v_definition := substr(v_definition, 1, v_closed_at - 1) || v_closed_new || substr(v_definition, v_closed_at + length(v_closed_old));
+  v_current_then := v_current_condition + strpos(substr(v_definition, v_current_condition), 'THEN') - 1;
+  v_current_else := v_current_then + strpos(substr(v_definition, v_current_then), 'ELSE') - 1;
+  v_closed_then := v_closed_condition + strpos(substr(v_definition, v_closed_condition), 'THEN') - 1;
+  v_closed_else := v_closed_then + strpos(substr(v_definition, v_closed_then), 'ELSE') - 1;
+  v_active_then := v_active_condition + strpos(substr(v_definition, v_active_condition), 'THEN') - 1;
+  v_active_else := v_active_then + strpos(substr(v_definition, v_active_then), 'ELSE') - 1;
+  IF v_current_then < v_current_condition OR v_current_else <= v_current_then
+     OR v_closed_then < v_closed_condition OR v_closed_else <= v_closed_then
+     OR v_active_then < v_active_condition OR v_active_else <= v_active_then THEN
+    RAISE EXCEPTION 'Billing preview Extension CASE structure has drifted';
+  END IF;
 
-  IF (length(v_definition) - length(replace(v_definition, v_current_new, ''))) / length(v_current_new) <> 1
-     OR (length(v_definition) - length(replace(v_definition, v_closed_new, ''))) / length(v_closed_new) <> 1
-     OR (length(v_definition) - length(replace(v_definition, v_active_new, ''))) / length(v_active_new) <> 1
-     OR strpos(v_definition, v_current_old) <> 0
-     OR strpos(v_definition, v_closed_old) <> 0
-     OR strpos(v_definition, v_active_old) <> 0
-     OR regexp_count(v_definition, 'v_current_line\.line_type = ''rental_extension''') <> 1
+  -- Collapse whitespace only for validation; retain structural offsets for each splice.
+  v_current_expression := regexp_replace(btrim(substr(v_definition, v_current_then + 4, v_current_else - v_current_then - 4)), '[[:space:]]+', ' ', 'g');
+  v_closed_expression := regexp_replace(btrim(substr(v_definition, v_closed_then + 4, v_closed_else - v_closed_then - 4)), '[[:space:]]+', ' ', 'g');
+  v_active_expression := regexp_replace(btrim(substr(v_definition, v_active_then + 4, v_active_else - v_active_then - 4)), '[[:space:]]+', ' ', 'g');
+
+  -- Recognize only the complete target or complete predecessor; mixed/drifted states fail closed.
+  IF v_current_expression = v_current_new
+     AND v_closed_expression = v_closed_new
+     AND v_active_expression = v_active_new THEN
+    RETURN;
+  END IF;
+  IF v_current_expression <> v_current_old
+     OR v_closed_expression <> v_closed_old
+     OR v_active_expression <> v_active_old THEN
+    RAISE EXCEPTION 'Billing preview Extension anchors are partial or drifted';
+  END IF;
+
+  -- Splice validated CASE-arm ranges back-to-front; never globally replace an expression.
+  v_definition := substr(v_definition, 1, v_active_then + 3)
+    || E'\n                        ' || v_active_new || E'\n                    '
+    || substr(v_definition, v_active_else);
+  v_definition := substr(v_definition, 1, v_current_then + 3)
+    || E'\n        ' || v_current_new || E'\n        '
+    || substr(v_definition, v_current_else);
+  v_definition := substr(v_definition, 1, v_closed_then + 3)
+    || E'\n                            ' || v_closed_new || E'\n                        '
+    || substr(v_definition, v_closed_else);
+
+  IF regexp_count(v_definition, 'v_current_line\.line_type = ''rental_extension''') <> 1
      OR regexp_count(v_definition, 'parent\.line_type = ''rental_extension''') <> 2 THEN
     RAISE EXCEPTION 'Anchored Billing preview validation failed';
   END IF;
