@@ -36,6 +36,42 @@ def splice_case_arm(definition: str, condition: str, replacement: str, occurrenc
     return definition[:then_at + 4] + "\n  " + replacement + "\n  " + definition[else_at:]
 
 
+def compact(expression: str) -> str:
+    """Mirror regexp_replace(value, '[[:space:]]', '', 'g')."""
+    return re.sub(r"\s", "", expression)
+
+
+def migration_expressions(definition: str) -> tuple[str, str, str]:
+    """Reproduce the migration's branch counts, ordering, and CASE-arm extraction."""
+    current_condition = "v_current_line.line_type = 'rental_extension'"
+    history_condition = "parent.line_type = 'rental_extension'"
+    assert len(re.findall(r"v_current_line\.line_type = 'rental_extension'", definition)) == 1
+    assert len(re.findall(r"parent\.line_type = 'rental_extension'", definition)) == 2
+
+    current_at = definition.index(current_condition)
+    closed_at = definition.index(history_condition)
+    active_at = definition.index(history_condition, closed_at + 1)
+    assert closed_at < current_at < active_at
+
+    def expression_at(condition_at: int) -> str:
+        then_at = definition.index("THEN", condition_at)
+        else_at = definition.index("ELSE", then_at)
+        return compact(definition[then_at + 4:else_at])
+
+    return expression_at(current_at), expression_at(closed_at), expression_at(active_at)
+
+
+def migration_validation_state(definition: str) -> str:
+    actual = migration_expressions(definition)
+    old = tuple(compact(value) for value in re.findall(r"v_(?:current|closed|active)_old text := '([^']+)'", SQL))
+    new = tuple(compact(value) for value in re.findall(r"v_(?:current|closed|active)_new text := '([^']+)'", SQL))
+    if actual == new:
+        return "target"
+    if actual == old:
+        return "predecessor"
+    return "partial-or-drifted"
+
+
 def test_controlled_repeated_extension_timeline_keeps_reservation_anchor():
     anchor = at("2026-08-20T13:00:00Z")
     extension_start = at("2026-08-20T16:44:00Z")
@@ -62,17 +98,28 @@ def test_exactly_three_extension_branches_are_anchored_and_old_math_is_removed()
     assert "never globally replace an expression" in SQL
 
 
+def test_branch_count_patterns_use_one_postgresql_regex_escape():
+    definition = "v_current_line.line_type = 'rental_extension'\n" + 2 * "parent.line_type = 'rental_extension'\n"
+    assert len(re.findall(r"v_current_line\.line_type = 'rental_extension'", definition)) == 1
+    assert len(re.findall(r"parent\.line_type = 'rental_extension'", definition)) == 2
+    assert not re.findall(r"v_current_line\\.line_type = 'rental_extension'", definition)
+    assert not re.findall(r"parent\\.line_type = 'rental_extension'", definition)
+    assert SQL.count("v_current_line\\.line_type = ''rental_extension''") == 2
+    assert SQL.count("parent\\.line_type = ''rental_extension''") == 2
+
+
 def test_structural_splice_transforms_realistically_multiline_predecessor():
     fixture = "\n".join((
         predecessor_replacement("v_closed_replacement"),
         predecessor_replacement("v_current_replacement"),
         predecessor_replacement("v_active_replacement"),
-    )).replace(", ", ",\n                ")
+    )).replace("(", "(\n                ").replace(", ", ",\n                ").replace(")", "\n            )")
     old_current = "greatest(0, public.business_contract_days(v_billing_start, v_preview_end) - 1)"
     assert old_current not in fixture  # pg_get_functiondef-style wrapping defeats one-line matching.
 
     targets = re.findall(r"v_(?:current|closed|active)_new text := '([^']+)'", SQL)
     assert len(targets) == 3
+    assert migration_validation_state(fixture) == "predecessor"
     transformed = splice_case_arm(fixture, "parent.line_type = 'rental_extension'", targets[2], 2)
     transformed = splice_case_arm(transformed, "v_current_line.line_type = 'rental_extension'", targets[0])
     transformed = splice_case_arm(transformed, "parent.line_type = 'rental_extension'", targets[1])
@@ -81,6 +128,10 @@ def test_structural_splice_transforms_realistically_multiline_predecessor():
     assert transformed.count("parent.line_type = 'rental_extension'") == 2
     for target in targets:
         assert transformed.count(target) == 1
+    assert migration_validation_state(transformed) == "target"
+
+    partial = splice_case_arm(fixture, "v_current_line.line_type = 'rental_extension'", targets[0])
+    assert migration_validation_state(partial) == "partial-or-drifted"
 
 
 def test_non_extension_branches_and_protected_definitions_are_untouched():

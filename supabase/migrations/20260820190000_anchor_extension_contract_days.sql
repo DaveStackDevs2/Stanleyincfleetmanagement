@@ -15,6 +15,9 @@ DECLARE
   v_closed_new text := 'greatest(0, public.business_contract_days(v_reservation.start_date, coalesce(parent.end_time, parent.paid_through_at, v_event.closed_at, p_effective_at)) - public.business_contract_days(v_reservation.start_date, parent.start_time))';
   v_active_old text := 'greatest(0, public.business_contract_days(parent.start_time, coalesce(parent.end_time, parent.paid_through_at, p_effective_at)) - 1)';
   v_active_new text := 'greatest(0, public.business_contract_days(v_reservation.start_date, coalesce(parent.end_time, parent.paid_through_at, p_effective_at)) - public.business_contract_days(v_reservation.start_date, parent.start_time))';
+  v_current_old_compact text; v_current_new_compact text;
+  v_closed_old_compact text; v_closed_new_compact text;
+  v_active_old_compact text; v_active_new_compact text;
 BEGIN
   IF v_preview IS NULL THEN
     RAISE EXCEPTION 'Expected Billing preview signature is missing';
@@ -47,20 +50,29 @@ BEGIN
     RAISE EXCEPTION 'Billing preview Extension CASE structure has drifted';
   END IF;
 
-  -- Collapse whitespace only for validation; retain structural offsets for each splice.
-  v_current_expression := regexp_replace(btrim(substr(v_definition, v_current_then + 4, v_current_else - v_current_then - 4)), '[[:space:]]+', ' ', 'g');
-  v_closed_expression := regexp_replace(btrim(substr(v_definition, v_closed_then + 4, v_closed_else - v_closed_then - 4)), '[[:space:]]+', ' ', 'g');
-  v_active_expression := regexp_replace(btrim(substr(v_definition, v_active_then + 4, v_active_else - v_active_then - 4)), '[[:space:]]+', ' ', 'g');
+  -- Remove all whitespace for validation because pg_get_functiondef may also insert
+  -- spaces immediately inside function-call parentheses. Retain structural offsets
+  -- into the unmodified definition for each splice.
+  v_current_expression := regexp_replace(substr(v_definition, v_current_then + 4, v_current_else - v_current_then - 4), '[[:space:]]', '', 'g');
+  v_closed_expression := regexp_replace(substr(v_definition, v_closed_then + 4, v_closed_else - v_closed_then - 4), '[[:space:]]', '', 'g');
+  v_active_expression := regexp_replace(substr(v_definition, v_active_then + 4, v_active_else - v_active_then - 4), '[[:space:]]', '', 'g');
+
+  v_current_old_compact := regexp_replace(v_current_old, '[[:space:]]', '', 'g');
+  v_current_new_compact := regexp_replace(v_current_new, '[[:space:]]', '', 'g');
+  v_closed_old_compact := regexp_replace(v_closed_old, '[[:space:]]', '', 'g');
+  v_closed_new_compact := regexp_replace(v_closed_new, '[[:space:]]', '', 'g');
+  v_active_old_compact := regexp_replace(v_active_old, '[[:space:]]', '', 'g');
+  v_active_new_compact := regexp_replace(v_active_new, '[[:space:]]', '', 'g');
 
   -- Recognize only the complete target or complete predecessor; mixed/drifted states fail closed.
-  IF v_current_expression = v_current_new
-     AND v_closed_expression = v_closed_new
-     AND v_active_expression = v_active_new THEN
+  IF v_current_expression = v_current_new_compact
+     AND v_closed_expression = v_closed_new_compact
+     AND v_active_expression = v_active_new_compact THEN
     RETURN;
   END IF;
-  IF v_current_expression <> v_current_old
-     OR v_closed_expression <> v_closed_old
-     OR v_active_expression <> v_active_old THEN
+  IF v_current_expression <> v_current_old_compact
+     OR v_closed_expression <> v_closed_old_compact
+     OR v_active_expression <> v_active_old_compact THEN
     RAISE EXCEPTION 'Billing preview Extension anchors are partial or drifted';
   END IF;
 
