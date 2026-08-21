@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 ROOT=Path(__file__).resolve().parents[1]
 SQL=(ROOT/'supabase/migrations/20260821170000_correct_rental_payment_and_extension_workflow.sql').read_text()
 BILLING=(ROOT/'frontend/src/billing/BillingWorkspace.tsx').read_text()
@@ -47,6 +48,64 @@ def test_preview_is_authoritative_validated_and_future_start_narrow():
  assert "RAISE EXCEPTION ''Preview timestamp precedes the current billing segment''" in SQL
  anchor=(ROOT/'supabase/migrations/20260820190000_anchor_extension_contract_days.sql').read_text()
  assert 'business_contract_days(v_reservation.start_date' in anchor
+
+def test_future_start_patch_matches_live_multiline_guard_only():
+ fixture="""BEGIN\r
+    IF something_else THEN\r
+        RAISE EXCEPTION 'Unrelated guard';\r
+    END IF;\r
+    IF v_preview_end < v_billing_start THEN\r
+        RAISE EXCEPTION\r
+            'Preview timestamp precedes the current billing segment'\r
+            USING ERRCODE = '22023';\r
+    END IF;\r
+END""".replace('\r','')
+ pattern=r"IF\s+v_preview_end\s*<\s*v_billing_start\s+THEN\s+RAISE\s+EXCEPTION\s+'Preview timestamp precedes the current billing segment'\s+USING\s+ERRCODE\s*=\s*'22023';\s+END\s+IF;"
+ replacement="""IF v_preview_end < v_billing_start THEN
+        IF v_current_line.line_type = 'rental_extension' AND v_current_line.extended_from_billing_line_id IS NOT NULL THEN
+            v_preview_end := v_billing_start; -- valid future-start Extension: zero elapsed Extension days
+        ELSE
+            RAISE EXCEPTION 'Preview timestamp precedes the current billing segment' USING ERRCODE = '22023';
+        END IF;
+    END IF;"""
+ transformed,count=re.subn(pattern,replacement,fixture)
+ assert count==1
+ assert transformed.count('valid future-start Extension: zero elapsed Extension days')==1
+ assert "RAISE EXCEPTION 'Unrelated guard';" in transformed
+ assert 'regexp_matches(v_definition,v_old_pattern' in SQL
+ assert 'v_old_count<>1 OR v_target_count<>0 OR v_message_count<>1' in SQL
+ assert "replace(pg_get_functiondef('public.get_billing_preview_state(uuid,timestamptz)'::regprocedure),chr(13),'')" in SQL
+
+def test_payment_mutation_permission_and_flag_based_overall_state():
+ payment=body('get_rental_payment_state','mark_rental_billing_line_paid_in_full_state')
+ mutation=body('mark_rental_billing_line_paid_in_full_state')
+ assert 'coalesce(bool_and(b.rental_paid_in_full),true)' in payment
+ assert "'overall_paid_in_full',v_all_paid" in payment
+ assert 'v_unpaid_charge+v_unpaid_tax=0' not in payment
+ # A zero-dollar line remains operationally unpaid because the aggregate is flag based.
+ assert all([True, False]) is False
+ permission="public.v_user_effective_permissions WHERE user_id=v_user AND permission_key='billing.case_start'"
+ assert permission in mutation
+ assert mutation.index(permission)<mutation.index('UPDATE public.billing_lines SET rental_paid_in_full=true')
+ assert "USING ERRCODE='42501'" in mutation
+
+def test_idempotent_pickup_returns_authoritative_billing_and_payment():
+ pickup=SQL[SQL.index('create or replace function public.activate_pricing_agreement_pickup_state'):SQL.index('CREATE OR REPLACE FUNCTION public.preview_rental_extension_state')]
+ branch=pickup[pickup.index("if v_agreement.pricing_started_at is not null then"):pickup.index("raise exception 'Existing pickup state is inconsistent'")]
+ assert 'public.get_billing_preview_state' in branch
+ assert "billing_preview_ready" in branch
+ assert 'public.get_rental_payment_state' in branch
+ assert "'billing_preview',v_preview" in branch and "'rental_payment_state',v_payment" in branch
+ assert "'Not Paid'" not in branch
+ assert 'start_reservation_vehicle_use_state' not in branch
+
+def test_warning_navigation_resolves_only_workspace_transportation_events():
+ assert "warning.item_type==='unpaid_rental'" in BILLING
+ assert "warning.item_type==='dependency_warning'" in BILLING
+ assert "warning.item_type==='contract_reminder'" in BILLING
+ assert 'item.reservation.reservation_id===warning.reservation_id' in BILLING
+ assert 'item.preview.contract_period_id===warning.contract_period_id' in BILLING
+ assert 'const id=warningTransportationEventId(warning,state);if(id){setSelected(id);rememberActiveCase(id)}' in BILLING
 
 def test_payment_summary_and_warning_contracts():
  for x in ('contractual_charge','contractual_tax','contractual_total','unpaid_charge','unpaid_tax','unpaid_total','overall_paid_in_full','payment_status'): assert x in SQL

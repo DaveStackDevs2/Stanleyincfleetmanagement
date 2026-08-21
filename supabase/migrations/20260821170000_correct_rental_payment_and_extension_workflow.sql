@@ -8,19 +8,20 @@ DO $migration$ BEGIN
 END $migration$;
 
 CREATE OR REPLACE FUNCTION public.get_rental_payment_state(p_transportation_event_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $function$
-DECLARE v_actor uuid; v_reservation uuid; v_lines jsonb; v_charge numeric; v_tax numeric; v_unpaid_charge numeric; v_unpaid_tax numeric;
+DECLARE v_actor uuid; v_reservation uuid; v_lines jsonb; v_charge numeric; v_tax numeric; v_unpaid_charge numeric; v_unpaid_tax numeric; v_all_paid boolean;
 BEGIN
  SELECT id INTO v_actor FROM public.app_users WHERE auth_user_id=auth.uid() AND is_active=true; IF v_actor IS NULL THEN RAISE EXCEPTION 'An active application user is required' USING ERRCODE='42501'; END IF;
  SELECT r.id INTO v_reservation FROM public.reservations r WHERE r.transportation_event_id=p_transportation_event_id AND lower(coalesce(r.reservation_type,'')) LIKE '%rental%' ORDER BY r.created_at LIMIT 1;
  IF v_reservation IS NULL THEN RAISE EXCEPTION 'Rental case was not found' USING ERRCODE='P0002'; END IF;
- SELECT coalesce(jsonb_agg(jsonb_build_object('billing_line_id',b.id,'purpose',CASE WHEN b.line_type='rental_extension' THEN 'Rental Extension' ELSE 'Original Rental' END,'line_type',b.line_type,'start_at',b.start_time,'through_at',b.end_time,'charge',b.amount::text,'tax',coalesce(b.tax_amount,0)::text,'total',(coalesce(b.amount,0)+coalesce(b.tax_amount,0))::text,'rental_paid_in_full',b.rental_paid_in_full,'payment_status',CASE WHEN b.rental_paid_in_full THEN 'Paid in Full' ELSE 'Not Paid' END,'rental_paid_at',b.rental_paid_at) ORDER BY b.start_time,b.created_at,b.id),'[]'::jsonb),coalesce(sum(b.amount),0),coalesce(sum(b.tax_amount),0),coalesce(sum(b.amount) FILTER(WHERE NOT b.rental_paid_in_full),0),coalesce(sum(b.tax_amount) FILTER(WHERE NOT b.rental_paid_in_full),0) INTO v_lines,v_charge,v_tax,v_unpaid_charge,v_unpaid_tax FROM public.billing_lines b WHERE b.transportation_event_id=p_transportation_event_id AND b.reservation_id=v_reservation AND b.parent_billing_line_id IS NULL AND b.line_type IN ('initial_assignment','rental_extension');
- RETURN jsonb_build_object('status','rental_payment_state_ready','reservation_id',v_reservation,'transportation_event_id',p_transportation_event_id,'lines',v_lines,'contractual_charge',v_charge::text,'contractual_tax',v_tax::text,'contractual_total',(v_charge+v_tax)::text,'unpaid_charge',v_unpaid_charge::text,'unpaid_tax',v_unpaid_tax::text,'unpaid_total',(v_unpaid_charge+v_unpaid_tax)::text,'overall_paid_in_full',(v_unpaid_charge+v_unpaid_tax=0));
+ SELECT coalesce(jsonb_agg(jsonb_build_object('billing_line_id',b.id,'purpose',CASE WHEN b.line_type='rental_extension' THEN 'Rental Extension' ELSE 'Original Rental' END,'line_type',b.line_type,'start_at',b.start_time,'through_at',b.end_time,'charge',b.amount::text,'tax',coalesce(b.tax_amount,0)::text,'total',(coalesce(b.amount,0)+coalesce(b.tax_amount,0))::text,'rental_paid_in_full',b.rental_paid_in_full,'payment_status',CASE WHEN b.rental_paid_in_full THEN 'Paid in Full' ELSE 'Not Paid' END,'rental_paid_at',b.rental_paid_at) ORDER BY b.start_time,b.created_at,b.id),'[]'::jsonb),coalesce(sum(b.amount),0),coalesce(sum(b.tax_amount),0),coalesce(sum(b.amount) FILTER(WHERE NOT b.rental_paid_in_full),0),coalesce(sum(b.tax_amount) FILTER(WHERE NOT b.rental_paid_in_full),0),coalesce(bool_and(b.rental_paid_in_full),true) INTO v_lines,v_charge,v_tax,v_unpaid_charge,v_unpaid_tax,v_all_paid FROM public.billing_lines b WHERE b.transportation_event_id=p_transportation_event_id AND b.reservation_id=v_reservation AND b.parent_billing_line_id IS NULL AND b.line_type IN ('initial_assignment','rental_extension');
+ RETURN jsonb_build_object('status','rental_payment_state_ready','reservation_id',v_reservation,'transportation_event_id',p_transportation_event_id,'lines',v_lines,'contractual_charge',v_charge::text,'contractual_tax',v_tax::text,'contractual_total',(v_charge+v_tax)::text,'unpaid_charge',v_unpaid_charge::text,'unpaid_tax',v_unpaid_tax::text,'unpaid_total',(v_unpaid_charge+v_unpaid_tax)::text,'overall_paid_in_full',v_all_paid);
 END $function$;
 
 CREATE OR REPLACE FUNCTION public.mark_rental_billing_line_paid_in_full_state(p_billing_line_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $function$
 DECLARE v_user uuid; v_line public.billing_lines%rowtype;
 BEGIN
  SELECT id INTO v_user FROM public.app_users WHERE auth_user_id=auth.uid() AND is_active=true; IF v_user IS NULL THEN RAISE EXCEPTION 'Active application user required' USING ERRCODE='42501'; END IF; IF coalesce(auth.jwt()->>'aal','')<>'aal2' THEN RAISE EXCEPTION 'AAL2 required' USING ERRCODE='42501'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.v_user_effective_permissions WHERE user_id=v_user AND permission_key='billing.case_start') THEN RAISE EXCEPTION 'Billing payment permission is required' USING ERRCODE='42501'; END IF;
  SELECT b.* INTO v_line FROM public.billing_lines b JOIN public.reservations r ON r.id=b.reservation_id WHERE b.id=p_billing_line_id AND b.parent_billing_line_id IS NULL AND b.line_type IN ('initial_assignment','rental_extension') AND lower(coalesce(r.reservation_type,'')) LIKE '%rental%' FOR UPDATE OF b; IF NOT FOUND THEN RAISE EXCEPTION 'Eligible Rental parent billing line not found' USING ERRCODE='P0002'; END IF;
  IF NOT v_line.rental_paid_in_full THEN UPDATE public.billing_lines SET rental_paid_in_full=true,rental_paid_at=clock_timestamp(),rental_paid_by_user_id=v_user,updated_at=clock_timestamp() WHERE id=v_line.id; INSERT INTO public.audit_log(entity_type,entity_id,action_type,field_name,old_value,new_value,actor_user_id,metadata) VALUES ('billing_line',v_line.id::text,'rental_paid_in_full_recorded','rental_paid_in_full','false','true',v_user::text,jsonb_build_object('transportation_event_id',v_line.transportation_event_id,'reservation_id',v_line.reservation_id)); END IF;
  RETURN public.get_rental_payment_state(v_line.transportation_event_id);
@@ -71,7 +72,10 @@ begin
    order by bl.start_time desc nulls last,bl.created_at desc,bl.id desc limit 1;
  if v_agreement.pricing_started_at is not null then
   if v_current_vehicle_id=p_vehicle_id and v_existing_line is not null then
-   return jsonb_build_object('status','pricing_agreement_pickup_already_active','reservation_id',p_reservation_id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'vehicle_id',p_vehicle_id,'billing_line_id',v_existing_line,'pricing_started_at',v_agreement.pricing_started_at);
+   v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,v_reservation.expected_return_datetime);
+   if v_preview->>'status'<>'billing_preview_ready' then raise exception 'Activated pickup could not be loaded by Billing' using errcode='P0001'; end if;
+   v_payment:=public.get_rental_payment_state(v_reservation.transportation_event_id);
+   return jsonb_build_object('status','pricing_agreement_pickup_already_active','reservation_id',p_reservation_id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'vehicle_id',p_vehicle_id,'billing_line_id',v_existing_line,'pricing_started_at',v_agreement.pricing_started_at,'billing_preview',v_preview,'rental_payment_state',v_payment);
   end if;
    raise exception 'Existing pickup state is inconsistent' using errcode='P0001';
  end if;
@@ -134,8 +138,21 @@ REVOKE INSERT,UPDATE,DELETE ON public.billing_lines FROM authenticated,anon;
 
 
 DO $migration$
-DECLARE v_definition text; v_old text:=E'IF v_preview_end < v_billing_start THEN\n        RAISE EXCEPTION ''Preview timestamp precedes the current billing segment'' USING ERRCODE = ''22023'';\n    END IF;'; v_new text:=E'IF v_preview_end < v_billing_start THEN\n        IF v_current_line.line_type = ''rental_extension'' AND v_current_line.extended_from_billing_line_id IS NOT NULL THEN\n            v_preview_end := v_billing_start; -- valid future-start Extension: zero elapsed Extension days\n        ELSE\n            RAISE EXCEPTION ''Preview timestamp precedes the current billing segment'' USING ERRCODE = ''22023'';\n        END IF;\n    END IF;';
-BEGIN v_definition:=replace(pg_get_functiondef('public.get_billing_preview_state(uuid,timestamptz)'::regprocedure),chr(13),''); IF strpos(v_definition,v_new)>0 THEN RETURN; END IF; IF strpos(v_definition,v_old)=0 THEN RAISE EXCEPTION 'Billing preview future-start guard has drifted'; END IF; EXECUTE replace(v_definition,v_old,v_new); END $migration$;
+DECLARE
+ v_definition text;
+ v_old_pattern text := 'IF[[:space:]]+v_preview_end[[:space:]]*<[[:space:]]*v_billing_start[[:space:]]+THEN[[:space:]]+RAISE[[:space:]]+EXCEPTION[[:space:]]+''Preview timestamp precedes the current billing segment''[[:space:]]+USING[[:space:]]+ERRCODE[[:space:]]*=[[:space:]]*''22023'';[[:space:]]+END[[:space:]]+IF;';
+ v_target_pattern text := 'IF[[:space:]]+v_preview_end[[:space:]]*<[[:space:]]*v_billing_start[[:space:]]+THEN[[:space:]]+IF[[:space:]]+v_current_line\.line_type[[:space:]]*=[[:space:]]*''rental_extension''[[:space:]]+AND[[:space:]]+v_current_line\.extended_from_billing_line_id[[:space:]]+IS[[:space:]]+NOT[[:space:]]+NULL[[:space:]]+THEN[[:space:]]+v_preview_end[[:space:]]*:=[[:space:]]*v_billing_start;[[:space:]]*-- valid future-start Extension: zero elapsed Extension days[[:space:]]+ELSE[[:space:]]+RAISE[[:space:]]+EXCEPTION[[:space:]]+''Preview timestamp precedes the current billing segment''[[:space:]]+USING[[:space:]]+ERRCODE[[:space:]]*=[[:space:]]*''22023'';[[:space:]]+END[[:space:]]+IF;[[:space:]]+END[[:space:]]+IF;';
+ v_new text := E'IF v_preview_end < v_billing_start THEN\n        IF v_current_line.line_type = ''rental_extension'' AND v_current_line.extended_from_billing_line_id IS NOT NULL THEN\n            v_preview_end := v_billing_start; -- valid future-start Extension: zero elapsed Extension days\n        ELSE\n            RAISE EXCEPTION ''Preview timestamp precedes the current billing segment'' USING ERRCODE = ''22023'';\n        END IF;\n    END IF;';
+ v_old_count integer; v_target_count integer; v_message_count integer;
+BEGIN
+ v_definition:=replace(pg_get_functiondef('public.get_billing_preview_state(uuid,timestamptz)'::regprocedure),chr(13),'');
+ SELECT count(*) INTO v_old_count FROM regexp_matches(v_definition,v_old_pattern,'g');
+ SELECT count(*) INTO v_target_count FROM regexp_matches(v_definition,v_target_pattern,'g');
+ SELECT count(*) INTO v_message_count FROM regexp_matches(v_definition,'''Preview timestamp precedes the current billing segment''','g');
+ IF v_target_count=1 AND v_old_count=0 AND v_message_count=1 THEN RETURN; END IF;
+ IF v_old_count<>1 OR v_target_count<>0 OR v_message_count<>1 THEN RAISE EXCEPTION 'Billing preview future-start guard has drifted'; END IF;
+ EXECUTE regexp_replace(v_definition,v_old_pattern,v_new,'g');
+END $migration$;
 
 CREATE OR REPLACE FUNCTION public.create_extension_billing_line_state(p_parent_billing_line_id uuid,p_extension_amount numeric,p_extension_tax_amount numeric,p_new_expected_return_at timestamptz DEFAULT NULL) RETURNS jsonb LANGUAGE plpgsql AS $function$
 DECLARE v_parent public.billing_lines%rowtype; v_result jsonb;
