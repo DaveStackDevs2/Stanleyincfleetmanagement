@@ -1993,3 +1993,9 @@ Read-only live verification used active multi-day TE `a5757d9d-8234-40bf-86e3-9d
 - **VERIFIED AAL2 PREVIEW:** The resulting preview returned historical subtotal `$40`, current Extension subtotal `$80`, accumulated subtotal `$120`, accumulated tax `$12`, accumulated total `$132`, and Extension `contract_days = 2`. The shared boundary is therefore not double-counted.
 - **IMPLEMENTED IN REPOSITORY:** A follow-up compatibility migration records the live helper correction. Billing now remembers an active case for the browser session, presents a staff-facing rental summary, Tekion checkpoint, Extension decision, and compact Billing history, and clears stale Extension state after confirmation.
 - **NOT VERIFIED / STILL PENDING:** Repeated-Extension rejection and a later successful repeated Extension remain pending after this UX correction. Phase 8 Extension testing is not complete.
+
+### 2026-08-20 — Phase 8 repeated-Extension contract-day anchor follow-up
+
+- **VERIFIED PRODUCTION PASS:** The first repeated Extension correctly rejected before Tekion Billing advanced. The later 3:43 PM checkpoint correctly captured zero Extension days and `$0/$0`; its zero-tax-child removal is not a defect.
+- **IMPLEMENTED IN REPOSITORY / NOT DEPLOYED:** The defect was the successor segment's relative contract-day clock. The preview-only follow-up measures each true Extension segment between positions on the Reservation's scheduled Billing clock and leaves checkpoint and wrapper definitions unchanged.
+- **NOT VERIFIED / STILL PENDING:** Deployment and successful repeated-Extension production proof remain open. This correction has no browser verification, and Phase 8 Extension remains **not complete**.
