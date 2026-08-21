@@ -604,3 +604,11 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 - [x] **VERIFIED PRODUCTION:** The 3:43 PM Tekion checkpoint correctly stored zero Extension days and `$0/$0`; removing the zero-tax child was correct.
 - [x] **IMPLEMENTED IN REPOSITORY / NOT DEPLOYED:** Anchor current, active-history, and closed-history true Extension contract days to `reservations.start_date`, without changing non-Extension calculation, the checkpoint RPC, or the Extension wrapper delta.
 - [ ] **NOT VERIFIED / STILL PENDING:** Deploy this correction and production-verify a successful repeated Extension. No browser verification is claimed. Phase 8 Extension is **not complete**.
+
+### 2026-08-21 Rental workflow correction
+- [x] Original reserved-through Rental charge is authoritative at pickup; pickup is allowed while Not Paid.
+- [x] External Tekion Rental Sale payment recording, per-line audited state, backend balance summary, and one active-case Warning are implemented.
+- [x] Extensions are separate same-vehicle lines independent of Loaner billed-through; Days in Vehicle continues.
+- [ ] **DEFERRED:** SO number per payment.
+- [ ] **SEPARATE PLANNED LOANER WORKFLOW:** mass/bulk billed-through; no verified live bulk engine exists.
+- [x] **CORRECTED BEFORE DEPLOYMENT:** Existing Extension chain and tax helpers are reused; future-start Extension workspace preview, authoritative Rental payment detail/refresh, active-only warnings, and individual Loaner preview-before-confirm are covered by regression tests.
