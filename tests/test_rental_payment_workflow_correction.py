@@ -112,6 +112,11 @@ def test_payment_summary_and_warning_contracts():
  assert "lower(btrim(te.status))='active'" in SQL
  assert 'GROUP BY te.id,r.id' in SQL and "'dependency_warning'" in SQL and "'contract_reminder'" in SQL
 
+def test_unpaid_rental_warning_uses_type_safe_vehicle_uuid_aggregate():
+ warning=SQL[SQL.index("UNION ALL SELECT 'unpaid_rental'"):SQL.index('GROUP BY te.id,r.id,te.status,te.expected_return_at')]
+ assert 'min(b.vehicle_id::text)::uuid' in warning
+ assert 'min(b.vehicle_id)' not in warning
+
 def test_frontends_use_authoritative_payment_warning_and_loaner_preview():
  for x in ('get_rental_payment_state','Balance Due','Overall payment status','Mark Paid in Full','rental_paid_at','loadWarnings','onMutation'): assert x in BILLING
  assert "get_billing_preview_state" in BILLING and BILLING.index("get_billing_preview_state")<BILLING.index("mark_case_billed_through_and_get_preview_state")
