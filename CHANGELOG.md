@@ -100,3 +100,9 @@
 - **VERIFIED PRODUCTION:** The original Billing segment closed with `$40 + $4` tax, and the Extension recorded `$80 + $8` tax. The AAL2 preview returned an accumulated `$120 + $12 = $132`; the shared boundary was verified without double-counting.
 - **IMPLEMENTED IN REPOSITORY / NOT YET BROWSER-VERIFIED:** Billing navigation persistence and the staff-facing Extension UX cleanup are implemented, but browser verification remains pending deployment.
 - **NOT VERIFIED / STILL PENDING:** Repeated-Extension rejection and a subsequent successful repeated Extension remain pending. Phase 8 Extension is **not complete**.
+
+### 2026-08-20 — Phase 8 repeated-Extension contract-day anchor follow-up
+
+- **VERIFIED PRODUCTION PASS:** A repeated Extension was correctly rejected before Tekion Billing advanced. Marking Tekion updated through `2026-08-20T19:43:00Z` then correctly checkpointed the open Extension at zero contract days and removed its zero-tax child.
+- **DEFECT IDENTIFIED / CORRECTED IN REPOSITORY:** That mid-day checkpoint exposed segment-relative Extension day anchoring: successor days restarted at 3:43 PM instead of retaining the Reservation's scheduled 9:00 AM Billing boundary. A data-free follow-up migration anchors only true Extension day differences to `reservations.start_date`; the checkpoint and Extension wrapper remain unchanged.
+- **NOT VERIFIED / STILL PENDING:** Deployment and a successful repeated production Extension remain pending. This correction has not been browser-verified, and Phase 8 Extension is **not complete**.

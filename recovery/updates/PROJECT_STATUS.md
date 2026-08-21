@@ -181,3 +181,9 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - **VERIFIED AAL2 PREVIEW:** The resulting preview returned historical subtotal `$40`, current Extension subtotal `$80`, accumulated subtotal `$120`, accumulated tax `$12`, accumulated total `$132`, and Extension `contract_days = 2`. The shared boundary is therefore not double-counted.
 - **IMPLEMENTED IN REPOSITORY:** A follow-up compatibility migration records the live helper correction. Billing now remembers an active case for the browser session, presents a staff-facing rental summary, Tekion checkpoint, Extension decision, and compact Billing history, and clears stale Extension state after confirmation.
 - **NOT VERIFIED / STILL PENDING:** Repeated-Extension rejection and a later successful repeated Extension remain pending after this UX correction. Phase 8 Extension testing is not complete.
+
+### 2026-08-20 — Phase 8 repeated-Extension contract-day anchor follow-up
+
+- **VERIFIED PRODUCTION PASS:** The first repeated Extension rejected before Tekion Billing advanced. Mark Tekion updated at `2026-08-20T19:43:00Z` correctly persisted the point-in-time zero-day, `$0/$0` Extension checkpoint and reconciled away the zero-tax child.
+- **IMPLEMENTED IN REPOSITORY / NOT DEPLOYED:** The defect is the three segment-relative Extension contract-day branches, not the Tekion checkpoint. The follow-up preserves the scheduled Reservation Billing anchor across mid-day checkpoints and does not alter the checkpoint or Extension wrapper.
+- **NOT VERIFIED / STILL PENDING:** Successful repeated Extension deployment and production verification remain open. No browser verification is claimed, and Phase 8 Extension remains **not complete**.
