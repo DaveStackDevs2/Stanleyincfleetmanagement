@@ -106,3 +106,9 @@
 - **VERIFIED PRODUCTION PASS:** A repeated Extension was correctly rejected before Tekion Billing advanced. Marking Tekion updated through `2026-08-20T19:43:00Z` then correctly checkpointed the open Extension at zero contract days and removed its zero-tax child.
 - **DEFECT IDENTIFIED / CORRECTED IN REPOSITORY:** That mid-day checkpoint exposed segment-relative Extension day anchoring: successor days restarted at 3:43 PM instead of retaining the Reservation's scheduled 9:00 AM Billing boundary. A data-free follow-up migration anchors only true Extension day differences to `reservations.start_date`; the checkpoint and Extension wrapper remain unchanged.
 - **NOT VERIFIED / STILL PENDING:** Deployment and a successful repeated production Extension remain pending. This correction has not been browser-verified, and Phase 8 Extension is **not complete**.
+
+## 2026-08-21 — Rental payment and Extension workflow correction
+- **IMPLEMENTED / NOT LIVE-VERIFIED:** Rental pickup stores the complete reserved-through charge and begins Not Paid; staff payment records external Tekion Rental Sale completion, not payment processing by Stanley.
+- Active unpaid Rentals aggregate into one existing Warning Center Warning. Rental Extensions are separate unpaid lines on the same vehicle, independent of Loaner billed-through, and Days in Vehicle continues from physical handoff.
+- SO number is deferred. Mass/bulk Loaner billed-through remains a separate planned workflow because no verified live bulk engine exists.
+- **CORRECTED BEFORE DEPLOYMENT:** The Rental correction now preserves the existing Extension accept/commit/create chain, uses old expected return rather than paid-through for segment boundaries, narrowly supports future-start Extensions, synchronizes pickup tax through the existing helper, and connects authoritative payment, Warning, and two-step Loaner preview UI contracts.

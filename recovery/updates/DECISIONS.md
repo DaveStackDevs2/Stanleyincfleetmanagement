@@ -96,3 +96,7 @@
 ## 2026-08-19 — Closed Billing historical boundary
 
 **Decision:** Closed-case filtering uses `transportation_events.closed_at`. `p_closed_from` is inclusive and `p_closed_before` is exclusive. Historical money always comes from stored billing-line and tax snapshots, never current rate or tax configuration. The browser only supplies query boundaries and renders returned exact strings; closed review is read-only Tekion reconciliation, not cashiering.
+
+## 2026-08-21 — Rental Billing correction
+**IMPLEMENTED / NOT DEPLOYED / NOT LIVE-VERIFIED:** Rental original and Extension charges independently record external Tekion Rental Sale Paid in Full state. Pickup remains allowed unpaid and active unpaid Rentals appear once in the existing Warning category. Rental Extension is independent from Loaner billed-through, uses separate same-vehicle lines, and preserves Days in Vehicle. SO number is deferred; mass/bulk Loaner billed-through remains separate and planned because no verified live engine exists.
+- **CORRECTED LOCALLY / NOT DEPLOYED:** The pre-push audit correction preserves the existing Extension engine chain and authoritative tax/preview/continuity/Warning engines while adding the required Rental payment presentation and Loaner two-step preview. Production application and browser verification remain pending.
