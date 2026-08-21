@@ -612,3 +612,12 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 - [ ] **DEFERRED:** SO number per payment.
 - [ ] **SEPARATE PLANNED LOANER WORKFLOW:** mass/bulk billed-through; no verified live bulk engine exists.
 - [x] **CORRECTED BEFORE DEPLOYMENT:** Existing Extension chain and tax helpers are reused; future-start Extension workspace preview, authoritative Rental payment detail/refresh, active-only warnings, and individual Loaner preview-before-confirm are covered by regression tests.
+
+### 2026-08-21 — Rental workflow deployment and live verification
+- [x] **DEPLOYED / VERIFIED:** PR #39 merged at `5aca4682368bc8d6945bd33f49d139a374ff0bc1`; Supabase migration `20260821185156 correct_rental_payment_and_extension_workflow` is recorded and live.
+- [x] **VERIFIED LIVE / READ-ONLY:** The current active Rental has three parent billing lines totaling `$160 + $16 tax = $176`; all three are Not Paid, including the valid `$0/$0` Extension checkpoint. The authenticated AAL2 `get_rental_payment_state` payload matches those stored totals and statuses.
+- [x] **VERIFIED LIVE / READ-ONLY:** Exactly one active Rental with unpaid parent lines produces exactly one unpaid-Rental Warning. Warning membership, Balance Due, and vehicle ID match the authoritative billing rows.
+- [x] **VERIFIED LIVE / READ-ONLY:** A one-day Extension preview returns `$40 + $4 tax = $44` and exactly matches the delta between authoritative Billing previews. The future-start Extension guard clamps an earlier preview to the Extension start and returns zero elapsed `$0/$0`.
+- [x] **SECURITY FOLLOW-UP:** PR #40 merged at `d4485f2796c3229bc34f7fcabc36b54c6ad985f4`; Supabase migration `20260821185849 secure_warning_center_counts` restricts the existing counts helper to `service_role` while preserving its body, owner, `SECURITY DEFINER`, and empty search path. The corresponding anonymous SECURITY DEFINER advisor finding is cleared.
+- [ ] **BROWSER/MUTATION FOLLOW-UP:** Do not mark a production Rental payment line Paid solely for testing. Verify the write path when a legitimate Tekion Rental Sale is actually recorded.
+- [ ] **STILL OPEN:** A successfully persisted repeated Extension after the scheduled-start anchor correction remains a separate Phase 8 verification item; this read-only preview proof does not close it.
