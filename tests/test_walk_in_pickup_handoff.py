@@ -18,12 +18,14 @@ def test_walk_in_uses_existing_rpc_and_authoritative_identifier_handoff():
     assert "setPickupReservationId(reservationId)" in walk_in_success
     assert "setWorkflow('pickup')" in walk_in_success
     assert "initialReservationId={pickupReservationId}" in RESERVATIONS
+    assert "onInitialReservationHandled={handleInitialPickupReservation}" in RESERVATIONS
+    assert "handleInitialPickupReservation = useCallback(() => setPickupReservationId(null), [])" in RESERVATIONS
 
 
 def test_pickup_handoff_only_selects_authoritative_loaded_item():
     assert "initialReservationId?:string|null" in PICKUP
     assert "get_pricing_agreement_pickup_state" in PICKUP
-    handoff = PICKUP.split("useEffect(()=>{if(loading||!initialReservationId", 1)[1].split(
+    handoff = PICKUP.split("useEffect(()=>{if(!authoritativeLoadVersion||loading||!initialReservationId", 1)[1].split(
         "const activate=", 1
     )[0]
     assert "items.find(item=>item.reservationId===initialReservationId)" in handoff
@@ -32,6 +34,21 @@ def test_pickup_handoff_only_selects_authoritative_loaded_item():
     assert "not present in Pickup" in handoff
     assert "setVehicleId('')" in handoff
     assert "setVehicleId(authoritativeItem" not in handoff
+    assert "onInitialReservationHandled()" in handoff
+    assert handoff.index("items.find") < handoff.index("onInitialReservationHandled()")
+
+
+def test_pickup_handoff_is_not_consumed_until_authoritative_load_succeeds():
+    load = PICKUP.split("const load=useCallback", 1)[1].split(
+        "useEffect(()=>{void load()", 1
+    )[0]
+    assert "setAuthoritativeLoadVersion(version=>version+1)" in load
+    assert load.index("parsePickupState(data)") < load.index("setAuthoritativeLoadVersion")
+    rpc_failure = load.split("if(error){", 1)[1].split("try{", 1)[0]
+    parse_failure = load.split("}catch{", 1)[1]
+    assert "setAuthoritativeLoadVersion" not in rpc_failure
+    assert "setAuthoritativeLoadVersion" not in parse_failure
+    assert "!authoritativeLoadVersion" in PICKUP
 
 
 def test_activation_remains_pickup_owned_and_never_automatic():
