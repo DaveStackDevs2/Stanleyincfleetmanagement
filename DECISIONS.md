@@ -1,3 +1,11 @@
+## 2026-08-24 — Fleet Board remains an operational router
+
+- PR #43, “Hand Walk-ins directly into Pickup,” merged to `main` at `06b2dd8f74b48d218a24d016116f8b1a9389cf35`; it was frontend-only and required no Supabase migration.
+- `public.get_fleet_board_state(timestamptz,timestamptz)` remains the Fleet Board backend engine and is extended rather than duplicated.
+- `rental_model_limits` remains Rental-only capacity; Loaner visibility does not imply shared or fabricated capacity.
+- Reservation/Pickup/Billing engines remain authoritative. Fleet Board supplies one-time navigation context and performs no lifecycle mutation.
+- **NOT VERIFIED:** Production migration application and production browser workflow.
+
 ## 2026-08-24 — Hand immediate Walk-ins into existing Pickup
 
 **Decision:** Continue creating Walk-ins exclusively through `create_walk_in_with_pricing_agreement_state`, then use its validated authoritative `reservation_id` only as selection context for the existing Pickup workspace after Pickup reloads `get_pricing_agreement_pickup_state`. Never fabricate a Pickup item, choose a VIN, or activate Pickup from intake. Loaner Walk-ins require a nonblank RO as friendly preflight, and weekly/monthly Walk-ins fail before creation with the existing Pickup-not-implemented message.

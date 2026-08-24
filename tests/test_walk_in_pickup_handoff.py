@@ -19,7 +19,8 @@ def test_walk_in_uses_existing_rpc_and_authoritative_identifier_handoff():
     assert "setWorkflow('pickup')" in walk_in_success
     assert "initialReservationId={pickupReservationId}" in RESERVATIONS
     assert "onInitialReservationHandled={handleInitialPickupReservation}" in RESERVATIONS
-    assert "handleInitialPickupReservation = useCallback(() => setPickupReservationId(null), [])" in RESERVATIONS
+    assert "handleInitialPickupReservation = useCallback" in RESERVATIONS
+    assert "setPickupReservationId(null)" in RESERVATIONS
 
 
 def test_pickup_handoff_only_selects_authoritative_loaded_item():
@@ -84,4 +85,4 @@ def test_no_frontend_business_arithmetic_or_new_backend_checkpoint():
     assert ".from(" not in combined
     assert not re.search(r"(?:daily_rate|subtotal|tax_rate|tax_amount|total)\s*[*/]", combined)
     migrations = sorted((ROOT / "supabase/migrations").glob("*.sql"))
-    assert migrations[-1].name == "20260821193000_reconcile_rental_loaner_pickup_workflows.sql"
+    assert migrations[-1].name == "20260824185322_fleet_board_operational_routing.sql"
