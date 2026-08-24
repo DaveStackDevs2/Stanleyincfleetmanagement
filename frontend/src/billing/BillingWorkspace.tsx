@@ -52,7 +52,7 @@ const label=(v:string)=>v.replaceAll('_',' ')
 const attentionReason=(p:AttentionPreview)=>p.status==='billing_preview_missing_dependency'?label(p.missing_dependency??'required dependency unavailable'):p.status==='billing_preview_missing_configuration'?label(p.missing_configuration??'required configuration unavailable'):'Billing preview unavailable'
 const isRental=(item:WorkspaceItem)=>item.reservation.reservation_type?.toLowerCase().includes('rental')===true||item.current_vehicle.fleet_type?.toLowerCase().includes('rental')===true
 const segmentRate=(segment:Segment)=>segment.daily_rate_override??segment.default_daily_rate_snapshot
-const ACTIVE_CASE_STORAGE_KEY='billing.activeTransportationEventId'
+export const ACTIVE_CASE_STORAGE_KEY='billing.activeTransportationEventId'
 const rememberedActiveCase=()=>typeof window==='undefined'?null:window.sessionStorage.getItem(ACTIVE_CASE_STORAGE_KEY)
 const rememberActiveCase=(id:string)=>window.sessionStorage.setItem(ACTIVE_CASE_STORAGE_KEY,id)
 const forgetActiveCase=()=>window.sessionStorage.removeItem(ACTIVE_CASE_STORAGE_KEY)

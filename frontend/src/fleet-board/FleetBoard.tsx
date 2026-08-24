@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type PointerEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import type { ReservationsNavigationContext } from '../reservations/ReservationsWorkspace'
 import './FleetBoard.css'
 
 type ViewMode = 'day' | 'week'
@@ -33,12 +34,17 @@ type Reservation = {
   endsAt: string
   status: string
   reservationType: string
+  customerName: string
+  roNumber: string
+  serviceAdvisor: string
 }
 
 type Capacity = { model: string; dailyLimit: number }
 type PayTypeColors = Record<string, { backgroundColor: string; textColor: string }>
 type AssignmentLane = Assignment & { lane: number; left: number; width: number }
+type ReservationLane = Reservation & { lane: number; left: number; width: number }
 type TimelineHover = { target: string; quarter: number }
+type SlotChoice = { vehicle: Vehicle; startsAt: string }
 
 const NEUTRAL_PAY_TYPE_COLORS = { backgroundColor: '#E4E7ED', textColor: '#29313D' }
 const DAY_TIMELINE_START_HOUR = 7
@@ -74,6 +80,29 @@ const formatAssignmentTime = (value: string) => new Date(value).toLocaleTimeStri
 const formatTimelineQuarter = (quarter: number) => new Date(2000, 0, 1, DAY_TIMELINE_START_HOUR, quarter * 15).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
 function assignmentLanes(items: Assignment[], dayStart: Date, dayEnd: Date): { items: AssignmentLane[]; laneCount: number } {
+  const start = dayStart.getTime()
+  const end = dayEnd.getTime()
+  const duration = end - start
+  const laneEnds: number[] = []
+  const positioned = items
+    .map(item => ({ item, visibleStart: Math.max(Date.parse(item.startsAt), start), visibleEnd: Math.min(Date.parse(item.endsAt), end) }))
+    .filter(item => item.visibleEnd > item.visibleStart)
+    .sort((a, b) => a.visibleStart - b.visibleStart || a.visibleEnd - b.visibleEnd || a.item.id.localeCompare(b.item.id))
+    .map(({ item, visibleStart, visibleEnd }) => {
+      let lane = laneEnds.findIndex(laneEnd => laneEnd <= visibleStart)
+      if (lane === -1) lane = laneEnds.length
+      laneEnds[lane] = visibleEnd
+      return {
+        ...item,
+        lane,
+        left: ((visibleStart - start) / duration) * 100,
+        width: ((visibleEnd - visibleStart) / duration) * 100,
+      }
+    })
+  return { items: positioned, laneCount: Math.max(laneEnds.length, 1) }
+}
+
+function reservationLanes(items: Reservation[], dayStart: Date, dayEnd: Date): { items: ReservationLane[]; laneCount: number } {
   const start = dayStart.getTime()
   const end = dayEnd.getTime()
   const duration = end - start
@@ -139,9 +168,9 @@ function reservationFrom(value: unknown): Reservation | null {
   const startsAt = dateValue(row.start_date)
   const endsAt = dateValue(row.expected_return_datetime)
   if (!id || !startsAt || !endsAt || textValue(row.vehicle_id)) return null
-  const reservationType = textValue(row.reservation_type)
-  if (reservationType.toLowerCase() !== 'rental') return null
-  return { id, startsAt, endsAt, requestedModel: textValue(row.requested_model, 'Model not set'), status: textValue(row.status, 'Unknown'), reservationType }
+  const reservationType = textValue(row.reservation_type).trim().toLowerCase()
+  if (reservationType !== 'rental' && reservationType !== 'loaner') return null
+  return { id, startsAt, endsAt, requestedModel: textValue(row.requested_model, 'Model not set'), status: textValue(row.status, 'Unknown'), reservationType, customerName: textValue(row.customer_name), roNumber: textValue(row.ro_number), serviceAdvisor: textValue(row.service_advisor) }
 }
 
 function capacityFrom(value: unknown): Capacity | null {
@@ -184,7 +213,11 @@ function boardPayloadFrom(value: unknown, requestedStart: string, requestedEnd: 
     : null
 }
 
-export function FleetBoard() {
+export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }: {
+  onOpenReservation: (workflow: 'edit' | 'pickup', reservationId: string) => void
+  onCreateIntake: (context: Extract<ReservationsNavigationContext, { workflow: 'quote' | 'reservation' | 'walk_in' }>) => void
+  onOpenBilling: (transportationEventId: string) => void
+}) {
   const [view, setView] = useState<ViewMode>('day')
   const [date, setDate] = useState(() => startOfDay(new Date()))
   const [filter, setFilter] = useState<FleetFilter>('all')
@@ -197,6 +230,7 @@ export function FleetBoard() {
   const [loadFailed, setLoadFailed] = useState(false)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [timelineHover, setTimelineHover] = useState<TimelineHover | null>(null)
+  const [slotChoice, setSlotChoice] = useState<SlotChoice | null>(null)
 
   const rangeStart = view === 'day' ? date : addDays(date, -date.getDay())
   const rangeEnd = addDays(rangeStart, view === 'day' ? 1 : 7)
@@ -250,6 +284,7 @@ export function FleetBoard() {
   const isDayView = view === 'day'
   const timelineStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), DAY_TIMELINE_START_HOUR)
   const timelineEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), DAY_TIMELINE_END_HOUR)
+  const reservationLaneLayout = isDayView ? reservationLanes(reservations, timelineStart, timelineEnd) : null
   const showCurrentTime = isDayView
     && dayKey(date) === dayKey(currentTime)
     && currentTime >= timelineStart
@@ -267,6 +302,20 @@ export function FleetBoard() {
   const timelineHoverIndicator = (target: string) => timelineHover?.target === target
     ? <div className={`timeline-hover-indicator${timelineHover.quarter === 0 ? ' at-start' : timelineHover.quarter === 48 ? ' at-end' : ''}`} style={{ left: `${(timelineHover.quarter / 48) * 100}%` }} aria-hidden="true"><span>{formatTimelineQuarter(timelineHover.quarter)}</span></div>
     : null
+  const chooseSlot = (vehicle: Vehicle) => {
+    if (timelineHover?.target !== vehicle.id) return
+    const startsAt = new Date(date.getFullYear(), date.getMonth(), date.getDate(), DAY_TIMELINE_START_HOUR, timelineHover.quarter * 15).toISOString()
+    setSlotChoice({ vehicle, startsAt })
+  }
+  const createFromSlot = (workflow: 'quote' | 'reservation' | 'walk_in', reservationType: 'rental' | 'loaner') => {
+    if (!slotChoice) return
+    onCreateIntake({ workflow, reservationType, vehicleModel: slotChoice.vehicle.model, startAt: slotChoice.startsAt })
+    setSlotChoice(null)
+  }
+  const slotFleetType = slotChoice?.vehicle.fleetType.trim().toLowerCase()
+  const slotReservationTypes: Array<'rental' | 'loaner'> = slotFleetType === 'rental'
+    ? ['rental', 'loaner']
+    : slotFleetType === 'loaner' ? ['loaner'] : []
 
   return <main className="fleet-board">
     <section className="fleet-board-toolbar" aria-label="Fleet Board controls">
@@ -289,9 +338,15 @@ export function FleetBoard() {
         <div className="board-group-title">Reservation Capacity</div>
         {capacities.map(capacity => <div className="board-row capacity-row" key={capacity.model}>
           <div className="board-resource"><strong>{capacity.model}</strong><small>Daily limit {capacity.dailyLimit}</small></div>
-          <div className={isDayView ? 'day-capacity' : 'board-days'}>{days.map(day => { const booked = reservations.filter(item => item.status !== 'cancelled' && item.requestedModel === capacity.model && overlaps(item.startsAt, item.endsAt, day)); return <div className="board-day" key={dayKey(day)}><strong>{booked.length} / {capacity.dailyLimit}</strong>{booked.map(item => <span className="reservation-block" title={`Reservation · ${item.status}`} key={item.id}>{item.status}</span>)}</div> })}</div>
+          <div className={isDayView ? 'day-capacity' : 'board-days'}>{days.map(day => { const booked = reservations.filter(item => item.reservationType === 'rental' && item.status.toLowerCase() !== 'cancelled' && item.requestedModel === capacity.model && overlaps(item.startsAt, item.endsAt, day)); return <div className="board-day" key={dayKey(day)}><strong>{booked.length} / {capacity.dailyLimit}</strong></div> })}</div>
         </div>)}
         {capacities.length === 0 && <div className="board-empty">No reservation capacity records are available.</div>}
+        <div className="board-group-title">Pre-pickup Reservations</div>
+        <div className="board-row pre-pickup-row" style={isDayView ? { '--reservation-lanes': reservationLaneLayout?.laneCount } as CSSProperties : undefined}>
+          <div className="board-resource"><strong>Model-level</strong><small>No VIN assigned</small></div>
+          {isDayView && reservationLaneLayout ? <div className="pre-pickup-timeline">{reservationLaneLayout.items.map(item => <article className={`reservation-block day-reservation ${item.reservationType}`} style={{ left: `${item.left}%`, width: `${item.width}%`, top: `calc(5px + ${item.lane} * 76px)` }} key={item.id}><strong>{item.reservationType === 'rental' ? 'Rental' : 'Loaner'} · {item.requestedModel}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)} · {item.status}</span>{item.customerName && <span>{item.customerName}</span>}{item.roNumber && <span>RO {item.roNumber}</span>}<div className="reservation-actions"><button type="button" onClick={() => onOpenReservation('edit', item.id)}>Edit Reservation</button><button type="button" onClick={() => onOpenReservation('pickup', item.id)}>Check-in / Pickup</button></div></article>)}</div> : <div className="board-days">{days.map(day => <div className="board-day" key={dayKey(day)}>{reservations.filter(item => overlaps(item.startsAt, item.endsAt, day)).map(item => <article className={`reservation-block ${item.reservationType}`} key={item.id}><strong>{item.reservationType === 'rental' ? 'Rental' : 'Loaner'} · {item.requestedModel}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)} · {item.status}</span>{item.customerName && <span>{item.customerName}</span>}{item.roNumber && <span>RO {item.roNumber}</span>}<div className="reservation-actions"><button type="button" onClick={() => onOpenReservation('edit', item.id)}>Edit Reservation</button><button type="button" onClick={() => onOpenReservation('pickup', item.id)}>Check-in / Pickup</button></div></article>)}</div>)}</div>}
+        </div>
+        {reservations.length === 0 && <div className="board-empty">No pre-pickup Reservations in this range.</div>}
         {vehicleGroups.map(([label, groupVehicles]) => <section className="board-group" key={label}>
           <h2 className="board-group-title">{label}</h2>
           {groupVehicles.map(vehicle => {
@@ -299,15 +354,16 @@ export function FleetBoard() {
             const laneLayout = isDayView ? assignmentLanes(vehicleAssignments, timelineStart, timelineEnd) : null
             return <div className="board-row" style={isDayView ? { '--assignment-lanes': laneLayout?.laneCount } as CSSProperties : undefined} key={vehicle.id}>
               <div className="board-resource"><strong>{vehicle.stockNumber}</strong><span>{vehicle.model}</span><small>{vehicle.status}{vehicle.location ? ` · ${vehicle.location}` : ''}</small></div>
-              {isDayView && laneLayout ? <div className="day-timeline-row" onPointerMove={event => updateTimelineHover(event, vehicle.id)} onPointerLeave={() => setTimelineHover(null)}>
+              {isDayView && laneLayout ? <div className="day-timeline-row" onClick={event => { if (!(event.target as HTMLElement).closest('.assignment-block')) chooseSlot(vehicle) }} onPointerMove={event => updateTimelineHover(event, vehicle.id)} onPointerLeave={() => setTimelineHover(null)}>
                 {showCurrentTime && <div className="current-time-marker" style={{ left: `${currentTimePosition}%` }} aria-label="Current time" />}
                 {timelineHoverIndicator(vehicle.id)}
-                {laneLayout.items.map(item => { const colors = payTypeColors[item.payType] ?? NEUTRAL_PAY_TYPE_COLORS; return <article className={`assignment-block day-assignment${item.hasConflict ? ' conflict' : ''}`} style={{ backgroundColor: colors.backgroundColor, color: colors.textColor, left: `${item.left}%`, width: `${item.width}%`, top: `calc(5px + ${item.lane} * 46px)` }} title={`${item.payType} · ${item.status} · ${item.sourceType} · ${formatAssignmentTime(item.startsAt)}–${formatAssignmentTime(item.endsAt)}`} key={item.id}><strong>{item.payType}</strong><span className="assignment-status">{item.status}</span><span className="assignment-source">{item.sourceType}</span><span className="assignment-times">{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)}</span></article> })}
-              </div> : <div className="board-days">{days.map(day => <div className="board-day" key={dayKey(day)}>{vehicleAssignments.filter(item => overlaps(item.startsAt, item.endsAt, day)).map(item => { const colors = payTypeColors[item.payType] ?? NEUTRAL_PAY_TYPE_COLORS; return <article className={`assignment-block${item.hasConflict ? ' conflict' : ''}`} style={{ backgroundColor: colors.backgroundColor, color: colors.textColor }} title={`${item.sourceType} · ${item.status}`} key={item.id}><strong>{item.payType}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)}</span></article> })}</div>)}</div>}
+                {laneLayout.items.map(item => { const colors = payTypeColors[item.payType] ?? NEUTRAL_PAY_TYPE_COLORS; return <button type="button" className={`assignment-block day-assignment${item.hasConflict ? ' conflict' : ''}`} onClick={event => { event.stopPropagation(); onOpenBilling(item.id) }} style={{ backgroundColor: colors.backgroundColor, color: colors.textColor, left: `${item.left}%`, width: `${item.width}%`, top: `calc(5px + ${item.lane} * 46px)` }} title={`${item.payType} · ${item.status} · ${item.sourceType} · ${formatAssignmentTime(item.startsAt)}–${formatAssignmentTime(item.endsAt)}`} key={item.id}><strong>{item.payType}</strong><span className="assignment-status">{item.status}</span><span className="assignment-source">{item.sourceType}</span><span className="assignment-times">{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)}</span></button> })}
+              </div> : <div className="board-days">{days.map(day => <div className="board-day" key={dayKey(day)}>{vehicleAssignments.filter(item => overlaps(item.startsAt, item.endsAt, day)).map(item => { const colors = payTypeColors[item.payType] ?? NEUTRAL_PAY_TYPE_COLORS; return <button type="button" className={`assignment-block${item.hasConflict ? ' conflict' : ''}`} onClick={() => onOpenBilling(item.id)} style={{ backgroundColor: colors.backgroundColor, color: colors.textColor }} title={`${item.sourceType} · ${item.status}`} key={item.id}><strong>{item.payType}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)}</span></button> })}</div>)}</div>}
             </div>
           })}
         </section>)}
       </div>
     </div>}
+    {slotChoice && <div className="slot-choice" role="dialog" aria-modal="true" aria-labelledby="slot-choice-title"><div><h2 id="slot-choice-title">Create intake at {new Date(slotChoice.startsAt).toLocaleString()}</h2><p>{slotChoice.vehicle.fleetType} · {slotChoice.vehicle.model} · stock {slotChoice.vehicle.stockNumber}. The clicked vehicle is context only; no VIN will be assigned.</p>{slotReservationTypes.map(type => <section key={type}><h3>{type === 'rental' ? 'Rental' : 'Loaner'} intake</h3>{(['quote', 'reservation', 'walk_in'] as const).map(workflow => <button type="button" key={workflow} onClick={() => createFromSlot(workflow, type)}>{workflow === 'walk_in' ? 'Walk-in' : workflow[0].toUpperCase() + workflow.slice(1)}</button>)}</section>)}{slotReservationTypes.length === 0 && <p className="error-message" role="alert">This fleet type is not eligible for intake routing.</p>}<button type="button" onClick={() => setSlotChoice(null)}>Cancel</button></div></div>}
   </main>
 }

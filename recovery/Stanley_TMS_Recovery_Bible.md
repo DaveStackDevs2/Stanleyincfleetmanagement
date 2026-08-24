@@ -1,3 +1,7 @@
+## Recovery checkpoint — Fleet Board operational routing (2026-08-24)
+
+PR #43 merged to `main` at `06b2dd8f74b48d218a24d016116f8b1a9389cf35`; that Walk-in-to-Pickup checkpoint was frontend-only and required no migration. The Fleet Board checkpoint extends the existing `get_fleet_board_state` engine to expose actionable Rental and Loaner pre-pickup Reservations. `rental_model_limits` remains Rental-only. Existing intake, Reservation/Edit, Pickup, activation, and Billing engines remain authoritative; Fleet Board only routes into them. **NOT VERIFIED:** production migration application or production browser behavior.
+
 ## 2026-08-24 — PR #42 deployment and immediate Walk-in handoff
 
 **VERIFIED LIVE / RECORDED:** PR #42 merged to `main` at `627f6a61c2ef6e062c3978fd9be0124a915a7ad7`. Supabase migration `20260824180402 reconcile_rental_loaner_pickup_workflows` is live, and read-only production verification passed. Zero legitimate pickup-ready records existed, so browser mutation verification was intentionally not manufactured.

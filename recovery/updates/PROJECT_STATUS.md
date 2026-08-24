@@ -1,3 +1,8 @@
+## 2026-08-24 — Fleet Board operational routing checkpoint
+
+- **VERIFIED (repository):** navigation-only connections exist for intake, Edit, Pickup, and Billing; both pre-pickup types are visible model-level.
+- **NOT VERIFIED:** production deployment/browser verification. Weekly/monthly Pickup and excluded Billing follow-ups remain incomplete.
+
 ## 2026-08-24 — PR #42 live verification and immediate Walk-in handoff
 
 - **VERIFIED LIVE / RECORDED:** PR #42 merged to `main` at `627f6a61c2ef6e062c3978fd9be0124a915a7ad7`; live Supabase migration `20260824180402 reconcile_rental_loaner_pickup_workflows` passed read-only production verification for the Rental/Loaner pickup branches, one-way fleet eligibility, Loaner RO guard, fail-closed normalized fleet types, and preserved security/grants. Zero legitimate pickup-ready production records existed, so no fake browser mutation case was manufactured.

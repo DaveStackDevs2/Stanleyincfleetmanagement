@@ -5,8 +5,8 @@ import { useAuthorization } from './authorization/useAuthorization'
 import { supabase } from './lib/supabase'
 import { FleetBoard } from './fleet-board/FleetBoard'
 import { PayTypeManagement } from './admin/PayTypeManagement'
-import { BillingWorkspace } from './billing/BillingWorkspace'
-import { ReservationsWorkspace } from './reservations/ReservationsWorkspace'
+import { ACTIVE_CASE_STORAGE_KEY, BillingWorkspace } from './billing/BillingWorkspace'
+import { ReservationsWorkspace, type ReservationsNavigationContext } from './reservations/ReservationsWorkspace'
 
 type AdminFeature = {
   title: string
@@ -170,6 +170,23 @@ function App() {
   const [filter, setFilter] = useState<FleetFilter>('All')
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reservationsNavigation, setReservationsNavigation] = useState<ReservationsNavigationContext | null>(null)
+
+  const openReservations = (context: ReservationsNavigationContext) => {
+    setReservationsNavigation(context)
+    setPage('reservations')
+  }
+  const openBillingCase = (transportationEventId: string) => {
+    window.sessionStorage.setItem(ACTIVE_CASE_STORAGE_KEY, transportationEventId)
+    setPage('dashboard')
+  }
+  const openPageNormally = (nextPage: Page) => {
+    setReservationsNavigation(null)
+    setPage(nextPage)
+  }
+  useEffect(() => {
+    if (page !== 'reservations' && page !== 'fleet-board') setReservationsNavigation(null)
+  }, [page])
 
   const openFeature = (title: string) => {
     if (title === 'Fleet Administration') {
@@ -300,7 +317,7 @@ function App() {
         <nav className="sidebar-nav" aria-label="Primary navigation">
           <button type="button" className={page === 'dashboard' ? 'active' : ''} onClick={() => setPage('dashboard')}>Dashboard</button>
           <button type="button" className={page === 'fleet-board' ? 'active' : ''} onClick={() => setPage('fleet-board')}>Fleet Board</button>
-          <button type="button" className={page === 'reservations' ? 'active' : ''} onClick={() => setPage('reservations')}>Reservations</button>
+          <button type="button" className={page === 'reservations' ? 'active' : ''} onClick={() => openPageNormally('reservations')}>Reservations</button>
           <button type="button">Active Transportation</button>
 
           <button
@@ -387,9 +404,9 @@ function App() {
         {page === 'dashboard' ? (
           <BillingWorkspace />
         ) : page === 'reservations' ? (
-          <ReservationsWorkspace />
+          <ReservationsWorkspace navigationContext={reservationsNavigation} onNavigationContextHandled={() => setReservationsNavigation(null)} />
         ) : page === 'fleet-board' ? (
-          <FleetBoard />
+          <FleetBoard onOpenReservation={(workflow, reservationId) => openReservations({ workflow, reservationId })} onCreateIntake={context => openReservations(context)} onOpenBilling={openBillingCase} />
         ) : page === 'access' ? (
           <UserRoleManagement onBack={() => setPage('admin')} />
         ) : page === 'pay-types' ? (

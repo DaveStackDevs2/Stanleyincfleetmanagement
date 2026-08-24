@@ -1,3 +1,9 @@
+## 2026-08-24 — Engine-first Fleet Board routing
+
+- PR #43 merged at `06b2dd8f74b48d218a24d016116f8b1a9389cf35` and was frontend-only with no migration.
+- Extend `get_fleet_board_state`; do not create a parallel engine. Keep `rental_model_limits` Rental-only and route to existing Reservation/Pickup/Billing authorities.
+- **NOT VERIFIED:** production migration and browser workflow.
+
 ## 2026-08-24 — Hand immediate Walk-ins into existing Pickup
 
 **Decision:** Continue creating Walk-ins exclusively through `create_walk_in_with_pricing_agreement_state`, then use its validated authoritative `reservation_id` only as selection context for the existing Pickup workspace after Pickup reloads `get_pricing_agreement_pickup_state`. Never fabricate a Pickup item, choose a VIN, or activate Pickup from intake. Loaner Walk-ins require a nonblank RO as friendly preflight, and weekly/monthly Walk-ins fail before creation with the existing Pickup-not-implemented message.

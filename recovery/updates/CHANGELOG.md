@@ -1,3 +1,9 @@
+## 2026-08-24 — Fleet Board operational routing
+
+- Extended the existing Fleet Board read contract for Rental and Loaner pre-pickup Reservations and added navigation-only operational routing.
+- Rental capacity remains based only on Rental Reservations and `rental_model_limits`.
+- **NOT VERIFIED:** production migration/application and production browser workflow.
+
 ## 2026-08-24 — Immediate Walk-in to existing Pickup handoff
 
 - Recorded PR #42 deployment at merged `main` SHA `627f6a61c2ef6e062c3978fd9be0124a915a7ad7` and live Supabase migration `20260824180402 reconcile_rental_loaner_pickup_workflows`; read-only production verification passed, and no fake mutation was manufactured because zero legitimate pickup-ready records existed.
