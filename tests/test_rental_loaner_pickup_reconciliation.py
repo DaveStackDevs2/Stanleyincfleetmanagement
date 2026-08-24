@@ -8,6 +8,7 @@ UI = (ROOT / 'frontend/src/reservations/PickupWorkspace.tsx').read_text()
 
 
 def test_one_way_candidate_and_assignment_contracts():
+    assert "v_reservation_type is null or v_vehicle_type is null" in LOWER
     assert "v_reservation_type='rental' and v_vehicle_type<>'rental'" in LOWER
     assert "v_reservation_type not in ('rental','loaner')" in LOWER
     assert "lower(btrim(r.reservation_type))='rental' and lower(btrim(v.fleet_type))='rental'" in LOWER
@@ -62,3 +63,11 @@ def test_frontend_separates_authoritative_rental_and_loaner_results():
     assert 'Loaner pickup requires an RO number' in UI
     for forbidden in ('parseFloat', 'toFixed', ".from('billing_lines')"):
         assert forbidden not in UI
+
+
+def test_loaner_contract_days_accepts_authoritative_numeric_value():
+    loaner = UI[UI.index("if(reservationType==='loaner')"):UI.index("if(reservationType!=='rental')")]
+    assert "contractDaysText(preview.contract_days)||'Unavailable'" in loaner
+    assert "text(preview.contract_days)" not in loaner
+    assert "typeof v==='number'&&Number.isFinite(v)?String(v)" in UI
+    assert "typeof v==='string'&&/^\\d+$/.test(v.trim())?v.trim():''" in UI

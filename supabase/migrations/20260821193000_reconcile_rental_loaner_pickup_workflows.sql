@@ -10,7 +10,8 @@ begin
  if not found then raise exception 'Vehicle % does not exist',p_vehicle_id using errcode='P0002'; end if;
  v_reservation_type:=nullif(lower(btrim(v_reservation.reservation_type)),'');
  v_vehicle_type:=nullif(lower(btrim(v_vehicle_fleet_type)),'');
- if v_reservation_type not in ('rental','loaner') or v_vehicle_type not in ('rental','loaner') or
+ if v_reservation_type is null or v_vehicle_type is null or
+    v_reservation_type not in ('rental','loaner') or v_vehicle_type not in ('rental','loaner') or
     (v_reservation_type='rental' and v_vehicle_type<>'rental') then
   raise exception 'Vehicle fleet type % is not eligible for reservation type %',v_vehicle_fleet_type,v_reservation.reservation_type using errcode='22023';
  end if;
