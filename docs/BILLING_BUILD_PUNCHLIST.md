@@ -1,3 +1,9 @@
+## 2026-08-24 — Walk-in Pickup handoff checkpoint
+
+- [x] **VERIFIED LIVE / RECORDED:** PR #42 merged at `627f6a61c2ef6e062c3978fd9be0124a915a7ad7`; live migration `20260824180402 reconcile_rental_loaner_pickup_workflows` passed read-only verification. Zero legitimate pickup-ready records existed, so no artificial browser mutation was performed.
+- [x] **IMPLEMENTED IN REPOSITORY:** Walk-ins reuse `create_walk_in_with_pricing_agreement_state` and immediately hand the validated authoritative Reservation ID to existing Pickup, which selects it only from `get_pricing_agreement_pickup_state`. No VIN or activation is automatic and no backend engine was added.
+- [ ] **OPEN:** Weekly/monthly Pickup remains unimplemented and fail-closed. Whole Billing release, bulk Loaner billed-through, Fleet Board integration, and persisted repeated Rental Extension production proof are not claimed complete.
+
 
 ## 2026-08-18 — Pre-check-in Reservation editing
 

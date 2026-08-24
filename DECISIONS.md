@@ -1,3 +1,9 @@
+## 2026-08-24 — Hand immediate Walk-ins into existing Pickup
+
+**Decision:** Continue creating Walk-ins exclusively through `create_walk_in_with_pricing_agreement_state`, then use its validated authoritative `reservation_id` only as selection context for the existing Pickup workspace after Pickup reloads `get_pricing_agreement_pickup_state`. Never fabricate a Pickup item, choose a VIN, or activate Pickup from intake. Loaner Walk-ins require a nonblank RO as friendly preflight, and weekly/monthly Walk-ins fail before creation with the existing Pickup-not-implemented message.
+
+**Verified deployment context:** PR #42 is live from merged `main` SHA `627f6a61c2ef6e062c3978fd9be0124a915a7ad7` with Supabase migration `20260824180402 reconcile_rental_loaner_pickup_workflows`. Read-only production verification passed. There were zero legitimate pickup-ready records, so browser mutation verification was intentionally not manufactured.
+
 # Decisions
 
 ## 2026-07-30 — Normal operational case-write security boundary

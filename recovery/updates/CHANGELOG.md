@@ -1,3 +1,9 @@
+## 2026-08-24 — Immediate Walk-in to existing Pickup handoff
+
+- Recorded PR #42 deployment at merged `main` SHA `627f6a61c2ef6e062c3978fd9be0124a915a7ad7` and live Supabase migration `20260824180402 reconcile_rental_loaner_pickup_workflows`; read-only production verification passed, and no fake mutation was manufactured because zero legitimate pickup-ready records existed.
+- Changed successful Walk-in intake to validate the existing RPC's authoritative `reservation_id`, reload state, open Check-in / Pickup, and select only the matching item returned by Pickup's authoritative state RPC. No VIN or activation is automatic.
+- Added Walk-in-only Loaner RO and daily-plan preflight checks. Quote and future Reservation behavior are unchanged, and no backend engine or migration was added.
+
 
 ## 2026-08-18 — Pre-check-in Reservation editing
 
