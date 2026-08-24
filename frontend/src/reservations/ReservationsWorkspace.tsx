@@ -42,6 +42,10 @@ function parseIntake(value: unknown): Intake {
 const money = (value: string | null) => value === null ? 'Not configured' : `$${value}`
 const dateTime = (value: string) => value ? new Date(value).toLocaleString() : '—'
 const optional = (value: string) => value.trim() || null
+const authoritativeUuid = (value: unknown): string | null => {
+  const candidate = string(value).trim()
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(candidate) ? candidate : null
+}
 function friendlyError(message: string): string {
   const text = message.toLowerCase()
   if (text.includes('rental workflow requires the rental pay type') || text.includes('rental pay type requires a rental workflow')) return 'Pay type mismatch: Rental workflows require the active Rental pay type, and Rental cannot be used for Loaner workflows.'
@@ -72,6 +76,8 @@ export function ReservationsWorkspace() {
   const [notes, setNotes] = useState('')
   const [result, setResult] = useState<Json | null>(null)
   const [conversion, setConversion] = useState<Quote | null>(null)
+  const [pickupReservationId, setPickupReservationId] = useState<string | null>(null)
+  const handleInitialPickupReservation = useCallback(() => setPickupReservationId(null), [])
 
   const load = useCallback(async (): Promise<boolean> => {
     setLoading(true); setError(null); setIntake(null)
@@ -103,6 +109,8 @@ export function ReservationsWorkspace() {
     if (reservationType === 'rental' && payTypeId !== rentalPayType?.id) return 'Validation: Rental workflows require the authoritative Rental pay type.'
     if (reservationType !== 'rental' && payTypeId === rentalPayType?.id) return 'Validation: Rental pay type cannot be used for a Loaner workflow.'
     if (!plan) return 'Validation: rate plan is required.'
+    if (workflow === 'walk_in' && plan !== 'daily') return 'Weekly and monthly pickup billing is not implemented yet.'
+    if (workflow === 'walk_in' && reservationType === 'loaner' && !roNumber.trim()) return 'Validation: Loaner Walk-in requires an RO number before continuing to Pickup.'
     if (selectedPlanValue === null) return `Missing configuration: ${plan} pricing is not configured for ${vehicleModel}.`
     return null
   }
@@ -115,6 +123,12 @@ export function ReservationsWorkspace() {
       : supabase.rpc(workflow === 'reservation' ? 'create_reservation_with_pricing_agreement_state' : 'create_walk_in_with_pricing_agreement_state', { ...common, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes) })
     const { data, error: rpcError } = await call
     if (rpcError) setError(friendlyError(rpcError.message));
+    else if (workflow === 'walk_in') {
+      const reservationId = authoritativeUuid(record(data)?.reservation_id)
+      if (!reservationId) { await load(); setError('State sync failed: the Walk-in response did not include a valid authoritative reservation ID. Refresh before continuing.') }
+      else if (await load()) { setPickupReservationId(reservationId); setWorkflow('pickup') }
+      else setError('State sync failed: the write completed, but Reservations could not reload authoritative intake. Refresh before continuing.')
+    }
     else if (await load()) setResult(record(data));
     else setError('State sync failed: the write completed, but Reservations could not reload authoritative intake. Refresh before continuing.')
     setBusy(false)
@@ -136,7 +150,7 @@ export function ReservationsWorkspace() {
     {error && <div className="data-message error-message"><strong>Reservations needs attention</strong><span>{error}</span></div>}
     {loading ? <div className="reservation-card">Loading authoritative intake…</div> : intake && <>
       <div className="reservation-tabs" role="tablist">{(['quote','reservation','walk_in','edit','pickup'] as Workflow[]).map(item=><button type="button" className={workflow===item?'active':''} onClick={()=>setWorkflow(item)} key={item}>{item==='walk_in'?'Walk-in':item==='edit'?'Edit Reservation':item==='pickup'?'Check-in / Pickup':item[0].toUpperCase()+item.slice(1)}</button>)}</div>
-      {workflow==='pickup'?<PickupWorkspace onError={setError}/>:workflow==='edit'?<EditReservationWorkspace onError={setError}/>:<>
+      {workflow==='pickup'?<PickupWorkspace onError={setError} initialReservationId={pickupReservationId} onInitialReservationHandled={handleInitialPickupReservation}/>:workflow==='edit'?<EditReservationWorkspace onError={setError}/>:<>
       <form className="reservation-card reservation-form" onSubmit={submit}>
         <label className="wide">Find existing customer<input type="search" value={customerSearch} onChange={e=>setCustomerSearch(e.target.value)} placeholder="Search name or Tekion customer number" /></label>
         <label className="wide">Customer<select required value={customerId} onChange={e=>setCustomerId(e.target.value)}><option value="">Select an existing customer</option>{shownCustomers.map(c=><option value={c.id} key={c.id}>{c.name}{c.number?` · ${c.number}`:''}</option>)}</select></label>

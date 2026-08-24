@@ -1,3 +1,9 @@
+## 2026-08-24 — PR #42 deployment and immediate Walk-in handoff
+
+**VERIFIED LIVE / RECORDED:** PR #42 merged to `main` at `627f6a61c2ef6e062c3978fd9be0124a915a7ad7`. Supabase migration `20260824180402 reconcile_rental_loaner_pickup_workflows` is live, and read-only production verification passed. Zero legitimate pickup-ready records existed, so browser mutation verification was intentionally not manufactured.
+
+**IMPLEMENTED IN REPOSITORY / NOT PRODUCTION-BROWSER-VERIFIED:** Walk-in creation continues to use the existing `create_walk_in_with_pricing_agreement_state` engine. Its validated authoritative Reservation ID is handed into the existing Check-in / Pickup workspace, which reloads `get_pricing_agreement_pickup_state` and selects only the returned matching item. VIN selection and activation remain explicit Pickup actions. Loaner Walk-ins require an RO frontend preflight; weekly/monthly Walk-ins fail before creation because that Pickup activation is still unimplemented. No new lifecycle, Pickup, assignment, pricing, or Billing engine was created.
+
 Stanley TMS Recovery Bible v1.0
 Table of Contents
 Stanley Transportation Management System - Project Bible and AI Handoff
