@@ -124,3 +124,13 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **VERIFIED SECURITY FOLLOW-UP:** PR #40 merged at `d4485f2796c3229bc34f7fcabc36b54c6ad985f4`; Supabase migration `20260821185849 secure_warning_center_counts` restricts the existing `get_warning_center_counts_state()` helper to `service_role` only. Its function body, owner, `SECURITY DEFINER`, and empty-search-path contract are preserved, and the specific anonymous SECURITY DEFINER advisor finding is cleared.
 - **NOT MUTATION-VERIFIED IN THIS CHECKPOINT:** No production Rental payment line was marked Paid solely for testing. Browser payment-write interaction remains to be verified when a real Tekion Rental Sale should be recorded.
 - **DEFERRED:** SO number and mass/bulk Loaner billed-through remain deferred. No bulk Loaner engine is claimed.
+
+## 2026-08-21 — Rental / Loaner Pickup reconciliation
+
+**IMPLEMENTED / NOT YET DEPLOYED OR PRODUCTION-VERIFIED:** Pickup now preserves two distinct workflows while reusing the existing continuity, pricing-agreement, Billing, tax, Rental payment, and Loaner billed-through engines.
+
+- **Rental:** Quote / Reservation / Walk-in → Rental pickup → reserved-through Rental charge → external Tekion Rental Sale Paid / Not Paid → Rental Extensions → Return. Rental pickup remains Rental-fleet-only, persists the original charge and synchronized tax through expected return, and returns authoritative Rental payment state.
+- **Loaner:** Quote / Reservation / Walk-in → Loaner pickup with required RO → initial/open Loaner Billing → Tekion Mark billed through progression → warranty/pay-type segmentation as applicable → Return. Loaner pickup uses the scheduled Billing start, previews at current/effective time, and does not invoke or display Rental payment state.
+- **One-way fleet rule:** a Loaner-fleet vehicle cannot serve a Rental; a Rental-fleet vehicle may serve a Loaner as a fallback, with native Loaner candidates ordered first.
+- **Assignment boundary:** `public.start_reservation_vehicle_use_state` rejects a null/blank Loaner RO before `public.start_vehicle_use_state` can begin continuity. Rental has no RO requirement.
+- **Still NOT IMPLEMENTED:** Fleet Board click integration, Fleet Board Loaner reservation rendering, and immediate Walk-in activation remain later checkpoints. Nothing in this checkpoint claims those surfaces complete.
