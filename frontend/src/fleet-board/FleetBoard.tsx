@@ -42,6 +42,7 @@ type Reservation = {
 type Capacity = { model: string; dailyLimit: number }
 type PayTypeColors = Record<string, { backgroundColor: string; textColor: string }>
 type AssignmentLane = Assignment & { lane: number; left: number; width: number }
+type ReservationLane = Reservation & { lane: number; left: number; width: number }
 type TimelineHover = { target: string; quarter: number }
 type SlotChoice = { vehicle: Vehicle; startsAt: string }
 
@@ -79,6 +80,29 @@ const formatAssignmentTime = (value: string) => new Date(value).toLocaleTimeStri
 const formatTimelineQuarter = (quarter: number) => new Date(2000, 0, 1, DAY_TIMELINE_START_HOUR, quarter * 15).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
 function assignmentLanes(items: Assignment[], dayStart: Date, dayEnd: Date): { items: AssignmentLane[]; laneCount: number } {
+  const start = dayStart.getTime()
+  const end = dayEnd.getTime()
+  const duration = end - start
+  const laneEnds: number[] = []
+  const positioned = items
+    .map(item => ({ item, visibleStart: Math.max(Date.parse(item.startsAt), start), visibleEnd: Math.min(Date.parse(item.endsAt), end) }))
+    .filter(item => item.visibleEnd > item.visibleStart)
+    .sort((a, b) => a.visibleStart - b.visibleStart || a.visibleEnd - b.visibleEnd || a.item.id.localeCompare(b.item.id))
+    .map(({ item, visibleStart, visibleEnd }) => {
+      let lane = laneEnds.findIndex(laneEnd => laneEnd <= visibleStart)
+      if (lane === -1) lane = laneEnds.length
+      laneEnds[lane] = visibleEnd
+      return {
+        ...item,
+        lane,
+        left: ((visibleStart - start) / duration) * 100,
+        width: ((visibleEnd - visibleStart) / duration) * 100,
+      }
+    })
+  return { items: positioned, laneCount: Math.max(laneEnds.length, 1) }
+}
+
+function reservationLanes(items: Reservation[], dayStart: Date, dayEnd: Date): { items: ReservationLane[]; laneCount: number } {
   const start = dayStart.getTime()
   const end = dayEnd.getTime()
   const duration = end - start
@@ -260,6 +284,7 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
   const isDayView = view === 'day'
   const timelineStart = new Date(date.getFullYear(), date.getMonth(), date.getDate(), DAY_TIMELINE_START_HOUR)
   const timelineEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate(), DAY_TIMELINE_END_HOUR)
+  const reservationLaneLayout = isDayView ? reservationLanes(reservations, timelineStart, timelineEnd) : null
   const showCurrentTime = isDayView
     && dayKey(date) === dayKey(currentTime)
     && currentTime >= timelineStart
@@ -287,6 +312,10 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
     onCreateIntake({ workflow, reservationType, vehicleModel: slotChoice.vehicle.model, startAt: slotChoice.startsAt })
     setSlotChoice(null)
   }
+  const slotFleetType = slotChoice?.vehicle.fleetType.trim().toLowerCase()
+  const slotReservationTypes: Array<'rental' | 'loaner'> = slotFleetType === 'rental'
+    ? ['rental', 'loaner']
+    : slotFleetType === 'loaner' ? ['loaner'] : []
 
   return <main className="fleet-board">
     <section className="fleet-board-toolbar" aria-label="Fleet Board controls">
@@ -313,9 +342,9 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
         </div>)}
         {capacities.length === 0 && <div className="board-empty">No reservation capacity records are available.</div>}
         <div className="board-group-title">Pre-pickup Reservations</div>
-        <div className="board-row pre-pickup-row">
+        <div className="board-row pre-pickup-row" style={isDayView ? { '--reservation-lanes': reservationLaneLayout?.laneCount } as CSSProperties : undefined}>
           <div className="board-resource"><strong>Model-level</strong><small>No VIN assigned</small></div>
-          <div className={isDayView ? 'pre-pickup-timeline' : 'board-days'}>{days.map(day => <div className="board-day" key={dayKey(day)}>{reservations.filter(item => overlaps(item.startsAt, item.endsAt, day)).map(item => <article className={`reservation-block ${item.reservationType}`} key={item.id}><strong>{item.reservationType === 'rental' ? 'Rental' : 'Loaner'} · {item.requestedModel}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)} · {item.status}</span>{item.customerName && <span>{item.customerName}</span>}{item.roNumber && <span>RO {item.roNumber}</span>}<div className="reservation-actions"><button type="button" onClick={() => onOpenReservation('edit', item.id)}>Edit Reservation</button><button type="button" onClick={() => onOpenReservation('pickup', item.id)}>Check-in / Pickup</button></div></article>)}</div>)}</div>
+          {isDayView && reservationLaneLayout ? <div className="pre-pickup-timeline">{reservationLaneLayout.items.map(item => <article className={`reservation-block day-reservation ${item.reservationType}`} style={{ left: `${item.left}%`, width: `${item.width}%`, top: `calc(5px + ${item.lane} * 76px)` }} key={item.id}><strong>{item.reservationType === 'rental' ? 'Rental' : 'Loaner'} · {item.requestedModel}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)} · {item.status}</span>{item.customerName && <span>{item.customerName}</span>}{item.roNumber && <span>RO {item.roNumber}</span>}<div className="reservation-actions"><button type="button" onClick={() => onOpenReservation('edit', item.id)}>Edit Reservation</button><button type="button" onClick={() => onOpenReservation('pickup', item.id)}>Check-in / Pickup</button></div></article>)}</div> : <div className="board-days">{days.map(day => <div className="board-day" key={dayKey(day)}>{reservations.filter(item => overlaps(item.startsAt, item.endsAt, day)).map(item => <article className={`reservation-block ${item.reservationType}`} key={item.id}><strong>{item.reservationType === 'rental' ? 'Rental' : 'Loaner'} · {item.requestedModel}</strong><span>{formatAssignmentTime(item.startsAt)}–{formatAssignmentTime(item.endsAt)} · {item.status}</span>{item.customerName && <span>{item.customerName}</span>}{item.roNumber && <span>RO {item.roNumber}</span>}<div className="reservation-actions"><button type="button" onClick={() => onOpenReservation('edit', item.id)}>Edit Reservation</button><button type="button" onClick={() => onOpenReservation('pickup', item.id)}>Check-in / Pickup</button></div></article>)}</div>)}</div>}
         </div>
         {reservations.length === 0 && <div className="board-empty">No pre-pickup Reservations in this range.</div>}
         {vehicleGroups.map(([label, groupVehicles]) => <section className="board-group" key={label}>
@@ -335,6 +364,6 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
         </section>)}
       </div>
     </div>}
-    {slotChoice && <div className="slot-choice" role="dialog" aria-modal="true" aria-labelledby="slot-choice-title"><div><h2 id="slot-choice-title">Create intake at {new Date(slotChoice.startsAt).toLocaleString()}</h2><p>{slotChoice.vehicle.fleetType} · {slotChoice.vehicle.model}. This is context only; VIN {slotChoice.vehicle.stockNumber} will not be assigned.</p>{(slotChoice.vehicle.fleetType.toLowerCase().includes('rental') ? ['rental', 'loaner'] : ['loaner']).map(type => <section key={type}><h3>{type === 'rental' ? 'Rental' : 'Loaner'} intake</h3>{(['quote', 'reservation', 'walk_in'] as const).map(workflow => <button type="button" key={workflow} onClick={() => createFromSlot(workflow, type as 'rental' | 'loaner')}>{workflow === 'walk_in' ? 'Walk-in' : workflow[0].toUpperCase() + workflow.slice(1)}</button>)}</section>)}<button type="button" onClick={() => setSlotChoice(null)}>Cancel</button></div></div>}
+    {slotChoice && <div className="slot-choice" role="dialog" aria-modal="true" aria-labelledby="slot-choice-title"><div><h2 id="slot-choice-title">Create intake at {new Date(slotChoice.startsAt).toLocaleString()}</h2><p>{slotChoice.vehicle.fleetType} · {slotChoice.vehicle.model} · stock {slotChoice.vehicle.stockNumber}. The clicked vehicle is context only; no VIN will be assigned.</p>{slotReservationTypes.map(type => <section key={type}><h3>{type === 'rental' ? 'Rental' : 'Loaner'} intake</h3>{(['quote', 'reservation', 'walk_in'] as const).map(workflow => <button type="button" key={workflow} onClick={() => createFromSlot(workflow, type)}>{workflow === 'walk_in' ? 'Walk-in' : workflow[0].toUpperCase() + workflow.slice(1)}</button>)}</section>)}{slotReservationTypes.length === 0 && <p className="error-message" role="alert">This fleet type is not eligible for intake routing.</p>}<button type="button" onClick={() => setSlotChoice(null)}>Cancel</button></div></div>}
   </main>
 }

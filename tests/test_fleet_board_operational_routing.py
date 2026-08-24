@@ -70,12 +70,35 @@ def test_assignment_uses_existing_billing_handoff_without_mutation():
     assert "onOpenBilling(item.id)" in BOARD
 
 
-def test_empty_slot_context_obeys_fleet_rule_and_safe_fields():
+def test_day_reservations_use_timeline_lanes_and_week_stays_day_bucketed():
+    assert "function reservationLanes" in BOARD
+    assert "Math.max(Date.parse(item.startsAt), start)" in BOARD
+    assert "Math.min(Date.parse(item.endsAt), end)" in BOARD
+    assert "laneEnds.findIndex(laneEnd => laneEnd <= visibleStart)" in BOARD
+    assert "left: ((visibleStart - start) / duration) * 100" in BOARD
+    assert "width: ((visibleEnd - visibleStart) / duration) * 100" in BOARD
+    assert "reservationLanes(reservations, timelineStart, timelineEnd)" in BOARD
+    assert "className={`reservation-block day-reservation" in BOARD
+    assert "top: `calc(5px + ${item.lane} * 76px)`" in BOARD
+    week_branch = BOARD.split(": <div className=\"board-days\">{days.map(day", 1)[1]
+    assert "reservations.filter(item => overlaps(item.startsAt, item.endsAt, day))" in week_branch
+
+
+def test_empty_slot_context_fails_closed_by_exact_fleet_type_and_uses_safe_fields():
     assert "timelineHover.quarter * 15" in BOARD
     assert "closest('.assignment-block')" in BOARD
-    assert "fleetType.toLowerCase().includes('rental') ? ['rental', 'loaner'] : ['loaner']" in BOARD
+    assert "fleetType.trim().toLowerCase()" in BOARD
+    assert "slotFleetType === 'rental'" in BOARD
+    assert "? ['rental', 'loaner']" in BOARD
+    assert "slotFleetType === 'loaner' ? ['loaner'] : []" in BOARD
+    assert "slotReservationTypes.length === 0" in BOARD
+    assert "This fleet type is not eligible for intake routing." in BOARD
+    assert "includes('rental')" not in BOARD
     assert "vehicleModel: slotChoice.vehicle.model" in BOARD
     assert "startAt: slotChoice.startsAt" in BOARD
+    assert "stock {slotChoice.vehicle.stockNumber}" in BOARD
+    assert "VIN {slotChoice.vehicle.stockNumber}" not in BOARD
+    assert "no VIN will be assigned" in BOARD
     create_context = BOARD.split("onCreateIntake({", 1)[1].split("})", 1)[0]
     assert "vehicleId" not in create_context and "vehicle_id" not in create_context
     assert "expectedReturn" not in create_context
