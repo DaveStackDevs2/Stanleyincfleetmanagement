@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 SQL=(ROOT/'supabase/migrations/20260825180000_rental_capacity_admin_impact_warnings.sql').read_text()
-ADMIN=(ROOT/'frontend/src/admin/ReservationCapacityManagement.tsx').read_text()
+ADMIN=(ROOT/'frontend/src/admin/PayTypeManagement.tsx').read_text()
 
 def test_authoritative_evaluator_uses_future_new_york_half_open_days():
     assert "evaluate_admin_rental_reservation_capacity_impact" in SQL
@@ -55,12 +55,12 @@ def test_security_and_execute_boundaries_are_preserved():
     assert "to service_role" in SQL
 
 def test_frontend_renders_backend_impact_without_capacity_arithmetic():
-    assert "Add Model Capacity" in ADMIN
+    assert "Rental Models &amp; Rates" in ADMIN
     assert "has_active_rate_card" in ADMIN
     assert "hard_reservation_conflicts" in ADMIN and "at_risk_quotes" in ADMIN
     assert "Hard Reservation conflicts" in ADMIN and "At-risk Quote pressure" in ADMIN
     assert "Quotes are non-binding" in ADMIN
-    for field in ("item?.days","capacity_configured","reservation_count","reservation_overage","active_quote_count","combined_count","quote_pressure_overage"):
+    for field in ("impact.days","capacity_configured","reservation_count","reservation_overage","active_quote_count","combined_count","quote_pressure_overage"):
         assert field in ADMIN
     assert "Saved/effective capacity" in ADMIN and "Unavailable (effective capacity:" in ADMIN
     assert "Hard Reservation overage" in ADMIN and "Quote-pressure overage" in ADMIN
