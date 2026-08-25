@@ -146,3 +146,10 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **One-way fleet rule:** a Loaner-fleet vehicle cannot serve a Rental; a Rental-fleet vehicle may serve a Loaner as a fallback, with native Loaner candidates ordered first.
 - **Assignment boundary:** `public.start_reservation_vehicle_use_state` rejects a null/blank Loaner RO before `public.start_vehicle_use_state` can begin continuity. Rental has no RO requirement.
 - **Still NOT IMPLEMENTED:** Fleet Board click integration, Fleet Board Loaner reservation rendering, and immediate Walk-in activation remain later checkpoints. Nothing in this checkpoint claims those surfaces complete.
+
+## 2026-08-25 — Authoritative Rental Reservation Capacity (implemented in repository)
+
+- **VERIFIED (repository):** One America/New_York, half-open Rental Reservation Capacity evaluator now supplies complete-period daily state and rate-card-qualified alternatives. Direct Rental Reservation creation, Quote conversion, and pre-check-in date edits recheck it server-side; Quotes remain non-holding and Walk-ins/Loaners remain unchanged.
+- **VERIFIED (repository):** Fleet Board reads authoritative daily counts, and Admin users with active app-user, AAL2, and `user_admin.manage` may read/save/remove nonnegative capacity configuration without direct browser table writes. No capacity values are seeded.
+- **NOT VERIFIED:** Migration application and production browser behavior. Existing over-capacity records are not modified; persisted conflict refresh after an Admin limit reduction is the immediate Fleet Board capacity follow-up.
+- **NOT IMPLEMENTED / OUT OF SCOPE:** Lost Rental writes/classification, alternative accepted/free upgrade, cross-model Pickup, Bulk Billing, and weekly/monthly billing.

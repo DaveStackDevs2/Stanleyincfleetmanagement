@@ -121,3 +121,10 @@ Before coding, re-check live state and repository migrations. Then:
 8. Update Recovery/Status/Decisions/Changelog as part of the implementation PR.
 
 Do not invent capacity values and do not create fake production Rental/lost-rental records merely for proof.
+## Engineering checkpoint implementation — Authoritative Rental Reservation Capacity
+
+**IMPLEMENTED / REPOSITORY VERIFIED:** The existing `rental_model_limits` store now has a single fail-closed evaluator for Maine dealership calendar days, complete-period alternatives, and edit exclusion. Direct Rental Reservation creation, Quote conversion, and pre-check-in date editing recheck capacity under their established authorization boundary and serialize same-model decisions. Quotes still consume no capacity; Loaner and Walk-in semantics are preserved. Fleet Board and the staff Reservations UI consume backend capacity state, and Admin configuration is RPC-only with AAL2 plus `user_admin.manage`. No limits were seeded.
+
+**NOT VERIFIED LIVE:** This migration was not applied to Supabase and no production-browser mutation was performed.
+
+**DEFERRED:** Persisted capacity-conflict refresh after Admin reductions is the immediate Fleet Board capacity follow-up. Lost Rental write behavior/classification, alternative-model acceptance, free upgrades/cross-model Pickup, Bulk Billing, and weekly/monthly Billing remain unimplemented and outside this checkpoint.

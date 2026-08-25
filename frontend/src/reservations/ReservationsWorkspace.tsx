@@ -15,6 +15,8 @@ type PayType = { id: string; name: string }
 type RateCard = { id: string; vehicleModel: string; daily: string | null; weekly: string | null; monthly: string | null }
 type Quote = { id: string; eventId: string; customerId: string; customerName: string; start: string; expectedReturn: string; reservationType: string; vehicleModel: string; payType: string; initialPlan: string; currentPlan: string; daily: string | null; weekly: string | null; monthly: string | null }
 type Intake = { customers: Customer[]; payTypes: PayType[]; rateCards: RateCard[]; quotes: Quote[] }
+type CapacityAlternative = { vehicleModel: string; minimumRemaining: number; daily: string | null; weekly: string | null; monthly: string | null }
+type CapacityState = { status: 'available' | 'not_configured' | 'full'; available: boolean; alternatives: CapacityAlternative[] }
 
 const record = (value: unknown): Json | null => typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Json : null
 const string = (value: unknown): string => typeof value === 'string' ? value : ''
@@ -51,6 +53,7 @@ const authoritativeUuid = (value: unknown): string | null => {
 }
 function friendlyError(message: string): string {
   const text = message.toLowerCase()
+  if (text.includes('reservation capacity unavailable')) return 'No Rental reservation capacity is available for the selected model and dates. Refresh availability and choose an available alternative.'
   if (text.includes('rental workflow requires the rental pay type') || text.includes('rental pay type requires a rental workflow')) return 'Pay type mismatch: Rental workflows require the active Rental pay type, and Rental cannot be used for Loaner workflows.'
   if (text.includes('aal2') || text.includes('permission') || text.includes('access denied') || text.includes('application user')) return 'Authorization/security: an active authorized user with AAL2 is required.'
   if (text.includes('not configured') || text.includes('configuration') || text.includes('rate card')) return 'Missing configuration: the selected pricing option is not configured.'
@@ -58,6 +61,13 @@ function friendlyError(message: string): string {
   if (text.includes('active') || text.includes('conflict') || text.includes('already') || text.includes('inconsistent')) return 'Workflow conflict: authoritative state changed. Refresh Reservations and try again.'
   if (text.includes('required') || text.includes('invalid') || text.includes('after start')) return 'Validation: review the required fields and date range.'
   return 'Unexpected failure: Reservations could not complete the request. Please try again.'
+}
+
+function parseCapacity(value: unknown): CapacityState {
+  const root=record(value); const status=root?.status
+  if (!root || (status!=='available'&&status!=='not_configured'&&status!=='full') || typeof root.available!=='boolean') throw new Error('invalid-capacity')
+  const alternatives=array(root.alternatives).map(record).filter(Boolean).map(item=>({vehicleModel:string(item!.vehicle_class),minimumRemaining:Number(item!.minimum_remaining),daily:nullableString(item!.daily_rate),weekly:nullableString(item!.weekly_rate),monthly:nullableString(item!.monthly_rate)})).filter(item=>item.vehicleModel&&Number.isInteger(item.minimumRemaining)&&item.minimumRemaining>0)
+  return {status,available:root.available,alternatives}
 }
 
 const localDateTime = (value: string) => {
@@ -86,8 +96,13 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   const [notes, setNotes] = useState('')
   const [result, setResult] = useState<Json | null>(null)
   const [conversion, setConversion] = useState<Quote | null>(null)
+  const [conversionCapacity, setConversionCapacity] = useState<CapacityState | null>(null)
+  const [conversionCapacityLoading, setConversionCapacityLoading] = useState(false)
+  const [conversionClass, setConversionClass] = useState('')
   const [pickupReservationId, setPickupReservationId] = useState<string | null>(null)
   const [editReservationId, setEditReservationId] = useState<string | null>(null)
+  const [capacity, setCapacity] = useState<CapacityState | null>(null)
+  const [capacityLoading, setCapacityLoading] = useState(false)
   const handleInitialPickupReservation = useCallback(() => { setPickupReservationId(null); onNavigationContextHandled?.() }, [onNavigationContextHandled])
 
   const load = useCallback(async (): Promise<boolean> => {
@@ -107,6 +122,30 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   const selectedRate = intake?.rateCards.find(card => card.vehicleModel === vehicleModel) ?? null
   const selectedPlanValue = selectedRate?.[plan] ?? null
   const shownCustomers = useMemo(() => intake?.customers.filter(customer => `${customer.name} ${customer.number ?? ''}`.toLowerCase().includes(customerSearch.trim().toLowerCase())) ?? [], [intake, customerSearch])
+
+  useEffect(()=>{
+    setCapacity(null)
+    if (reservationType!=='rental'||workflow==='walk_in'||!vehicleModel||!start||!expectedReturn||new Date(expectedReturn)<=new Date(start)) return
+    let current=true; setCapacityLoading(true)
+    const timer=window.setTimeout(async()=>{
+      const result=await supabase.rpc('get_rental_reservation_capacity_state',{p_vehicle_class:vehicleModel,p_start_date:new Date(start).toISOString(),p_expected_return_datetime:new Date(expectedReturn).toISOString(),p_exclude_reservation_id:null})
+      if(!current)return
+      try{if(result.error)throw result.error;setCapacity(parseCapacity(result.data))}catch{setError('Reservation capacity could not be verified. Refresh and try again.')}finally{setCapacityLoading(false)}
+    },250)
+    return()=>{current=false;window.clearTimeout(timer)}
+  },[reservationType,workflow,vehicleModel,start,expectedReturn])
+
+  useEffect(()=>{
+    setConversionCapacity(null)
+    setConversionClass('')
+    if(!conversion||conversion.reservationType.trim().toLowerCase()!=='rental')return
+    let current=true;setConversionCapacityLoading(true)
+    void supabase.rpc('get_rental_reservation_capacity_state',{p_vehicle_class:conversion.vehicleModel,p_start_date:conversion.start,p_expected_return_datetime:conversion.expectedReturn,p_exclude_reservation_id:null}).then(result=>{
+      if(!current)return
+      try{if(result.error)throw result.error;setConversionCapacity(parseCapacity(result.data))}catch{setError('Reservation capacity could not be verified. Refresh and try again.')}finally{setConversionCapacityLoading(false)}
+    })
+    return()=>{current=false}
+  },[conversion])
 
   useEffect(() => {
     if (!intake || loading || !navigationContext) return
@@ -144,6 +183,7 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
     if (workflow === 'walk_in' && plan !== 'daily') return 'Weekly and monthly pickup billing is not implemented yet.'
     if (workflow === 'walk_in' && reservationType === 'loaner' && !roNumber.trim()) return 'Validation: Loaner Walk-in requires an RO number before continuing to Pickup.'
     if (selectedPlanValue === null) return `Missing configuration: ${plan} pricing is not configured for ${vehicleModel}.`
+    if (reservationType==='rental'&&workflow!=='walk_in'&&(capacityLoading||!capacity?.available)) return 'No authoritative Rental reservation capacity is available for the selected model and dates.'
     return null
   }
   const submit = async (event: FormEvent) => {
@@ -167,8 +207,9 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   }
   const convert = async (event: FormEvent) => {
     event.preventDefault(); if (!conversion) return
+    if(conversion.reservationType.trim().toLowerCase()==='rental'&&(conversionCapacityLoading||(!conversionCapacity?.available&&!conversionClass))){setError('No authoritative Rental reservation capacity is available for conversion. Choose an available alternative.');return}
     setBusy(true); setError(null)
-    const { data, error: rpcError } = await supabase.rpc('convert_quote_to_reservation_with_pricing_agreement_state', { p_quote_id:conversion.id, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes) })
+    const { data, error: rpcError } = await supabase.rpc('convert_quote_to_reservation_with_pricing_agreement_state', { p_quote_id:conversion.id, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes), p_selected_vehicle_class:conversionClass||null })
     if (rpcError) setError(friendlyError(rpcError.message));
     else if (await load()) { setConversion(null); setResult(record(data)); }
     else { setConversion(null); setError('State sync failed: the conversion completed, but Reservations could not reload authoritative intake. Refresh before continuing.') }
@@ -176,7 +217,7 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   }
 
   if (result) return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">AUTHORITATIVE RESULT</p><h1>Reservations update complete</h1><p>Supabase completed the workflow. No VIN, vehicle use, contract period, pricing timer, or billing was started.</p><AuthoritativeFields value={result} /><button className="primary-action" type="button" onClick={reset}>Return to Reservations</button></section></main>
-  if (conversion) return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">QUOTE CONVERSION</p><h1>Convert Quote to Reservation</h1><p>The existing Transportation Event <code>{conversion.eventId}</code> and pricing agreement will be preserved.</p>{error && <div className="data-message error-message">{error}</div>}<form className="reservation-form" onSubmit={convert}><label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label><label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label><div className="form-actions wide"><button type="button" onClick={()=>setConversion(null)}>Cancel</button><button className="primary-action" disabled={busy}>{busy?'Converting…':'Convert to Reservation'}</button></div></form></section></main>
+  if (conversion) { const selectedAlternative=conversionCapacity?.alternatives.find(item=>item.vehicleModel===conversionClass); const conversionPlanRate=selectedAlternative?.[conversion.currentPlan as Plan]??null; return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">QUOTE CONVERSION</p><h1>Convert Quote to Reservation</h1><p>The existing Transportation Event <code>{conversion.eventId}</code> and pricing agreement will be preserved.</p>{error && <div className="data-message error-message">{error}</div>}<form className="reservation-form" onSubmit={convert}>{conversion.reservationType.trim().toLowerCase()==='rental'&&<div className="wide">{conversionCapacityLoading?<div className="rate-preview" role="status">Checking authoritative Reservation Capacity…</div>:conversionCapacity?.available?<div className="rate-preview"><strong>{conversion.vehicleModel} is available</strong><span>The original Quote pricing snapshots will be preserved.</span></div>:<div className="data-message error-message" role="alert"><strong>No reservation capacity is available for {conversion.vehicleModel} for the complete period.</strong><span>Choose an available class configured for the Quote's {conversion.currentPlan} rate plan.</span>{conversionCapacity?.alternatives.filter(item=>item[conversion.currentPlan as Plan]!==null).map(item=><button type="button" key={item.vehicleModel} onClick={()=>setConversionClass(item.vehicleModel)}>{item.vehicleModel} ({item.minimumRemaining} remaining)</button>)}</div>}{selectedAlternative&&<div className="rate-preview"><strong>Selected Reservation class: {selectedAlternative.vehicleModel}</strong><span>Normal current {conversion.currentPlan} rate: {money(conversionPlanRate)}</span><span>Daily: {money(selectedAlternative.daily)} · Weekly: {money(selectedAlternative.weekly)} · Monthly: {money(selectedAlternative.monthly)}</span></div>}</div>}<label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label><label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label><div className="form-actions wide"><button type="button" onClick={()=>setConversion(null)}>Cancel</button><button className="primary-action" disabled={busy||conversionCapacityLoading||(conversion.reservationType.trim().toLowerCase()==='rental'&&!conversionCapacity?.available&&!conversionClass)}>{busy?'Converting…':'Convert to Reservation'}</button></div></form></section></main> }
   return <main className="content reservations-page">
     <section className="page-heading"><div><p className="eyebrow">OPERATIONS / RESERVATIONS</p><h1>Reservations</h1><p>Create pre-pickup Quotes, Reservations, and Walk-ins from authoritative pricing configuration.</p></div><button type="button" onClick={()=>void load()} disabled={loading}>Refresh</button></section>
     {error && <div className="data-message error-message"><strong>Reservations needs attention</strong><span>{error}</span></div>}
@@ -193,8 +234,11 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
         <label>Start date/time<input type="datetime-local" required value={start} onChange={e=>setStart(e.target.value)} /></label><label>Expected return date/time<input type="datetime-local" required value={expectedReturn} onChange={e=>setExpectedReturn(e.target.value)} /></label>
         {workflow!=='quote' && <><label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label></>}
         <label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label>
+        {reservationType==='rental'&&workflow!=='walk_in'&&capacityLoading&&<div className="rate-preview wide" role="status">Checking authoritative Reservation Capacity…</div>}
+        {reservationType==='rental'&&workflow!=='walk_in'&&capacity&&!capacity.available&&<div className="data-message error-message wide" role="alert"><strong>No reservation capacity is available for {vehicleModel} for the selected dates.</strong><span>{capacity.status==='not_configured'?'This model has no Reservation Capacity configuration.':'At least one dealership calendar day is full.'}</span>{capacity.alternatives.length>0&&<div><span>Available alternatives for the complete period:</span>{capacity.alternatives.map(item=><button type="button" key={item.vehicleModel} onClick={()=>setVehicleModel(item.vehicleModel)}>{item.vehicleModel} ({item.minimumRemaining} remaining)</button>)}</div>}</div>}
+        {reservationType==='rental'&&workflow!=='walk_in'&&capacity?.available&&<div className="rate-preview wide"><strong>Reservation Capacity available</strong><span>Authoritative availability covers the complete selected period.</span></div>}
         <div className="rate-preview wide"><strong>Configured pricing — exact Supabase values</strong><span>Daily: {money(selectedRate?.daily??null)}</span><span>Weekly: {money(selectedRate?.weekly??null)}</span><span>Monthly: {money(selectedRate?.monthly??null)}</span>{selectedRate && selectedPlanValue===null && <em>{plan} is not configured. Choose another plan.</em>}</div>
-        <div className="form-actions wide"><button className="primary-action" disabled={busy}>{busy?'Submitting…':`Create ${workflow==='walk_in'?'Walk-in':workflow[0].toUpperCase()+workflow.slice(1)}`}</button></div>
+        <div className="form-actions wide"><button className="primary-action" disabled={busy||(workflow!=='walk_in'&&reservationType==='rental'&&(capacityLoading||!capacity?.available))}>{busy?'Submitting…':`Create ${workflow==='walk_in'?'Walk-in':workflow[0].toUpperCase()+workflow.slice(1)}`}</button></div>
       </form>
       <section className="reservation-card quote-list"><div className="section-heading"><div><h2>Active Quotes</h2><p>Authoritative Quotes available for same-event conversion.</p></div><strong>{intake.quotes.length}</strong></div>{intake.quotes.length===0?<p className="empty-state">No active Quotes.</p>:intake.quotes.map(q=><article key={q.id}><div><h3>{q.customerName||'Customer'}</h3><small>Quote ID {q.id}</small><small>Transportation Event ID {q.eventId}</small></div><dl><div><dt>Schedule</dt><dd>{dateTime(q.start)} — {dateTime(q.expectedReturn)}</dd></div><div><dt>Type / model</dt><dd>{q.reservationType} · {q.vehicleModel}</dd></div><div><dt>Pay type / plan</dt><dd>{q.payType} · {q.initialPlan} / {q.currentPlan}</dd></div><div><dt>Pricing snapshots</dt><dd>Daily {money(q.daily)} · Weekly {money(q.weekly)} · Monthly {money(q.monthly)}</dd></div></dl><button className="primary-action" type="button" onClick={()=>{setAdvisor('');setRoNumber('');setNotes('');setConversion(q)}}>Convert to Reservation</button></article>)}</section>
       </>}
