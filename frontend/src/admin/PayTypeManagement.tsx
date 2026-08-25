@@ -364,15 +364,21 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   }
   const editRentalRate = (item: RentalRateRule) => { setMessage(null); setSuccessMessage(null); setRateForm({id:item.id,vehicleClass:item.vehicleClass,dailyRate:String(item.dailyRate),weeklyRate:item.weeklyRate===null?'':String(item.weeklyRate),monthlyRate:item.monthlyRate===null?'':String(item.monthlyRate),sortOrder:String(item.sortOrder),capacity:'',saveCapacity:false}) }
   const saveRentalRate = async (event: FormEvent) => {
-    event.preventDefault(); if(busy)return; const values=validateRateForm(rateForm); if(!values)return; setBusy(true);setMessage(null);setSuccessMessage(null); const edit=rateForm.id!==null
+    event.preventDefault(); if(busy)return; const values=validateRateForm(rateForm); if(!values)return; const edit=rateForm.id!==null
+    if (!edit && rateForm.saveCapacity && !/^\d+$/.test(rateForm.capacity)) { setMessage('Reservation Capacity must be a whole number zero or greater. No changes were saved.'); return }
+    setBusy(true);setMessage(null);setSuccessMessage(null)
     const payload={p_vehicle_class:rateForm.vehicleClass.trim(),p_daily_rate:values.dailyRate,p_weekly_rate:values.weeklyRate,p_monthly_rate:values.monthlyRate,p_sort_order:values.sortOrder}
     const result=edit?await supabase.rpc('update_admin_rental_rate_card_state',{p_rental_rate_rule_id:rateForm.id,...payload}):await supabase.rpc('create_admin_rental_rate_card_state',payload)
     if(result.error){setMessage(`The rental rate could not be ${edit?'updated':'added'}. Review the values and try again. No change was confirmed.`);setBusy(false);return}
     try{parseRentalRateMutation(result.data,edit?'admin_rental_rate_card_updated':'admin_rental_rate_card_created',rateForm.id??undefined)}catch{setMessage('The rental rate request completed, but its complete result could not be verified. Refresh before trying again.');setBusy(false);return}
     if (!edit && rateForm.saveCapacity) {
-      if (!/^\d+$/.test(rateForm.capacity)) { setMessage('Pricing was saved, but Reservation Capacity was not because it must be a whole number zero or greater. The model remains unavailable for new Rental Reservations until capacity is configured.'); await load(); return }
       const capacityResult = await supabase.rpc('upsert_admin_rental_reservation_capacity_state', { p_vehicle_class: rateForm.vehicleClass.trim(), p_daily_limit: Number(rateForm.capacity) })
-      if (capacityResult.error) { setMessage('Pricing was saved, but Reservation Capacity was not. The model remains unavailable for new Rental Reservations until capacity is configured.'); await load(); return }
+      if (capacityResult.error) {
+        await load()
+        setRateForm(emptyRateForm())
+        setMessage('Pricing WAS saved, but Reservation Capacity WAS NOT. The model is unavailable for new Rental Reservations until capacity is configured.')
+        return
+      }
     }
     if(await load()){setRateForm(emptyRateForm());setSuccessMessage(edit?'Rental rate updated successfully.':'Rental model and authoritative settings saved successfully.')}else setMessage('The rental rate changed, but authoritative settings could not be reloaded. Refresh before making another change.')
   }

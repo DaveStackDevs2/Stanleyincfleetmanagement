@@ -28,9 +28,26 @@ def test_model_actions_keep_engines_separate_and_history_manageable():
         assert f"supabase.rpc('{rpc}'" in ADMIN
     assert "Inactive / Previous Rental Rate Cards" in ADMIN
     assert "vehicleClass:model.vehicleClass" in ADMIN
-    assert "Pricing was saved, but Reservation Capacity was not" in ADMIN
+    assert "Pricing WAS saved, but Reservation Capacity WAS NOT" in ADMIN
     assert ADMIN.index("create_admin_rental_rate_card_state") < ADMIN.index("if (!edit && rateForm.saveCapacity)")
     assert "/^\\d+$/.test" in ADMIN  # includes zero and rejects capacity arithmetic/fractions
+
+
+def test_combined_add_validates_capacity_before_creating_rate():
+    capacity_validation = "if (!edit && rateForm.saveCapacity && !/^\\d+$/.test(rateForm.capacity))"
+    rate_creation = "await supabase.rpc('create_admin_rental_rate_card_state',payload)"
+    assert capacity_validation in ADMIN
+    assert "No changes were saved." in ADMIN
+    assert ADMIN.index(capacity_validation) < ADMIN.index(rate_creation)
+
+
+def test_capacity_partial_failure_reloads_then_warns_and_resets_add_form():
+    failure_branch = ADMIN.index("if (capacityResult.error)")
+    reload_state = ADMIN.index("await load()", failure_branch)
+    reset_form = ADMIN.index("setRateForm(emptyRateForm())", reload_state)
+    persistent_warning = ADMIN.index("setMessage('Pricing WAS saved, but Reservation Capacity WAS NOT.", reset_form)
+    branch_end = ADMIN.index("return", persistent_warning)
+    assert failure_branch < reload_state < reset_form < persistent_warning < branch_end
 
 
 def test_backend_impact_is_rendered_without_recalculation():
