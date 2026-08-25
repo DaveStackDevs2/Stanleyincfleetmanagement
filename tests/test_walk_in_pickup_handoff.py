@@ -85,4 +85,4 @@ def test_no_frontend_business_arithmetic_or_new_backend_checkpoint():
     assert ".from(" not in combined
     assert not re.search(r"(?:daily_rate|subtotal|tax_rate|tax_amount|total)\s*[*/]", combined)
     migrations = sorted((ROOT / "supabase/migrations").glob("*.sql"))
-    assert migrations[-1].name == "20260825120000_authoritative_rental_reservation_capacity.sql"
+    assert migrations[-1].name == "20260825180000_rental_capacity_admin_impact_warnings.sql"
