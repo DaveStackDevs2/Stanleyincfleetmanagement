@@ -48,6 +48,14 @@ def test_conversion_alternative_reuses_agreement_and_authoritative_rate_engine()
     assert conversion.index("converted_to_reservation_id is not null") < conversion.index("resolve_rental_rate_card_state")
     assert "create_transportation_event_state" not in conversion and "insert into public.rental_pricing_agreements" not in conversion
 
+def test_conversion_rate_plan_case_is_parenthesized_for_plpgsql():
+    conversion=SQL.split("create function public.convert_quote_to_reservation_with_pricing_agreement_state",1)[1].split("create function public.update_precheckin",1)[0]
+    assert """if (case v_agreement.current_rate_plan
+        when 'daily' then v_rate->>'daily_rate'
+        when 'weekly' then v_rate->>'weekly_rate'
+        when 'monthly' then v_rate->>'monthly_rate'
+        else null end) is null then""" in conversion
+
 def test_admin_and_booking_writes_share_normalized_lock_and_upsert_identity():
     lock="pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(lower(btrim("
     assert SQL.count(lock) >= 6
