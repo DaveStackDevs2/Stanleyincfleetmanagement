@@ -48,7 +48,8 @@ def test_board_displays_both_model_level_types_and_routes_actions_only():
     assert "No VIN assigned" in BOARD
     assert "onOpenReservation('edit', item.id)" in BOARD
     assert "onOpenReservation('pickup', item.id)" in BOARD
-    assert ".rpc(" not in BOARD.replace("supabase.rpc('get_fleet_board_state'", "")
+    reads_only = BOARD.replace("supabase.rpc('get_fleet_board_state'", "").replace("supabase.rpc('get_fleet_board_capacity_state'", "")
+    assert ".rpc(" not in reads_only
 
 
 def test_authoritative_one_time_edit_and_pickup_handoffs():

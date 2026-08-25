@@ -54,3 +54,9 @@ Top-level browser-callable wrappers are `SECURITY DEFINER`, owned by `postgres`,
 - **One-way fleet rule:** a Loaner-fleet vehicle cannot serve a Rental; a Rental-fleet vehicle may serve a Loaner as a fallback, with native Loaner candidates ordered first.
 - **Assignment boundary:** `public.start_reservation_vehicle_use_state` rejects a null/blank Loaner RO before `public.start_vehicle_use_state` can begin continuity. Rental has no RO requirement.
 - **Still NOT IMPLEMENTED:** Fleet Board click integration, Fleet Board Loaner reservation rendering, and immediate Walk-in activation remain later checkpoints. Nothing in this checkpoint claims those surfaces complete.
+
+## 2026-08-25 — Rental Reservation Capacity is fail-closed and dealership-day authoritative
+
+**Decision:** `rental_model_limits` is the sole model-level capacity store for future Rentals. Missing and zero limits are unavailable. `get_rental_reservation_capacity_state` counts active, unpicked-up Rental Reservations over America/New_York calendar days with `[start,end)` semantics and provides only complete-period, active-rate-card alternatives. Authoritative Reservation writes serialize by model and recheck; Quotes do not hold capacity, while Loaners and immediate Walk-ins do not use this authority.
+
+**Deferred:** Admin limit reductions do not create or refresh persisted conflicts and never cancel/reassign existing Reservations. That is the immediate capacity follow-up. Lost Rentals and free upgrades remain separate later checkpoints.

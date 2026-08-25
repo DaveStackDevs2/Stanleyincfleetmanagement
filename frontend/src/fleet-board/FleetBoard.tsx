@@ -39,7 +39,8 @@ type Reservation = {
   serviceAdvisor: string
 }
 
-type Capacity = { model: string; dailyLimit: number }
+type CapacityDay = { date: string; booked: number; dailyLimit: number }
+type Capacity = { model: string; dailyLimit: number; days: CapacityDay[] }
 type PayTypeColors = Record<string, { backgroundColor: string; textColor: string }>
 type AssignmentLane = Assignment & { lane: number; left: number; width: number }
 type ReservationLane = Reservation & { lane: number; left: number; width: number }
@@ -175,9 +176,10 @@ function reservationFrom(value: unknown): Reservation | null {
 
 function capacityFrom(value: unknown): Capacity | null {
   const row = recordValue(value)
-  if (!row || typeof row.daily_limit !== 'number') return null
+  if (!row || typeof row.daily_limit !== 'number' || !Array.isArray(row.days)) return null
   const model = textValue(row.vehicle_class)
-  return model ? { model, dailyLimit: row.daily_limit } : null
+  const days=row.days.map(recordValue).filter(Boolean).map(day=>({date:textValue(day!.date),booked:typeof day!.booked_count==='number'?day!.booked_count:-1,dailyLimit:typeof day!.daily_limit==='number'?day!.daily_limit:-1}))
+  return model && days.every(day=>day.date&&day.booked>=0&&day.dailyLimit>=0) ? { model, dailyLimit: row.daily_limit, days } : null
 }
 
 function arrayFrom<T>(value: unknown, parse: (item: unknown) => T | null): T[] | null {
@@ -206,10 +208,9 @@ function boardPayloadFrom(value: unknown, requestedStart: string, requestedEnd: 
   const vehicles = arrayFrom(payload.vehicles, vehicleFrom)
   const assignments = arrayFrom(payload.assignments, item => assignmentFrom(item, requestedEnd))
   const reservations = arrayFrom(payload.reservations, reservationFrom)
-  const capacities = arrayFrom(payload.capacities, capacityFrom)
   const payTypeColors = colorsFrom(payload.pay_type_colors)
-  return vehicles && assignments && reservations && capacities && payTypeColors
-    ? { vehicles, assignments, reservations, capacities, payTypeColors }
+  return vehicles && assignments && reservations && payTypeColors
+    ? { vehicles, assignments, reservations, payTypeColors }
     : null
 }
 
@@ -243,10 +244,14 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
     async function loadBoard() {
       setLoading(true)
       setLoadFailed(false)
-      const boardResult = await supabase.rpc('get_fleet_board_state', { p_range_start: rangeStartIso, p_range_end: rangeEndIso })
+      const [boardResult,capacityResult] = await Promise.all([
+        supabase.rpc('get_fleet_board_state', { p_range_start: rangeStartIso, p_range_end: rangeEndIso }),
+        supabase.rpc('get_fleet_board_capacity_state',{p_range_start:rangeStartIso,p_range_end:rangeEndIso}),
+      ])
       if (!current) return
       const board = boardPayloadFrom(boardResult.data, rangeStartIso, rangeEndIso)
-      if (boardResult.error || !board) {
+      const authoritativeCapacities=arrayFrom(capacityResult.data,capacityFrom)
+      if (boardResult.error || capacityResult.error || !board || !authoritativeCapacities) {
         setLoadFailed(true)
         setVehicles([])
         setAssignments([])
@@ -257,7 +262,7 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
         setVehicles(board.vehicles)
         setAssignments(board.assignments)
         setReservations(board.reservations)
-        setCapacities(board.capacities)
+        setCapacities(authoritativeCapacities)
         setPayTypeColors(board.payTypeColors)
       }
       setLoading(false)
@@ -338,7 +343,7 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
         <div className="board-group-title">Reservation Capacity</div>
         {capacities.map(capacity => <div className="board-row capacity-row" key={capacity.model}>
           <div className="board-resource"><strong>{capacity.model}</strong><small>Daily limit {capacity.dailyLimit}</small></div>
-          <div className={isDayView ? 'day-capacity' : 'board-days'}>{days.map(day => { const booked = reservations.filter(item => item.reservationType === 'rental' && item.status.toLowerCase() !== 'cancelled' && item.requestedModel === capacity.model && overlaps(item.startsAt, item.endsAt, day)); return <div className="board-day" key={dayKey(day)}><strong>{booked.length} / {capacity.dailyLimit}</strong></div> })}</div>
+          <div className={isDayView ? 'day-capacity' : 'board-days'}>{days.map(day => { const authoritative=capacity.days.find(item=>item.date===dayKey(day)); return <div className="board-day" key={dayKey(day)}><strong>{authoritative?`${authoritative.booked} / ${authoritative.dailyLimit}`:'—'}</strong></div> })}</div>
         </div>)}
         {capacities.length === 0 && <div className="board-empty">No reservation capacity records are available.</div>}
         <div className="board-group-title">Pre-pickup Reservations</div>

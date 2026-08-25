@@ -136,3 +136,10 @@
 - **One-way fleet rule:** a Loaner-fleet vehicle cannot serve a Rental; a Rental-fleet vehicle may serve a Loaner as a fallback, with native Loaner candidates ordered first.
 - **Assignment boundary:** `public.start_reservation_vehicle_use_state` rejects a null/blank Loaner RO before `public.start_vehicle_use_state` can begin continuity. Rental has no RO requirement.
 - **Still NOT IMPLEMENTED:** Fleet Board click integration, Fleet Board Loaner reservation rendering, and immediate Walk-in activation remain later checkpoints. Nothing in this checkpoint claims those surfaces complete.
+
+## 2026-08-25 — Authoritative Rental Reservation Capacity
+
+- Added a data-free capacity migration with one complete-period evaluator, three server-side Rental Reservation write gates, controlled Admin read/save/remove RPCs, and an authoritative Fleet Board daily-state dependency.
+- Reservations now warns for unavailable Rental dates, offers backend-qualified alternatives, and blocks direct Reservation submit while unavailable; Quotes remain non-holding and Walk-ins/Loaners remain unchanged.
+- Added compact Admin Reservation Capacity configuration using active Rental rate-card models and no invented defaults.
+- **NOT VERIFIED LIVE:** No migration was applied and production browser behavior was not tested. Conflict persistence after limit reduction, Lost Rentals, and free upgrades remain unimplemented.
