@@ -4,7 +4,7 @@ ROOT=Path(__file__).resolve().parents[1]
 SQL=(ROOT/'supabase/migrations/20260825120000_authoritative_rental_reservation_capacity.sql').read_text()
 RESERVATIONS=(ROOT/'frontend/src/reservations/ReservationsWorkspace.tsx').read_text()
 FLEET=(ROOT/'frontend/src/fleet-board/FleetBoard.tsx').read_text()
-ADMIN=(ROOT/'frontend/src/admin/ReservationCapacityManagement.tsx').read_text()
+ADMIN=(ROOT/'frontend/src/admin/PayTypeManagement.tsx').read_text()
 
 def test_capacity_is_missing_or_zero_closed_and_half_open_in_maine():
     assert "when v_limit is null then 'not_configured'" in SQL

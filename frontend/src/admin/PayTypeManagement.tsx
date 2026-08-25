@@ -18,7 +18,10 @@ type PayTypeState = { payTypes: PayType[]; colors: Record<string, ColorPair> }
 type ColorState = { payTypes: string[]; colors: Record<string, ColorPair> }
 type EditForm = { id: string; payType: string; taxable: boolean; amount: string; sortOrder: string; description: string }
 type TaxState = { taxRate: number; percentage: number }
-type RentalRateForm = { id: string | null; vehicleClass: string; dailyRate: string; weeklyRate: string; monthlyRate: string; sortOrder: string }
+type RentalRateForm = { id: string | null; vehicleClass: string; dailyRate: string; weeklyRate: string; monthlyRate: string; sortOrder: string; capacity: string; saveCapacity: boolean }
+type ImpactItem = { id: string; customerName: string; vehicleClass: string; start: string; end: string; status: string; dates: string[]; kind: 'Reservation' | 'Quote' }
+type ImpactDay = { date: string; capacity: number; capacityConfigured: boolean; reservationCount: number; reservationOverage: number; activeQuoteCount: number; combinedCount: number; quotePressureOverage: number }
+type CapacityModel = { vehicleClass: string; dailyLimit: number | null; configured: boolean; hasActiveRateCard: boolean; impact: { days: ImpactDay[]; hardReservations: ImpactItem[]; atRiskQuotes: ImpactItem[] } }
 type ExtendedWarrantyProviderRule = { id: string; providerId: string; providerName: string; enabled: boolean; defaultDailyAmount: number | null; coveredDays: number; notes: string }
 type ExtendedWarrantyState = { providerRules: ExtendedWarrantyProviderRule[] }
 type ExtendedWarrantyForm = { id: string | null; providerId: string | null; providerName: string; defaultDailyAmount: string; coveredDays: string; notes: string }
@@ -132,6 +135,25 @@ function parseRentalRateState(value: unknown): RentalRateState {
   return { rateRules:value.rate_cards.map(parseRentalRateRule) }
 }
 
+const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+const numeric = (value: unknown) => typeof value === 'number' ? value : 0
+function parseCapacityState(value: unknown): CapacityModel[] {
+  if (!isRecord(value) || value.status !== 'admin_rental_reservation_capacity_ready' || !Array.isArray(value.models)) throw new Error('invalid-capacity-state')
+  return value.models.map((raw) => {
+    if (!isRecord(raw) || typeof raw.vehicle_class !== 'string' || !raw.vehicle_class.trim()) throw new Error('invalid-capacity-model')
+    const impact = isRecord(raw.impact) ? raw.impact : {}
+    const days: ImpactDay[] = Array.isArray(impact.days) ? impact.days.map((rawDay) => {
+      const day = isRecord(rawDay) ? rawDay : {}
+      return { date: String(day.date ?? ''), capacity: numeric(day.capacity), capacityConfigured: day.capacity_configured === true, reservationCount: numeric(day.reservation_count), reservationOverage: numeric(day.reservation_overage), activeQuoteCount: numeric(day.active_quote_count), combinedCount: numeric(day.combined_count), quotePressureOverage: numeric(day.quote_pressure_overage) }
+    }).filter((day) => day.date) : []
+    const items = (rawItems: unknown, kind: ImpactItem['kind']): ImpactItem[] => Array.isArray(rawItems) ? rawItems.map((rawItem) => {
+      const item = isRecord(rawItem) ? rawItem : {}
+      return { id: String(item[kind === 'Reservation' ? 'reservation_id' : 'quote_id'] ?? ''), customerName: typeof item.customer_name === 'string' ? item.customer_name : 'Customer unavailable', vehicleClass: String(item.vehicle_class ?? ''), start: String(item.start_date ?? ''), end: String(item.expected_return_datetime ?? ''), status: String(item.status ?? ''), dates: strings(item[kind === 'Reservation' ? 'conflict_dates' : 'risk_dates']), kind }
+    }).filter((item) => item.id) : []
+    return { vehicleClass: raw.vehicle_class, dailyLimit: typeof raw.daily_limit === 'number' ? raw.daily_limit : null, configured: raw.configured === true, hasActiveRateCard: raw.has_active_rate_card === true, impact: { days, hardReservations: items(impact.hard_reservation_conflicts, 'Reservation'), atRiskQuotes: items(impact.at_risk_quotes, 'Quote') } }
+  })
+}
+
 function parseExtendedWarrantyProviderRule(item: unknown): ExtendedWarrantyProviderRule {
   if (!isRecord(item) || typeof item.rule_id !== 'string' || !UUID.test(item.rule_id) ||
     typeof item.provider_id !== 'string' || !UUID.test(item.provider_id) ||
@@ -186,10 +208,12 @@ function parsePayTypeMutation(value: unknown, expectedStatus: 'admin_pay_type_ru
 export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const [state, setState] = useState<PayTypeState | null>(null)
   const [rateState, setRateState] = useState<RentalRateState | null>(null)
+  const [capacityModels, setCapacityModels] = useState<CapacityModel[] | null>(null)
+  const [capacityDrafts, setCapacityDrafts] = useState<Record<string, string>>({})
   const [extendedWarrantyState, setExtendedWarrantyState] = useState<ExtendedWarrantyState | null>(null)
   const [extendedWarrantyForm, setExtendedWarrantyForm] = useState<ExtendedWarrantyForm>({ id: null, providerId: null, providerName: '', defaultDailyAmount: '', coveredDays: '', notes: '' })
   const [extendedWarrantyFocusMode, setExtendedWarrantyFocusMode] = useState<ExtendedWarrantyFocusMode>('list')
-  const [rateForm, setRateForm] = useState<RentalRateForm>({ id: null, vehicleClass: '', dailyRate: '', weeklyRate: '', monthlyRate: '', sortOrder: '0' })
+  const [rateForm, setRateForm] = useState<RentalRateForm>({ id: null, vehicleClass: '', dailyRate: '', weeklyRate: '', monthlyRate: '', sortOrder: '0', capacity: '', saveCapacity: false })
   const [draftColors, setDraftColors] = useState<Record<string, ColorPair>>({})
   const [dirtyColorKeys, setDirtyColorKeys] = useState<Set<string>>(() => new Set())
   const [busy, setBusy] = useState(false)
@@ -203,10 +227,11 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
 
   const load = useCallback(async () => {
     setBusy(true); setMessage(null); setSuccessMessage(null)
-    const [rules, palette, rentalRates, extendedWarranty, tax] = await Promise.all([
+    const [rules, palette, rentalRates, rentalCapacity, extendedWarranty, tax] = await Promise.all([
       supabase.rpc('get_admin_pay_type_rules_state'),
       supabase.rpc('get_fleet_board_pay_type_colors_state'),
       supabase.rpc('get_admin_rental_rate_cards_state'),
+      supabase.rpc('get_admin_rental_reservation_capacity_state'),
       supabase.rpc('get_admin_billing_configuration_state'),
       supabase.rpc('get_admin_loaner_rental_tax_state'),
     ])
@@ -216,6 +241,11 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
       parseColors(palette.data)
       if (!rentalRates.error) setRateState(parseRentalRateState(rentalRates.data))
       else setRateState(null)
+      if (!rentalCapacity.error) {
+        const parsedCapacity = parseCapacityState(rentalCapacity.data)
+        setCapacityModels(parsedCapacity)
+        setCapacityDrafts(Object.fromEntries(parsedCapacity.map((item) => [item.vehicleClass.trim().toLocaleLowerCase(), item.dailyLimit === null ? '' : String(item.dailyLimit)])))
+      } else setCapacityModels(null)
       if (!extendedWarranty.error) setExtendedWarrantyState(parseExtendedWarrantyState(extendedWarranty.data))
       else setExtendedWarrantyState(null)
       if (tax.error) throw new Error('tax-request-failed')
@@ -229,6 +259,7 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
     } catch {
       setState(null)
       setRateState(null)
+      setCapacityModels(null)
       setExtendedWarrantyState(null)
       setTaxState(null)
       setMessage('Pay-type settings could not be loaded. Confirm your access and try again.')
@@ -324,23 +355,41 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
 
 
 
-  const emptyRateForm = (): RentalRateForm => ({ id:null, vehicleClass:'', dailyRate:'', weeklyRate:'', monthlyRate:'', sortOrder:'0' })
+  const emptyRateForm = (): RentalRateForm => ({ id:null, vehicleClass:'', dailyRate:'', weeklyRate:'', monthlyRate:'', sortOrder:'0', capacity:'', saveCapacity:false })
   const validateRateForm = (draft: RentalRateForm) => {
     const dailyRate=Number(draft.dailyRate), weeklyRate=draft.weeklyRate.trim()===''?null:Number(draft.weeklyRate), monthlyRate=draft.monthlyRate.trim()===''?null:Number(draft.monthlyRate), sortOrder=Number(draft.sortOrder)
     if (!draft.vehicleClass.trim() || draft.dailyRate.trim()==='' || !Number.isFinite(dailyRate) || dailyRate<0 || (weeklyRate!==null&&(!Number.isFinite(weeklyRate)||weeklyRate<0)) || (monthlyRate!==null&&(!Number.isFinite(monthlyRate)||monthlyRate<0)) || !Number.isInteger(sortOrder) || sortOrder<0) { setMessage('Enter a vehicle class, required finite non-negative daily rate, optional finite non-negative weekly and monthly rates, and non-negative whole-number sort order.'); return null }
     if (monthlyRate !== null && weeklyRate === null) { setMessage('Weekly rate is required when a monthly rate is configured'); return null }
     return {dailyRate,weeklyRate,monthlyRate,sortOrder}
   }
-  const editRentalRate = (item: RentalRateRule) => { setMessage(null); setSuccessMessage(null); setRateForm({id:item.id,vehicleClass:item.vehicleClass,dailyRate:String(item.dailyRate),weeklyRate:item.weeklyRate===null?'':String(item.weeklyRate),monthlyRate:item.monthlyRate===null?'':String(item.monthlyRate),sortOrder:String(item.sortOrder)}) }
+  const editRentalRate = (item: RentalRateRule) => { setMessage(null); setSuccessMessage(null); setRateForm({id:item.id,vehicleClass:item.vehicleClass,dailyRate:String(item.dailyRate),weeklyRate:item.weeklyRate===null?'':String(item.weeklyRate),monthlyRate:item.monthlyRate===null?'':String(item.monthlyRate),sortOrder:String(item.sortOrder),capacity:'',saveCapacity:false}) }
   const saveRentalRate = async (event: FormEvent) => {
     event.preventDefault(); if(busy)return; const values=validateRateForm(rateForm); if(!values)return; setBusy(true);setMessage(null);setSuccessMessage(null); const edit=rateForm.id!==null
     const payload={p_vehicle_class:rateForm.vehicleClass.trim(),p_daily_rate:values.dailyRate,p_weekly_rate:values.weeklyRate,p_monthly_rate:values.monthlyRate,p_sort_order:values.sortOrder}
     const result=edit?await supabase.rpc('update_admin_rental_rate_card_state',{p_rental_rate_rule_id:rateForm.id,...payload}):await supabase.rpc('create_admin_rental_rate_card_state',payload)
     if(result.error){setMessage(`The rental rate could not be ${edit?'updated':'added'}. Review the values and try again. No change was confirmed.`);setBusy(false);return}
     try{parseRentalRateMutation(result.data,edit?'admin_rental_rate_card_updated':'admin_rental_rate_card_created',rateForm.id??undefined)}catch{setMessage('The rental rate request completed, but its complete result could not be verified. Refresh before trying again.');setBusy(false);return}
-    if(await load()){setRateForm(emptyRateForm());setSuccessMessage(`Rental rate ${edit?'updated':'added'} successfully.`)}else setMessage('The rental rate changed, but authoritative settings could not be reloaded. Refresh before making another change.')
+    if (!edit && rateForm.saveCapacity) {
+      if (!/^\d+$/.test(rateForm.capacity)) { setMessage('Pricing was saved, but Reservation Capacity was not because it must be a whole number zero or greater. The model remains unavailable for new Rental Reservations until capacity is configured.'); await load(); return }
+      const capacityResult = await supabase.rpc('upsert_admin_rental_reservation_capacity_state', { p_vehicle_class: rateForm.vehicleClass.trim(), p_daily_limit: Number(rateForm.capacity) })
+      if (capacityResult.error) { setMessage('Pricing was saved, but Reservation Capacity was not. The model remains unavailable for new Rental Reservations until capacity is configured.'); await load(); return }
+    }
+    if(await load()){setRateForm(emptyRateForm());setSuccessMessage(edit?'Rental rate updated successfully.':'Rental model and authoritative settings saved successfully.')}else setMessage('The rental rate changed, but authoritative settings could not be reloaded. Refresh before making another change.')
   }
   const setRentalRateEnabled=async(item:RentalRateRule)=>{setBusy(true);setMessage(null);setSuccessMessage(null);const enabled=!item.enabled;const result=await supabase.rpc('set_admin_rental_rate_card_enabled_state',{p_rental_rate_rule_id:item.id,p_is_enabled:enabled});if(result.error){setMessage(`The rental rate could not be ${enabled?'reactivated':'disabled'}. No change was confirmed.`);setBusy(false);return}try{parseRentalRateMutation(result.data,enabled?'admin_rental_rate_card_enabled':'admin_rental_rate_card_disabled',item.id)}catch{setMessage('The rental rate status result could not be verified. Refresh before trying again.');setBusy(false);return}if(await load())setSuccessMessage(`Rental rate ${enabled?'reactivated':'disabled'} successfully.`);else setMessage('The rental rate changed, but authoritative settings could not be reloaded.')}
+  const saveCapacity = async (vehicleClass: string, value: string) => {
+    if (!/^\d+$/.test(value)) { setMessage('Reservation Capacity must be a whole number zero or greater.'); return }
+    setBusy(true); setMessage(null); setSuccessMessage(null)
+    const result = await supabase.rpc('upsert_admin_rental_reservation_capacity_state', { p_vehicle_class: vehicleClass.trim(), p_daily_limit: Number(value) })
+    if (result.error) { setMessage('Reservation Capacity could not be saved.'); setBusy(false); return }
+    if (await load()) setSuccessMessage(`Reservation Capacity saved for ${vehicleClass}.`)
+  }
+  const removeCapacity = async (item: CapacityModel) => {
+    setBusy(true); setMessage(null); setSuccessMessage(null)
+    const result = await supabase.rpc('remove_admin_rental_reservation_capacity_state', { p_vehicle_class: item.vehicleClass })
+    if (result.error) { setMessage('Reservation Capacity configuration could not be removed.'); setBusy(false); return }
+    if (await load()) setSuccessMessage(`Reservation Capacity removed for ${item.vehicleClass}; the model is unavailable for new Rental Reservations.`)
+  }
 
 
   const editExtendedWarrantyProvider = (item: ExtendedWarrantyProviderRule) => {
@@ -425,6 +474,14 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
   const extendedWarrantyFocused = extendedWarrantyFocusMode !== 'list'
   const rateFocused = rateForm.id !== null || rateForm.vehicleClass !== ''
   const focused = extendedWarrantyFocused || taxEditing || rateFocused
+  const modelKey = (value: string) => value.trim().toLocaleLowerCase()
+  const activeRates = rateState?.rateRules.filter((item) => item.enabled && item.current) ?? []
+  const inactiveRates = rateState?.rateRules.filter((item) => !item.enabled || !item.current) ?? []
+  const currentModels = new Map<string, { vehicleClass: string; rate: RentalRateRule | null; capacity: CapacityModel | null }>()
+  activeRates.forEach((rate) => currentModels.set(modelKey(rate.vehicleClass), { vehicleClass: rate.vehicleClass, rate, capacity: null }))
+  capacityModels?.forEach((capacity) => { const key = modelKey(capacity.vehicleClass); const existing = currentModels.get(key); currentModels.set(key, { vehicleClass: existing?.vehicleClass ?? capacity.vehicleClass, rate: existing?.rate ?? null, capacity }) })
+  const money = (value: number | null) => value === null ? 'Not configured' : value.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
+  const warningList = (items: ImpactItem[]) => <ul>{items.map((item) => <li key={`${item.kind}-${item.id}`}><strong>{item.customerName}</strong> — {item.kind} <code>{item.id}</code>, {item.vehicleClass}, {item.start} to {item.end}, status {item.status}. Affected local dates: {item.dates.join(', ')}</li>)}</ul>
 
   return <main className="content management-page pay-type-page">
     <section className="fleet-header"><div><p className="eyebrow">ADMINISTRATION / BILLING</p>
@@ -447,8 +504,10 @@ export function PayTypeManagement({ onBack }: { onBack: () => void }) {
             </td></tr>)}
         </tbody></table></div></section>}
 
-      {rateFocused && <section className="vehicle-table-card"><form className="details-panel editor-body" onSubmit={saveRentalRate}><div><h2>{rateForm.id?'Edit Rental Rate':'Add Rental Rate'}</h2><p>Blank weekly or monthly rates mean not configured, never free. A monthly rate requires a weekly rate so fallback pricing remains available.</p></div><label>Vehicle class / model identifier<input required value={rateForm.vehicleClass} disabled={busy} onChange={e=>setRateForm({...rateForm,vehicleClass:e.target.value})}/></label><label>Daily rate<input required min="0" step="0.01" type="number" value={rateForm.dailyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,dailyRate:e.target.value})}/></label><label>Weekly rate (optional)<input min="0" step="0.01" type="number" value={rateForm.weeklyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,weeklyRate:e.target.value})}/></label><label>Monthly rate (optional)<input min="0" step="0.01" type="number" value={rateForm.monthlyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,monthlyRate:e.target.value})}/></label><label>Sort order<input required min="0" step="1" type="number" value={rateForm.sortOrder} disabled={busy} onChange={e=>setRateForm({...rateForm,sortOrder:e.target.value})}/></label><div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{rateForm.id?'Save Rental Rate':'Add Rental Rate'}</button><button type="button" disabled={busy} onClick={async()=>{setMessage(null);await load();setRateForm(emptyRateForm())}}>Cancel / Return to Rates, Fees &amp; Billing Rules</button></div></form></section>}
-      {!focused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Rental Rates</h2><p>Configure pay-type-independent daily, weekly, and monthly rate cards by vehicle class/model. No rates are preloaded.</p></div><button className="primary-action" type="button" disabled={busy} onClick={()=>setRateForm({...emptyRateForm(),vehicleClass:' '})}>Add Rental Rate</button></div>{!rateState&&<p className="data-message">Rental rate settings could not be loaded. Pay Type management remains available.</p>}{rateState&&(rateState.rateRules.length===0?<p className="empty-state">No rental rates are configured yet. Add rates only after the business provides approved values.</p>:<div className="table-wrap"><table><thead><tr><th>Vehicle class</th><th>Daily rate</th><th>Weekly rate</th><th>Monthly rate</th><th>Sort order</th><th>Status</th><th>Action</th></tr></thead><tbody>{rateState.rateRules.map(item=><tr key={item.id}><td><strong>{item.vehicleClass}</strong></td><td>{item.dailyRate.toLocaleString(undefined,{style:'currency',currency:'USD'})}</td><td>{item.weeklyRate===null?'Not configured':item.weeklyRate.toLocaleString(undefined,{style:'currency',currency:'USD'})}</td><td>{item.monthlyRate===null?'Not configured':item.monthlyRate.toLocaleString(undefined,{style:'currency',currency:'USD'})}</td><td>{item.sortOrder}</td><td>{item.enabled?'Enabled':'Disabled'}</td><td><button type="button" disabled={busy} onClick={()=>editRentalRate(item)}>Edit</button>{' '}<button type="button" disabled={busy} onClick={()=>void setRentalRateEnabled(item)}>{item.enabled?'Disable':'Reactivate'}</button></td></tr>)}</tbody></table></div>)}</section>}
+      {rateFocused && <section className="vehicle-table-card"><form className="details-panel editor-body" onSubmit={saveRentalRate}><div><h2>{rateForm.id?'Edit Rental Rate':'Add Rental Model'}</h2><p>Blank weekly or monthly rates mean not configured, never free. A monthly rate requires a weekly rate. Pricing and capacity remain separate authoritative writes.</p></div><label>Vehicle class / model identifier<input required value={rateForm.vehicleClass} disabled={busy || (!rateForm.saveCapacity && rateForm.id === null)} onChange={e=>setRateForm({...rateForm,vehicleClass:e.target.value})}/></label><label>Daily rate<input required min="0" step="0.01" type="number" value={rateForm.dailyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,dailyRate:e.target.value})}/></label><label>Weekly rate (optional)<input min="0" step="0.01" type="number" value={rateForm.weeklyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,weeklyRate:e.target.value})}/></label><label>Monthly rate (optional)<input min="0" step="0.01" type="number" value={rateForm.monthlyRate} disabled={busy} onChange={e=>setRateForm({...rateForm,monthlyRate:e.target.value})}/></label><label>Sort order<input required min="0" step="1" type="number" value={rateForm.sortOrder} disabled={busy} onChange={e=>setRateForm({...rateForm,sortOrder:e.target.value})}/></label>{rateForm.saveCapacity&&<label>Reservation Capacity<input required min="0" step="1" type="number" value={rateForm.capacity} disabled={busy} onChange={e=>setRateForm({...rateForm,capacity:e.target.value})}/><span>Whole number zero or greater. Pricing is created first, then capacity is saved.</span></label>}<div className="page-actions"><button className="primary-action" disabled={busy} type="submit">{rateForm.id?'Save Rental Rate':'Add Rate'}</button><button type="button" disabled={busy} onClick={async()=>{setMessage(null);await load();setRateForm(emptyRateForm())}}>Cancel / Return to Rates, Fees &amp; Billing Rules</button></div></form></section>}
+      {!focused && <section className="vehicle-table-card"><div className="section-heading"><div><h2>Rental Models &amp; Rates</h2><p>Manage each model's current Rental pricing and fixed Reservation Capacity together. Missing capacity remains unavailable; Quotes are non-binding.</p></div><button className="primary-action" type="button" disabled={busy} onClick={()=>setRateForm({...emptyRateForm(),vehicleClass:' ',saveCapacity:true})}>Add Rental Model</button></div>{(!rateState||!capacityModels)&&<p className="data-message">Rental model pricing or capacity settings could not be loaded. Other billing management remains available.</p>}{rateState&&capacityModels&&(currentModels.size===0?<p className="empty-state">No current Rental models are configured or referenced.</p>:<div className="table-wrap"><table><thead><tr><th>Model / class</th><th>Daily / Weekly / Monthly</th><th>Reservation Capacity</th><th>Pricing status</th><th>Capacity status</th><th>Actions</th></tr></thead><tbody>{[...currentModels.values()].map((model)=>{const capacity=model.capacity;const draftKey=modelKey(model.vehicleClass);return <tr key={draftKey}><td><strong>{model.vehicleClass}</strong></td><td>{model.rate?<>{money(model.rate.dailyRate)} / {money(model.rate.weeklyRate)} / {money(model.rate.monthlyRate)}</>:'Not configured'}</td><td><input aria-label={`${model.vehicleClass} Reservation Capacity`} min="0" step="1" type="number" placeholder="Not configured" value={capacityDrafts[draftKey]??''} onChange={(event)=>setCapacityDrafts((current)=>({...current,[draftKey]:event.target.value}))}/></td><td>{model.rate?'Active current Rental rate':'No active Rental rate'}</td><td>{capacity?.configured?`Configured: ${capacity.dailyLimit}`:'Not configured (unavailable)'}</td><td>{model.rate?<button type="button" disabled={busy} onClick={()=>editRentalRate(model.rate!)}>Edit Rate</button>:<button type="button" disabled={busy} onClick={()=>setRateForm({...emptyRateForm(),vehicleClass:model.vehicleClass})}>Add Rate</button>}{' '}<button type="button" disabled={busy} onClick={()=>void saveCapacity(model.vehicleClass,capacityDrafts[draftKey]??'')}>Save Capacity</button>{capacity?.configured&&<><span> </span><button type="button" disabled={busy} onClick={()=>void removeCapacity(capacity)}>Remove Capacity</button></>}</td></tr>})}</tbody></table></div>)}</section>}
+      {!focused&&inactiveRates.length>0&&<section className="vehicle-table-card"><h2>Inactive / Previous Rental Rate Cards</h2><p>Historical pricing remains separate from the current model configuration and fully manageable.</p><div className="table-wrap"><table><thead><tr><th>Vehicle class</th><th>Daily / Weekly / Monthly</th><th>Sort order</th><th>Status</th><th>Actions</th></tr></thead><tbody>{inactiveRates.map((item)=><tr key={item.id}><td><strong>{item.vehicleClass}</strong></td><td>{money(item.dailyRate)} / {money(item.weeklyRate)} / {money(item.monthlyRate)}</td><td>{item.sortOrder}</td><td>{item.enabled?'Previous':'Disabled'}</td><td><button type="button" disabled={busy} onClick={()=>editRentalRate(item)}>Edit</button>{' '}<button type="button" disabled={busy} onClick={()=>void setRentalRateEnabled(item)}>{item.enabled?'Disable':'Reactivate'}</button></td></tr>)}</tbody></table></div></section>}
+      {!focused&&capacityModels?.some((item)=>item.impact.hardReservations.length||item.impact.atRiskQuotes.length)&&<section className="vehicle-table-card" aria-live="polite"><h2>Future capacity impact</h2>{capacityModels.map((item)=>(item.impact.hardReservations.length>0||item.impact.atRiskQuotes.length>0)&&<div key={`impact-${item.vehicleClass}`}><h3>Authoritative daily impact — {item.vehicleClass}</h3><div className="table-wrap"><table><thead><tr><th>Affected local date</th><th>Saved/effective capacity</th><th>Reservation count + hard overage</th><th>Active Quote count</th><th>Combined pressure + Quote-pressure overage</th></tr></thead><tbody>{item.impact.days.map((day)=><tr key={day.date}><td>{day.date}</td><td>{day.capacityConfigured?`Saved capacity: ${day.capacity}`:`Unavailable (effective capacity: ${day.capacity})`}</td><td>{day.reservationCount}{day.reservationOverage>0&&<strong> — Hard Reservation overage: {day.reservationOverage}</strong>}</td><td>{day.activeQuoteCount}</td><td>{day.combinedCount}{day.quotePressureOverage>0&&<strong> — Quote-pressure overage: {day.quotePressureOverage}</strong>}</td></tr>)}</tbody></table></div>{item.impact.hardReservations.length>0&&<div><h4>Hard Reservation conflicts</h4><p>Committed Reservations exceed saved/effective capacity. No Reservation has been selected for displacement.</p>{warningList(item.impact.hardReservations)}</div>}{item.impact.atRiskQuotes.length>0&&<div><h4>At-risk Quote pressure</h4><p>Quotes are non-binding and do not consume committed capacity, but these active Quotes create pressure if converted.</p>{warningList(item.impact.atRiskQuotes)}</div>}</div>)}</section>}
 
       {!rateFocused && <section className="vehicle-table-card extended-warranty-providers"><div className="section-heading"><div><h2>Extended Warranty Providers</h2><p>Configure outside Extended Warranty providers separately from GM Warranty and the single Extended Warranty pay type. Each provider must have a normal covered-day limit. Exceptional shorter or longer coverage uses an authorized case override.</p></div>{extendedWarrantyFocusMode === 'list' && <button className="primary-action" type="button" disabled={busy} onClick={() => { setMessage(null); setSuccessMessage(null); setExtendedWarrantyForm({ id: null, providerId: null, providerName: '', defaultDailyAmount: '', coveredDays: '', notes: '' }); setExtendedWarrantyFocusMode('form') }}>Add Extended Warranty Provider</button>}</div>
         {!extendedWarrantyState && <p className="data-message">Extended Warranty provider settings could not be loaded. Pay Type management remains available.</p>}

@@ -5,7 +5,6 @@ import { useAuthorization } from './authorization/useAuthorization'
 import { supabase } from './lib/supabase'
 import { FleetBoard } from './fleet-board/FleetBoard'
 import { PayTypeManagement } from './admin/PayTypeManagement'
-import { ReservationCapacityManagement } from './admin/ReservationCapacityManagement'
 import { ACTIVE_CASE_STORAGE_KEY, BillingWorkspace } from './billing/BillingWorkspace'
 import { ReservationsWorkspace, type ReservationsNavigationContext } from './reservations/ReservationsWorkspace'
 
@@ -15,7 +14,7 @@ type AdminFeature = {
   status: 'Foundation' | 'Planned' | 'Coming Soon'
 }
 
-type Page = 'dashboard' | 'admin' | 'fleet' | 'access' | 'fleet-board' | 'pay-types' | 'reservation-capacity' | 'reservations'
+type Page = 'dashboard' | 'admin' | 'fleet' | 'access' | 'fleet-board' | 'pay-types' | 'reservations'
 type FleetFilter =
   | 'All'
   | 'Active'
@@ -56,11 +55,6 @@ type Vehicle = {
 }
 
 const adminFeatures: AdminFeature[] = [
-  {
-    title: 'Reservation Capacity',
-    description: 'Configure future Rental Reservation capacity by active rate-card model.',
-    status: 'Foundation',
-  },
   {
     title: 'Fleet Administration',
     description:
@@ -112,7 +106,7 @@ const adminFeatures: AdminFeature[] = [
   {
     title: 'Rates, Fees & Billing Rules',
     description:
-      'Manage rental rates, pay types, taxes, late-fee rules, and billing defaults.',
+      'Manage Rental model rates and Reservation Capacity together with pay types, taxes, and billing defaults.',
     status: 'Foundation',
   },
   {
@@ -201,8 +195,6 @@ function App() {
       setPage('access')
     } else if (title === 'Rates, Fees & Billing Rules' && canManageUsers) {
       setPage('pay-types')
-    } else if (title === 'Reservation Capacity' && canManageUsers) {
-      setPage('reservation-capacity')
     }
   }
 
@@ -419,8 +411,6 @@ function App() {
           <UserRoleManagement onBack={() => setPage('admin')} />
         ) : page === 'pay-types' ? (
           <PayTypeManagement onBack={() => setPage('admin')} />
-        ) : page === 'reservation-capacity' ? (
-          <ReservationCapacityManagement onBack={() => setPage('admin')} />
         ) : page === 'admin' ? (
           <main className="content">
             <section className="page-heading">

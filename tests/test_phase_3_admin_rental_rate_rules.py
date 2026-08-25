@@ -94,9 +94,9 @@ class Phase3RentalRateRulesTest(unittest.TestCase):
         self.assertNotIn("Delete", self.frontend)
         self.assertIn("parseRentalRateState", self.frontend)
         self.assertIn("parseRentalRateMutation", self.frontend)
-        self.assertIn("No rental rates are configured yet", self.frontend)
+        self.assertIn("No current Rental models are configured or referenced", self.frontend)
         self.assertIn("Number.isFinite(dailyRate)", self.frontend)
-        self.assertIn("vehicle class/model", self.frontend)
+        self.assertIn("Vehicle class / model identifier", self.frontend)
         self.assertIn("changed, but authoritative settings could not be reloaded", self.frontend)
         self.assertNotRegex(self.frontend, r"dailyRate:\s*\d")
 
