@@ -131,26 +131,34 @@ end;$function$;
 
 create or replace function public.upsert_admin_rental_reservation_capacity_state(p_vehicle_class text,p_daily_limit integer) returns jsonb
 language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_class text;
+declare v_user uuid; v_class text; v_count integer;
 begin
   select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
   if v_user is null or coalesce(auth.jwt()->>'aal','')<>'aal2' or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='user_admin.manage') then raise exception 'Reservation capacity administration access denied' using errcode='42501'; end if;
   if p_daily_limit is null or p_daily_limit<0 then raise exception 'Reservation capacity must be an integer zero or greater' using errcode='22023'; end if;
   select vehicle_class into v_class from public.rental_rate_rules where lower(btrim(vehicle_class))=lower(btrim(p_vehicle_class)) and is_active=true and effective_from<=clock_timestamp() and (effective_to is null or effective_to>clock_timestamp()) order by effective_from desc limit 1;
   if v_class is null then raise exception 'Active Rental rate card not found' using errcode='P0002'; end if;
-  insert into public.rental_model_limits(vehicle_class,daily_limit) values(v_class,p_daily_limit)
-  on conflict(vehicle_class) do update set daily_limit=excluded.daily_limit;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(lower(btrim(v_class)),0));
+  update public.rental_model_limits set vehicle_class=v_class,daily_limit=p_daily_limit
+    where lower(btrim(vehicle_class))=lower(btrim(v_class));
+  get diagnostics v_count=row_count;
+  if v_count=0 then
+    insert into public.rental_model_limits(vehicle_class,daily_limit) values(v_class,p_daily_limit);
+  end if;
   return jsonb_build_object('status','admin_rental_reservation_capacity_saved','vehicle_class',v_class,'daily_limit',p_daily_limit);
 end;$function$;
 
 create or replace function public.remove_admin_rental_reservation_capacity_state(p_vehicle_class text) returns jsonb
 language plpgsql security definer set search_path to '' as $function$
-declare v_user uuid; v_count integer;
+declare v_user uuid; v_class text; v_count integer;
 begin
   select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
   if v_user is null or coalesce(auth.jwt()->>'aal','')<>'aal2' or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='user_admin.manage') then raise exception 'Reservation capacity administration access denied' using errcode='42501'; end if;
-  delete from public.rental_model_limits where lower(btrim(vehicle_class))=lower(btrim(p_vehicle_class)); get diagnostics v_count=row_count;
-  return jsonb_build_object('status','admin_rental_reservation_capacity_removed','vehicle_class',btrim(p_vehicle_class),'removed',v_count=1);
+  select vehicle_class into v_class from public.rental_rate_rules where lower(btrim(vehicle_class))=lower(btrim(p_vehicle_class)) and is_active=true and effective_from<=clock_timestamp() and (effective_to is null or effective_to>clock_timestamp()) order by effective_from desc limit 1;
+  if v_class is null then raise exception 'Active Rental rate card not found' using errcode='P0002'; end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(lower(btrim(v_class)),0));
+  delete from public.rental_model_limits where lower(btrim(vehicle_class))=lower(btrim(v_class)); get diagnostics v_count=row_count;
+  return jsonb_build_object('status','admin_rental_reservation_capacity_removed','vehicle_class',v_class,'removed',v_count=1);
 end;$function$;
 
 alter function public.get_admin_rental_reservation_capacity_state() owner to postgres;
@@ -164,12 +172,26 @@ grant execute on function public.upsert_admin_rental_reservation_capacity_state(
 grant execute on function public.remove_admin_rental_reservation_capacity_state(text) to authenticated,service_role;
 
 -- Preserve the established intake/edit engines and put one capacity gate in front of each Rental write.
+alter function public.create_quote_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text)
+  rename to create_quote_with_pricing_agreement_without_capacity_state;
 alter function public.create_reservation_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text,text,text)
   rename to create_reservation_with_pricing_agreement_without_capacity_state;
 alter function public.convert_quote_to_reservation_with_pricing_agreement_state(uuid,text,text,text)
   rename to convert_quote_to_reservation_with_pricing_agreement_without_capacity_state;
 alter function public.update_precheckin_reservation_state(uuid,timestamptz,timestamptz,text,text,text)
   rename to update_precheckin_reservation_without_capacity_state;
+
+create function public.create_quote_with_pricing_agreement_state(p_customer_id uuid,p_vehicle_class text,p_start_date timestamptz,p_expected_return_datetime timestamptz,p_reservation_type text,p_pay_type_rule_id uuid,p_initial_rate_plan text,p_notes text default null) returns jsonb
+language plpgsql security definer set search_path to '' as $function$ declare v_capacity jsonb; v_user uuid; begin
+  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
+  if v_user is null or coalesce(auth.jwt()->>'aal','')<>'aal2' or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing agreement management access denied' using errcode='42501'; end if;
+  if lower(btrim(coalesce(p_reservation_type,'')))='rental' then
+    perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(lower(btrim(p_vehicle_class)),0));
+    v_capacity:=public.get_rental_reservation_capacity_state(p_vehicle_class,p_start_date,p_expected_return_datetime,null);
+    if not coalesce((v_capacity->>'available')::boolean,false) then raise exception 'Rental reservation capacity unavailable: %',v_capacity->>'status' using errcode='P0001',detail=v_capacity::text; end if;
+  end if;
+  return public.create_quote_with_pricing_agreement_without_capacity_state(p_customer_id,p_vehicle_class,p_start_date,p_expected_return_datetime,p_reservation_type,p_pay_type_rule_id,p_initial_rate_plan,p_notes);
+end;$function$;
 
 create function public.create_reservation_with_pricing_agreement_state(p_customer_id uuid,p_vehicle_class text,p_start_date timestamptz,p_expected_return_datetime timestamptz,p_reservation_type text,p_pay_type_rule_id uuid,p_initial_rate_plan text,p_service_advisor text default null,p_ro_number text default null,p_notes text default null) returns jsonb
 language plpgsql security definer set search_path to '' as $function$ declare v_capacity jsonb; v_user uuid; begin
@@ -187,7 +209,10 @@ create function public.convert_quote_to_reservation_with_pricing_agreement_state
 language plpgsql security definer set search_path to '' as $function$ declare q public.quotes%rowtype; v_capacity jsonb; v_user uuid; begin
   select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
   if v_user is null or coalesce(auth.jwt()->>'aal','')<>'aal2' or not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing agreement management access denied' using errcode='42501'; end if;
-  select * into q from public.quotes where id=p_quote_id;
+  select * into q from public.quotes where id=p_quote_id for update;
+  if q.converted_to_reservation_id is not null then
+    return public.convert_quote_to_reservation_with_pricing_agreement_without_capacity_state(p_quote_id,p_service_advisor,p_ro_number,p_notes);
+  end if;
   if lower(btrim(coalesce(q.reservation_type,'')))='rental' then
     perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(lower(btrim(q.vehicle_class)),0));
     v_capacity:=public.get_rental_reservation_capacity_state(q.vehicle_class,q.start_date,q.expected_return_datetime,null);
@@ -210,15 +235,19 @@ language plpgsql security definer set search_path to '' as $function$ declare r 
   return public.update_precheckin_reservation_without_capacity_state(p_reservation_id,p_start_date,p_expected_return_datetime,p_service_advisor,p_ro_number,p_notes);
 end;$function$;
 
+alter function public.create_quote_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text) owner to postgres;
 alter function public.create_reservation_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text,text,text) owner to postgres;
 alter function public.convert_quote_to_reservation_with_pricing_agreement_state(uuid,text,text,text) owner to postgres;
 alter function public.update_precheckin_reservation_state(uuid,timestamptz,timestamptz,text,text,text) owner to postgres;
+revoke all on function public.create_quote_with_pricing_agreement_without_capacity_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text) from public,anon,authenticated;
 revoke all on function public.create_reservation_with_pricing_agreement_without_capacity_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text,text,text) from public,anon,authenticated;
 revoke all on function public.convert_quote_to_reservation_with_pricing_agreement_without_capacity_state(uuid,text,text,text) from public,anon,authenticated;
 revoke all on function public.update_precheckin_reservation_without_capacity_state(uuid,timestamptz,timestamptz,text,text,text) from public,anon,authenticated;
+revoke all on function public.create_quote_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text) from public,anon;
 revoke all on function public.create_reservation_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text,text,text) from public,anon;
 revoke all on function public.convert_quote_to_reservation_with_pricing_agreement_state(uuid,text,text,text) from public,anon;
 revoke all on function public.update_precheckin_reservation_state(uuid,timestamptz,timestamptz,text,text,text) from public,anon;
+grant execute on function public.create_quote_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text) to authenticated,service_role;
 grant execute on function public.create_reservation_with_pricing_agreement_state(uuid,text,timestamptz,timestamptz,text,uuid,text,text,text,text) to authenticated,service_role;
 grant execute on function public.convert_quote_to_reservation_with_pricing_agreement_state(uuid,text,text,text) to authenticated,service_role;
 grant execute on function public.update_precheckin_reservation_state(uuid,timestamptz,timestamptz,text,text,text) to authenticated,service_role;

@@ -19,14 +19,32 @@ def test_counting_semantics_and_complete_period_alternatives():
     assert "rental_rate_rules" in SQL
     assert "p_exclude_reservation_id" in SQL
 
-def test_authoritative_writes_recheck_but_quote_and_walk_in_do_not_hold_capacity():
-    assert SQL.count("Rental reservation capacity unavailable") == 3
-    assert "create_reservation_with_pricing_agreement_state" in SQL
-    assert "convert_quote_to_reservation_with_pricing_agreement_state" in SQL
-    assert "update_precheckin_reservation_state" in SQL
-    assert "create_quote_with_pricing_agreement_state" not in SQL
+def test_authoritative_rental_quote_and_reservation_writes_recheck_capacity():
+    assert SQL.count("Rental reservation capacity unavailable") == 4
+    for function in ("create_quote", "create_reservation", "convert_quote_to_reservation", "update_precheckin_reservation"):
+        assert f"{function}_with" in SQL
+    assert "create_quote_with_pricing_agreement_without_capacity_state" in SQL
     assert "create_walk_in_with_pricing_agreement_state" not in SQL
     assert "pg_advisory_xact_lock" in SQL
+
+def test_quote_capacity_is_non_holding_and_conversion_retry_is_idempotent():
+    evaluator=SQL.split("create or replace function public.get_rental_reservation_capacity_state",1)[1].split("alter function public.get_rental",1)[0]
+    quote=SQL.split("create function public.create_quote_with_pricing_agreement_state",1)[1].split("create function public.create_reservation",1)[0]
+    conversion=SQL.split("create function public.convert_quote_to_reservation_with_pricing_agreement_state",1)[1].split("create function public.update_precheckin",1)[0]
+    assert "from public.reservations r" in evaluator and "from public.quotes" not in evaluator
+    assert "get_rental_reservation_capacity_state" in quote
+    assert conversion.index("converted_to_reservation_id is not null") < conversion.index("get_rental_reservation_capacity_state")
+    assert "for update" in conversion
+
+def test_admin_and_booking_writes_share_normalized_lock_and_upsert_identity():
+    lock="pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(lower(btrim("
+    assert SQL.count(lock) >= 6
+    upsert=SQL.split("create or replace function public.upsert_admin",1)[1].split("create or replace function public.remove_admin",1)[0]
+    remove=SQL.split("create or replace function public.remove_admin",1)[1].split("alter function public.get_admin",1)[0]
+    assert lock in upsert and lock in remove
+    assert "where lower(btrim(vehicle_class))=lower(btrim(v_class))" in upsert
+    assert "set vehicle_class=v_class,daily_limit=p_daily_limit" in upsert
+    assert "on conflict(vehicle_class)" not in upsert
 
 def test_admin_boundary_and_no_direct_browser_table_mutation():
     assert SQL.count("permission_key='user_admin.manage'") == 3
@@ -39,6 +57,9 @@ def test_admin_boundary_and_no_direct_browser_table_mutation():
 def test_frontends_use_authoritative_capacity_state():
     assert "get_rental_reservation_capacity_state" in RESERVATIONS
     assert "capacity.alternatives.map" in RESERVATIONS
+    assert "workflow!=='walk_in'&&(capacityLoading||!capacity?.available)" in RESERVATIONS
+    assert "p_vehicle_class:vehicleModel.trim()" in RESERVATIONS
+    assert "selectedRate?.[plan]" in RESERVATIONS
     assert "workflow==='walk_in'" in RESERVATIONS
     assert "get_fleet_board_capacity_state" in FLEET
     assert "reservations.filter(item => item.reservationType === 'rental'" not in FLEET
