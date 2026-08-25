@@ -122,11 +122,40 @@ begin
       from public.rental_rate_rules where is_active=true and effective_from<=clock_timestamp()
         and (effective_to is null or effective_to>clock_timestamp())
       order by lower(btrim(vehicle_class)),effective_from desc,id
+    ), referenced_models as (
+      select r.requested_model vehicle_class
+      from public.reservations r
+      join public.transportation_events te on te.id=r.transportation_event_id and te.status='active'
+      join public.rental_pricing_agreements a on a.reservation_id=r.id
+        and a.transportation_event_id=r.transportation_event_id and a.is_active=true and a.pricing_started_at is null
+      where lower(btrim(coalesce(r.reservation_type,'')))='rental'
+        and lower(coalesce(r.status,''))<>'cancelled'
+        and nullif(btrim(r.requested_model),'') is not null
+        and r.expected_return_datetime>((clock_timestamp() at time zone 'America/New_York')::date::timestamp at time zone 'America/New_York')
+      union
+      select coalesce(a.vehicle_class,q.vehicle_class) vehicle_class
+      from public.quotes q
+      join public.rental_pricing_agreements a on a.quote_id=q.id and a.origin_type='quote'
+        and a.reservation_id is null and a.is_active=true
+      join public.transportation_events te on te.id=a.transportation_event_id and te.status='active'
+      where lower(btrim(coalesce(q.reservation_type,'')))='rental'
+        and q.is_active=true and lower(coalesce(q.status,''))='active'
+        and q.converted_to_reservation_id is null
+        and nullif(btrim(coalesce(a.vehicle_class,q.vehicle_class)),'') is not null
+        and q.expected_return_datetime>((clock_timestamp() at time zone 'America/New_York')::date::timestamp at time zone 'America/New_York')
+    ), candidates as (
+      select vehicle_class,0 source_priority from public.rental_model_limits
+      union all select vehicle_class,1 from active_rates
+      union all select vehicle_class,2 from referenced_models
+    ), canonical_models as (
+      select distinct on(lower(btrim(vehicle_class))) vehicle_class
+      from candidates order by lower(btrim(vehicle_class)),source_priority
     ), models as (
-      select coalesce(l.vehicle_class,r.vehicle_class) vehicle_class,l.daily_limit,l.id is not null configured,
+      select c.vehicle_class,l.daily_limit,l.id is not null configured,
         r.vehicle_class is not null has_active_rate_card,coalesce(r.sort_order,2147483647) sort_order
-      from public.rental_model_limits l full join active_rates r
-        on lower(btrim(l.vehicle_class))=lower(btrim(r.vehicle_class))
+      from canonical_models c
+      left join public.rental_model_limits l on lower(btrim(l.vehicle_class))=lower(btrim(c.vehicle_class))
+      left join active_rates r on lower(btrim(r.vehicle_class))=lower(btrim(c.vehicle_class))
     ) select coalesce(jsonb_agg(jsonb_build_object('vehicle_class',vehicle_class,'daily_limit',daily_limit,
       'configured',configured,'has_active_rate_card',has_active_rate_card,
       'impact',public.evaluate_admin_rental_reservation_capacity_impact(vehicle_class,daily_limit))

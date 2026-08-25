@@ -26,9 +26,13 @@ def test_quotes_are_separate_nonbinding_pressure_and_exclude_inactive_records():
     for field in ("'quote_id'","'risk_dates'","'active_quote_count'","'at_risk_quote_pressure'"):
         assert field in SQL
 
-def test_admin_union_supports_configured_only_and_active_rate_only_models():
+def test_admin_union_keeps_future_referenced_models_until_impact_is_resolved():
     get_admin=SQL.split("create or replace function public.get_admin_rental",1)[1].split("create or replace function public.upsert_admin",1)[0]
-    assert "full join active_rates" in get_admin
+    assert "referenced_models as" in get_admin and "canonical_models as" in get_admin
+    for eligibility in ("te.status='active'","a.pricing_started_at is null","status,''))<>'cancelled'","q.is_active=true","q.converted_to_reservation_id is null"):
+        assert eligibility in get_admin
+    assert "union all select vehicle_class,2 from referenced_models" in get_admin
+    assert "left join public.rental_model_limits" in get_admin and "left join active_rates" in get_admin
     assert "'has_active_rate_card'" in get_admin and "'configured'" in get_admin
     assert "evaluate_admin_rental_reservation_capacity_impact(vehicle_class,daily_limit)" in get_admin
 
@@ -56,5 +60,9 @@ def test_frontend_renders_backend_impact_without_capacity_arithmetic():
     assert "hard_reservation_conflicts" in ADMIN and "at_risk_quotes" in ADMIN
     assert "Hard Reservation conflicts" in ADMIN and "At-risk Quote pressure" in ADMIN
     assert "Quotes are non-binding" in ADMIN
-    assert "reservation_count" not in ADMIN and "active_quote_count" not in ADMIN
+    for field in ("item?.days","capacity_configured","reservation_count","reservation_overage","active_quote_count","combined_count","quote_pressure_overage"):
+        assert field in ADMIN
+    assert "Saved/effective capacity" in ADMIN and "Unavailable (effective capacity:" in ADMIN
+    assert "Hard Reservation overage" in ADMIN and "Quote-pressure overage" in ADMIN
+    assert "reservationCount+" not in ADMIN and "activeQuoteCount+" not in ADMIN
     assert "from('rental_model_limits')" not in ADMIN
