@@ -9,7 +9,7 @@ on conflict(permission_key) do update set description=excluded.description;
 
 insert into public.role_permissions(role_id,permission_id)
 select r.id,p.id from public.roles r cross join public.permissions p
-where p.permission_key='billing.customer_pay_rate_override' and r.name in ('Admin','Service Manager','Dev')
+where p.permission_key='billing.customer_pay_rate_override' and r.role_name in ('Admin','Service Manager','Dev')
 on conflict do nothing;
 create or replace function public.create_quote_with_pricing_agreement_without_capacity_state(
  p_customer_id uuid,p_vehicle_class text,p_start_date timestamptz,p_expected_return_datetime timestamptz,
@@ -153,30 +153,437 @@ begin
 end;$function$;
 
 -- Expose the configured standard alongside each intake pay type without introducing a second settings source.
-do $migration$
-declare v_definition text; v_replaced text;
+create or replace function public.get_pricing_agreement_intake_state()
+returns jsonb language plpgsql security definer set search_path to '' as $function$
+declare v_user uuid; v_at timestamptz:=clock_timestamp();
 begin
- select pg_get_functiondef('public.get_pricing_agreement_intake_state()'::regprocedure) into v_definition;
- if position($needle$'default_daily_amount'$needle$ in v_definition)=0 then
-  v_replaced:=replace(v_definition,$old$'is_taxable',p.is_taxable,'sort_order'$old$,$new$'is_taxable',p.is_taxable,'default_daily_amount',p.default_daily_amount,'sort_order'$new$);
-  if v_replaced=v_definition then raise exception 'Could not extend pricing intake pay-type state'; end if;
-  execute v_replaced;
- end if;
-end;$migration$;
+ select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
+  if v_user is null then raise exception 'An active application user is required' using errcode='42501'; end if;
+  if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'AAL2 authentication is required' using errcode='42501'; end if;
+  if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.pricing_agreement_manage') then raise exception 'Pricing-agreement permission is required' using errcode='42501'; end if;
+ return jsonb_build_object(
+  'status','pricing_agreement_intake_ready','observed_at',v_at,
+  'customers',coalesce((select jsonb_agg(jsonb_build_object('customer_id',c.id,'tekion_customer_number',c.tekion_customer_number,'name',c.name,'phone',c.phone,'email',c.email,'created_at',c.created_at) order by lower(btrim(c.name)),c.tekion_customer_number,c.id) from public.customers c),'[]'::jsonb),
+  'pay_types',coalesce((select jsonb_agg(jsonb_build_object('pay_type_rule_id',pay_type.id,'pay_type',pay_type.pay_type,'description',pay_type.description,'is_taxable',pay_type.is_taxable,'default_daily_amount',pay_type.default_daily_amount,'sort_order',pay_type.sort_order) order by pay_type.sort_order,lower(btrim(pay_type.pay_type)),pay_type.id) from public.pay_type_rules pay_type where pay_type.is_active=true and coalesce(pay_type.active,false)=true),'[]'::jsonb),
+  'rate_cards',coalesce((select jsonb_agg(jsonb_build_object('rental_rate_rule_id',r.id,'vehicle_class',r.vehicle_class,'daily_rate',r.daily_rate::text,'weekly_rate',r.weekly_rate::text,'monthly_rate',r.monthly_rate::text,'sort_order',r.sort_order,'effective_from',r.effective_from,'effective_to',r.effective_to) order by r.sort_order,lower(btrim(r.vehicle_class)),r.id) from public.rental_rate_rules r where r.is_active=true and r.effective_from<=v_at and (r.effective_to is null or r.effective_to>v_at)),'[]'::jsonb),
+  'quotes',coalesce((select jsonb_agg(jsonb_build_object(
+    'quote_id',q.id,'created_at',q.created_at,'status',q.status,'reservation_type',q.reservation_type,
+    'start_date',q.start_date,'expected_return_datetime',q.expected_return_datetime,'notes',q.notes,
+    'customer',jsonb_build_object('customer_id',c.id,'tekion_customer_number',c.tekion_customer_number,'name',c.name,'phone',c.phone,'email',c.email),
+    'transportation_event_id',a.transportation_event_id,'pricing_agreement_id',a.id,'origin_type',a.origin_type,'vehicle_class',a.vehicle_class,
+    'rental_rate_rule_id',a.rental_rate_rule_id,'pay_type_rule_id',a.pay_type_rule_id,'pay_type',p.pay_type,
+    'initial_rate_plan',a.initial_rate_plan,'current_rate_plan',a.current_rate_plan,'daily_rate',a.daily_rate_snapshot::text,
+    'weekly_rate',a.weekly_rate_snapshot::text,'monthly_rate',a.monthly_rate_snapshot::text,'pricing_started_at',a.pricing_started_at) order by q.start_date,q.created_at,q.id)
+   from public.quotes q
+   join public.rental_pricing_agreements a on a.quote_id=q.id and a.origin_type='quote' and a.reservation_id is null and a.is_active=true
+   join public.transportation_events te on te.id=a.transportation_event_id and te.source_type='quote' and te.source_id=q.id and te.status='active'
+   join public.customers c on c.id=q.customer_id
+   join public.pay_type_rules p on p.id=a.pay_type_rule_id
+   where q.is_active=true and q.status='active' and q.converted_to_reservation_id is null),'[]'::jsonb)
+ );
+end;$function$;
+
+alter function public.get_pricing_agreement_intake_state() owner to postgres;
+revoke all on function public.get_pricing_agreement_intake_state() from public,anon;
+grant execute on function public.get_pricing_agreement_intake_state() to authenticated,service_role;
 
 -- The existing EW cap engine remains authoritative; only snapshot Customer Pay's configured standard on its new split.
-do $migration$
-declare v_definition text; v_replaced text;
-begin
- select pg_get_functiondef('public.reconcile_extended_warranty_coverage_state(uuid,timestamp with time zone)'::regprocedure) into v_definition;
- if position('customer_pay_standard_snapshot' in v_definition)=0 then
-  v_replaced:=replace(v_definition,
-    E'p_default_daily_rate_snapshot =>\n        NULL,',
-    E'p_default_daily_rate_snapshot =>\n        CASE WHEN lower(btrim(v_post_coverage_pay_type.pay_type)) = ''customer pay'' THEN v_post_coverage_pay_type.default_daily_amount ELSE NULL END, -- customer_pay_standard_snapshot');
-  if v_replaced=v_definition then raise exception 'Could not snapshot Customer Pay standard in EW split'; end if;
-  execute v_replaced;
- end if;
-end;$migration$;
+CREATE OR REPLACE FUNCTION public.reconcile_extended_warranty_coverage_state(p_transportation_event_id uuid, p_effective_at timestamp with time zone)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+DECLARE
+  v_case public.warranty_cases%ROWTYPE;
+  v_event public.transportation_events%ROWTYPE;
+  v_current_line public.billing_lines%ROWTYPE;
+  v_existing_split public.billing_lines%ROWTYPE;
+  v_post_coverage_pay_type public.pay_type_rules%ROWTYPE;
+  v_effective_at timestamptz;
+  v_coverage_boundary timestamptz;
+  v_effective_covered_days integer;
+  v_current_contract_day integer;
+  v_close_result jsonb;
+  v_split_result jsonb;
+  v_split_line_id uuid;
+  v_changed_at timestamptz;
+BEGIN
+  IF p_transportation_event_id IS NULL OR p_effective_at IS NULL THEN
+    RAISE EXCEPTION 'Transportation event and effective timestamp are required'
+      USING ERRCODE = '22023';
+  END IF;
+
+  SELECT warranty_case.*
+    INTO v_case
+  FROM public.warranty_cases warranty_case
+  WHERE warranty_case.transportation_event_id =
+    p_transportation_event_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object(
+      'status', 'no_extended_warranty_case',
+      'transportation_event_id', p_transportation_event_id
+    );
+  END IF;
+
+  SELECT event.*
+    INTO v_event
+  FROM public.transportation_events event
+  WHERE event.id = p_transportation_event_id
+  FOR SHARE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Transportation event was not found'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF v_case.coverage_started_at IS NULL THEN
+    RAISE EXCEPTION 'Extended Warranty coverage start is missing'
+      USING ERRCODE = '22023';
+  END IF;
+
+  v_effective_at :=
+    least(
+      p_effective_at,
+      coalesce(v_event.closed_at, p_effective_at)
+    );
+
+  IF v_effective_at < v_case.coverage_started_at THEN
+    RAISE EXCEPTION 'Effective timestamp precedes Extended Warranty coverage'
+      USING ERRCODE = '22023';
+  END IF;
+
+  v_effective_covered_days :=
+    coalesce(
+      v_case.approved_days,
+      v_case.default_covered_days_snapshot
+    );
+
+  v_current_contract_day :=
+    public.business_contract_days(
+      v_case.coverage_started_at,
+      v_effective_at
+    );
+
+  v_changed_at := clock_timestamp();
+
+  UPDATE public.warranty_cases
+  SET current_day_count = v_current_contract_day,
+      last_checked_at = v_changed_at,
+      updated_at = v_changed_at
+  WHERE id = v_case.id
+  RETURNING *
+    INTO v_case;
+
+  IF v_effective_covered_days IS NULL THEN
+    RETURN jsonb_build_object(
+      'status', 'extended_warranty_coverage_uncapped',
+      'case_id', v_case.id,
+      'transportation_event_id', p_transportation_event_id,
+      'coverage_started_at', v_case.coverage_started_at,
+      'current_contract_day', v_current_contract_day,
+      'effective_covered_days', NULL,
+      'split_required', false
+    );
+  END IF;
+
+  v_coverage_boundary :=
+    v_case.coverage_started_at
+    + make_interval(days => v_effective_covered_days);
+
+  SELECT line.*
+    INTO v_existing_split
+  FROM public.billing_lines line
+  WHERE line.transportation_event_id =
+      p_transportation_event_id
+    AND line.parent_billing_line_id IS NULL
+    AND line.line_type = 'pay_type_split'
+    AND line.source_rule =
+      'extended_warranty_coverage_cap'
+  ORDER BY line.created_at, line.id
+  LIMIT 1
+  FOR UPDATE;
+
+  IF FOUND THEN
+    IF v_existing_split.start_time =
+       v_coverage_boundary THEN
+      UPDATE public.warranty_cases
+      SET coverage_exhausted_at = v_coverage_boundary,
+          updated_at = v_changed_at
+      WHERE id = v_case.id
+      RETURNING *
+        INTO v_case;
+
+      RETURN jsonb_build_object(
+        'status', 'extended_warranty_coverage_already_split',
+        'case_id', v_case.id,
+        'transportation_event_id',
+          p_transportation_event_id,
+        'coverage_boundary', v_coverage_boundary,
+        'current_contract_day',
+          v_current_contract_day,
+        'effective_covered_days',
+          v_effective_covered_days,
+        'split_billing_line_id',
+          v_existing_split.id
+      );
+    END IF;
+
+    UPDATE public.warranty_cases
+    SET requires_manual_review = true,
+        escalation_level =
+          greatest(coalesce(escalation_level, 0), 1),
+        updated_at = v_changed_at
+    WHERE id = v_case.id
+    RETURNING *
+      INTO v_case;
+
+    RETURN jsonb_build_object(
+      'status',
+        'extended_warranty_split_boundary_changed_manual_review',
+      'case_id', v_case.id,
+      'transportation_event_id',
+        p_transportation_event_id,
+      'existing_coverage_boundary',
+        v_existing_split.start_time,
+      'requested_coverage_boundary',
+        v_coverage_boundary,
+      'current_contract_day',
+        v_current_contract_day,
+      'effective_covered_days',
+        v_effective_covered_days,
+      'split_billing_line_id',
+        v_existing_split.id,
+      'requires_manual_review', true
+    );
+  END IF;
+
+  IF v_effective_at < v_coverage_boundary THEN
+    RETURN jsonb_build_object(
+      'status', 'extended_warranty_coverage_active',
+      'case_id', v_case.id,
+      'transportation_event_id',
+        p_transportation_event_id,
+      'coverage_started_at',
+        v_case.coverage_started_at,
+      'coverage_boundary',
+        v_coverage_boundary,
+      'current_contract_day',
+        v_current_contract_day,
+      'effective_covered_days',
+        v_effective_covered_days,
+      'split_required', false
+    );
+  END IF;
+
+  SELECT rule.*
+    INTO v_post_coverage_pay_type
+  FROM public.pay_type_rules rule
+  WHERE rule.id =
+    v_case.post_coverage_pay_type_rule_id
+  FOR SHARE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Post-coverage pay type was not found'
+      USING ERRCODE = 'P0002';
+  END IF;
+
+  IF lower(btrim(v_post_coverage_pay_type.pay_type)) =
+     'extended warranty' THEN
+    RAISE EXCEPTION 'Post-coverage pay type must differ from Extended Warranty'
+      USING ERRCODE = '22023';
+  END IF;
+
+  SELECT line.*
+    INTO v_current_line
+  FROM public.billing_lines line
+  WHERE line.transportation_event_id =
+      p_transportation_event_id
+    AND line.parent_billing_line_id IS NULL
+    AND line.is_open = true
+    AND lower(btrim(line.pay_type)) =
+      'extended warranty'
+    AND line.start_time <= v_coverage_boundary
+    AND (
+      line.end_time IS NULL
+      OR line.end_time >= v_coverage_boundary
+    )
+  ORDER BY line.start_time DESC,
+           line.created_at DESC,
+           line.id DESC
+  LIMIT 1
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    UPDATE public.warranty_cases
+    SET requires_manual_review = true,
+        escalation_level =
+          greatest(coalesce(escalation_level, 0), 1),
+        updated_at = v_changed_at
+    WHERE id = v_case.id
+    RETURNING *
+      INTO v_case;
+
+    RETURN jsonb_build_object(
+      'status',
+        'extended_warranty_split_line_missing_manual_review',
+      'case_id', v_case.id,
+      'transportation_event_id',
+        p_transportation_event_id,
+      'coverage_boundary',
+        v_coverage_boundary,
+      'current_contract_day',
+        v_current_contract_day,
+      'effective_covered_days',
+        v_effective_covered_days,
+      'requires_manual_review', true
+    );
+  END IF;
+
+  v_close_result :=
+    public.close_billing_line_state(
+      v_current_line.id,
+      v_coverage_boundary
+    );
+
+  v_split_result :=
+    public.create_billing_parent_line_state(
+      p_transportation_event_id =>
+        p_transportation_event_id,
+      p_reservation_id =>
+        v_case.reservation_id,
+      p_vehicle_id =>
+        v_current_line.vehicle_id,
+      p_pay_type =>
+        v_post_coverage_pay_type.pay_type,
+      p_amount =>
+        0,
+      p_tax_amount =>
+        0,
+      p_start_time =>
+        v_coverage_boundary,
+      p_end_time =>
+        NULL,
+      p_source_rule =>
+        'extended_warranty_coverage_cap',
+      p_vehicle_event_id =>
+        v_current_line.vehicle_event_id,
+      p_contract_period_id =>
+        v_current_line.contract_period_id,
+      p_line_type =>
+        'pay_type_split',
+      p_warranty_provider_id =>
+        NULL,
+      p_default_covered_days_snapshot =>
+        NULL,
+      p_covered_days_override =>
+        NULL,
+      p_is_open =>
+        true,
+      p_paid_through_at =>
+        NULL,
+      p_extended_from_billing_line_id =>
+        v_current_line.id,
+      p_default_daily_rate_snapshot =>
+        CASE
+          WHEN lower(btrim(v_post_coverage_pay_type.pay_type)) = 'customer pay'
+            THEN v_post_coverage_pay_type.default_daily_amount
+          ELSE NULL
+        END, -- customer_pay_standard_snapshot
+      p_daily_rate_override =>
+        NULL
+    );
+
+  BEGIN
+    v_split_line_id :=
+      (v_split_result ->>
+        'parent_billing_line_id')::uuid;
+  EXCEPTION
+    WHEN invalid_text_representation THEN
+      RAISE EXCEPTION 'Billing split returned an invalid identifier';
+  END;
+
+  IF v_split_line_id IS NULL THEN
+    RAISE EXCEPTION 'Billing split did not return a billing-line identifier';
+  END IF;
+
+  UPDATE public.warranty_cases
+  SET coverage_exhausted_at =
+        v_coverage_boundary,
+      requires_manual_review = false,
+      updated_at = v_changed_at
+  WHERE id = v_case.id
+  RETURNING *
+    INTO v_case;
+
+  INSERT INTO public.audit_log (
+    entity_type,
+    entity_id,
+    action_type,
+    field_name,
+    old_value,
+    new_value,
+    metadata,
+    actor_user_id
+  )
+  VALUES (
+    'extended_warranty_case',
+    v_case.id::text,
+    'coverage_pay_type_split',
+    'coverage_exhausted_at',
+    NULL,
+    v_coverage_boundary::text,
+    jsonb_build_object(
+      'transportation_event_id',
+        p_transportation_event_id,
+      'provider_id', v_case.provider_id,
+      'effective_covered_days',
+        v_effective_covered_days,
+      'closed_extended_warranty_billing_line_id',
+        v_current_line.id,
+      'post_coverage_billing_line_id',
+        v_split_line_id,
+      'post_coverage_pay_type_rule_id',
+        v_post_coverage_pay_type.id,
+      'post_coverage_pay_type',
+        v_post_coverage_pay_type.pay_type,
+      'close_result', v_close_result
+    ),
+    coalesce(
+      auth.uid()::text,
+      'system:extended_warranty_coverage'
+    )
+  );
+
+  RETURN jsonb_build_object(
+    'status', 'extended_warranty_coverage_split',
+    'case_id', v_case.id,
+    'transportation_event_id',
+      p_transportation_event_id,
+    'coverage_started_at',
+      v_case.coverage_started_at,
+    'coverage_boundary',
+      v_case.coverage_exhausted_at,
+    'current_contract_day',
+      v_current_contract_day,
+    'effective_covered_days',
+      v_effective_covered_days,
+    'closed_extended_warranty_billing_line_id',
+      v_current_line.id,
+    'post_coverage_billing_line_id',
+      v_split_line_id,
+    'post_coverage_pay_type_rule_id',
+      v_post_coverage_pay_type.id,
+    'post_coverage_pay_type',
+      v_post_coverage_pay_type.pay_type
+  );
+END;
+$function$;
+
+alter function public.reconcile_extended_warranty_coverage_state(uuid,timestamptz) owner to postgres;
+revoke all on function public.reconcile_extended_warranty_coverage_state(uuid,timestamptz) from public,anon,authenticated;
+grant execute on function public.reconcile_extended_warranty_coverage_state(uuid,timestamptz) to service_role;
 
 create or replace function public.get_customer_pay_rate_override_capability_state()
 returns jsonb language plpgsql security definer set search_path to '' as $function$
@@ -201,6 +608,7 @@ begin
  if not exists(select 1 from public.v_user_effective_permissions where user_id=v_user and permission_key='billing.customer_pay_rate_override') then raise exception 'Customer Pay rate-override permission is required' using errcode='42501'; end if;
  if p_billing_line_id is null then raise exception 'Parent billing line is required' using errcode='22023'; end if;
  if p_daily_rate_override is not null and (p_daily_rate_override<0 or p_daily_rate_override in ('NaN'::numeric,'Infinity'::numeric,'-Infinity'::numeric)) then raise exception 'Daily-rate override must be finite and nonnegative' using errcode='22023'; end if;
+ if p_daily_rate_override is not null and p_daily_rate_override<>trunc(p_daily_rate_override,2) then raise exception 'Daily-rate override must have at most two decimal places' using errcode='22023'; end if;
  select * into v_line from public.billing_lines where id=p_billing_line_id for update;
  if not found then raise exception 'Billing line was not found' using errcode='P0002'; end if;
  if v_line.parent_billing_line_id is not null then raise exception 'A parent billing line is required' using errcode='22023'; end if;
