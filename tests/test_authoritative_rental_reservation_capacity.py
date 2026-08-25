@@ -36,6 +36,18 @@ def test_quote_capacity_is_non_holding_and_conversion_retry_is_idempotent():
     assert conversion.index("converted_to_reservation_id is not null") < conversion.index("get_rental_reservation_capacity_state")
     assert "for update" in conversion
 
+def test_conversion_alternative_reuses_agreement_and_authoritative_rate_engine():
+    conversion=SQL.split("create function public.convert_quote_to_reservation_with_pricing_agreement_state",1)[1].split("create function public.update_precheckin",1)[0]
+    assert "p_selected_vehicle_class text default null" in conversion
+    assert "resolve_rental_rate_card_state(v_conversion_class,clock_timestamp())" in conversion
+    assert "current_rate_plan" in conversion and "has no configured % rate" in conversion
+    assert "update public.rental_pricing_agreements set" in conversion
+    for field in ("vehicle_class=v_rate->>'vehicle_class'", "rental_rate_rule_id=", "daily_rate_snapshot=", "weekly_rate_snapshot=", "monthly_rate_snapshot=", "updated_by=v_user"):
+        assert field in conversion
+    assert "update public.quotes set vehicle_class" not in conversion
+    assert conversion.index("converted_to_reservation_id is not null") < conversion.index("resolve_rental_rate_card_state")
+    assert "create_transportation_event_state" not in conversion and "insert into public.rental_pricing_agreements" not in conversion
+
 def test_admin_and_booking_writes_share_normalized_lock_and_upsert_identity():
     lock="pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(lower(btrim("
     assert SQL.count(lock) >= 6
@@ -60,6 +72,10 @@ def test_frontends_use_authoritative_capacity_state():
     assert "workflow!=='walk_in'&&(capacityLoading||!capacity?.available)" in RESERVATIONS
     assert "p_vehicle_class:vehicleModel.trim()" in RESERVATIONS
     assert "selectedRate?.[plan]" in RESERVATIONS
+    assert "p_selected_vehicle_class:conversionClass||null" in RESERVATIONS
+    assert "Normal current {conversion.currentPlan} rate" in RESERVATIONS
+    assert "alternatives.filter(item=>item[conversion.currentPlan as Plan]!==null)" in RESERVATIONS
+    assert "Checking authoritative Reservation Capacity" in RESERVATIONS
     assert "workflow==='walk_in'" in RESERVATIONS
     assert "get_fleet_board_capacity_state" in FLEET
     assert "reservations.filter(item => item.reservationType === 'rental'" not in FLEET

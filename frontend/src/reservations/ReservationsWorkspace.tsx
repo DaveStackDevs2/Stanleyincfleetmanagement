@@ -15,7 +15,7 @@ type PayType = { id: string; name: string }
 type RateCard = { id: string; vehicleModel: string; daily: string | null; weekly: string | null; monthly: string | null }
 type Quote = { id: string; eventId: string; customerId: string; customerName: string; start: string; expectedReturn: string; reservationType: string; vehicleModel: string; payType: string; initialPlan: string; currentPlan: string; daily: string | null; weekly: string | null; monthly: string | null }
 type Intake = { customers: Customer[]; payTypes: PayType[]; rateCards: RateCard[]; quotes: Quote[] }
-type CapacityAlternative = { vehicleModel: string; minimumRemaining: number }
+type CapacityAlternative = { vehicleModel: string; minimumRemaining: number; daily: string | null; weekly: string | null; monthly: string | null }
 type CapacityState = { status: 'available' | 'not_configured' | 'full'; available: boolean; alternatives: CapacityAlternative[] }
 
 const record = (value: unknown): Json | null => typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Json : null
@@ -66,7 +66,7 @@ function friendlyError(message: string): string {
 function parseCapacity(value: unknown): CapacityState {
   const root=record(value); const status=root?.status
   if (!root || (status!=='available'&&status!=='not_configured'&&status!=='full') || typeof root.available!=='boolean') throw new Error('invalid-capacity')
-  const alternatives=array(root.alternatives).map(record).filter(Boolean).map(item=>({vehicleModel:string(item!.vehicle_class),minimumRemaining:Number(item!.minimum_remaining)})).filter(item=>item.vehicleModel&&Number.isInteger(item.minimumRemaining)&&item.minimumRemaining>0)
+  const alternatives=array(root.alternatives).map(record).filter(Boolean).map(item=>({vehicleModel:string(item!.vehicle_class),minimumRemaining:Number(item!.minimum_remaining),daily:nullableString(item!.daily_rate),weekly:nullableString(item!.weekly_rate),monthly:nullableString(item!.monthly_rate)})).filter(item=>item.vehicleModel&&Number.isInteger(item.minimumRemaining)&&item.minimumRemaining>0)
   return {status,available:root.available,alternatives}
 }
 
@@ -96,6 +96,9 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   const [notes, setNotes] = useState('')
   const [result, setResult] = useState<Json | null>(null)
   const [conversion, setConversion] = useState<Quote | null>(null)
+  const [conversionCapacity, setConversionCapacity] = useState<CapacityState | null>(null)
+  const [conversionCapacityLoading, setConversionCapacityLoading] = useState(false)
+  const [conversionClass, setConversionClass] = useState('')
   const [pickupReservationId, setPickupReservationId] = useState<string | null>(null)
   const [editReservationId, setEditReservationId] = useState<string | null>(null)
   const [capacity, setCapacity] = useState<CapacityState | null>(null)
@@ -131,6 +134,18 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
     },250)
     return()=>{current=false;window.clearTimeout(timer)}
   },[reservationType,workflow,vehicleModel,start,expectedReturn])
+
+  useEffect(()=>{
+    setConversionCapacity(null)
+    setConversionClass('')
+    if(!conversion||conversion.reservationType.trim().toLowerCase()!=='rental')return
+    let current=true;setConversionCapacityLoading(true)
+    void supabase.rpc('get_rental_reservation_capacity_state',{p_vehicle_class:conversion.vehicleModel,p_start_date:conversion.start,p_expected_return_datetime:conversion.expectedReturn,p_exclude_reservation_id:null}).then(result=>{
+      if(!current)return
+      try{if(result.error)throw result.error;setConversionCapacity(parseCapacity(result.data))}catch{setError('Reservation capacity could not be verified. Refresh and try again.')}finally{setConversionCapacityLoading(false)}
+    })
+    return()=>{current=false}
+  },[conversion])
 
   useEffect(() => {
     if (!intake || loading || !navigationContext) return
@@ -192,8 +207,9 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   }
   const convert = async (event: FormEvent) => {
     event.preventDefault(); if (!conversion) return
+    if(conversion.reservationType.trim().toLowerCase()==='rental'&&(conversionCapacityLoading||(!conversionCapacity?.available&&!conversionClass))){setError('No authoritative Rental reservation capacity is available for conversion. Choose an available alternative.');return}
     setBusy(true); setError(null)
-    const { data, error: rpcError } = await supabase.rpc('convert_quote_to_reservation_with_pricing_agreement_state', { p_quote_id:conversion.id, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes) })
+    const { data, error: rpcError } = await supabase.rpc('convert_quote_to_reservation_with_pricing_agreement_state', { p_quote_id:conversion.id, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes), p_selected_vehicle_class:conversionClass||null })
     if (rpcError) setError(friendlyError(rpcError.message));
     else if (await load()) { setConversion(null); setResult(record(data)); }
     else { setConversion(null); setError('State sync failed: the conversion completed, but Reservations could not reload authoritative intake. Refresh before continuing.') }
@@ -201,7 +217,7 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   }
 
   if (result) return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">AUTHORITATIVE RESULT</p><h1>Reservations update complete</h1><p>Supabase completed the workflow. No VIN, vehicle use, contract period, pricing timer, or billing was started.</p><AuthoritativeFields value={result} /><button className="primary-action" type="button" onClick={reset}>Return to Reservations</button></section></main>
-  if (conversion) return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">QUOTE CONVERSION</p><h1>Convert Quote to Reservation</h1><p>The existing Transportation Event <code>{conversion.eventId}</code> and pricing agreement will be preserved.</p>{error && <div className="data-message error-message">{error}</div>}<form className="reservation-form" onSubmit={convert}><label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label><label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label><div className="form-actions wide"><button type="button" onClick={()=>setConversion(null)}>Cancel</button><button className="primary-action" disabled={busy}>{busy?'Converting…':'Convert to Reservation'}</button></div></form></section></main>
+  if (conversion) { const selectedAlternative=conversionCapacity?.alternatives.find(item=>item.vehicleModel===conversionClass); const conversionPlanRate=selectedAlternative?.[conversion.currentPlan as Plan]??null; return <main className="content reservations-page"><section className="reservation-success"><p className="eyebrow">QUOTE CONVERSION</p><h1>Convert Quote to Reservation</h1><p>The existing Transportation Event <code>{conversion.eventId}</code> and pricing agreement will be preserved.</p>{error && <div className="data-message error-message">{error}</div>}<form className="reservation-form" onSubmit={convert}>{conversion.reservationType.trim().toLowerCase()==='rental'&&<div className="wide">{conversionCapacityLoading?<div className="rate-preview" role="status">Checking authoritative Reservation Capacity…</div>:conversionCapacity?.available?<div className="rate-preview"><strong>{conversion.vehicleModel} is available</strong><span>The original Quote pricing snapshots will be preserved.</span></div>:<div className="data-message error-message" role="alert"><strong>No reservation capacity is available for {conversion.vehicleModel} for the complete period.</strong><span>Choose an available class configured for the Quote's {conversion.currentPlan} rate plan.</span>{conversionCapacity?.alternatives.filter(item=>item[conversion.currentPlan as Plan]!==null).map(item=><button type="button" key={item.vehicleModel} onClick={()=>setConversionClass(item.vehicleModel)}>{item.vehicleModel} ({item.minimumRemaining} remaining)</button>)}</div>}{selectedAlternative&&<div className="rate-preview"><strong>Selected Reservation class: {selectedAlternative.vehicleModel}</strong><span>Normal current {conversion.currentPlan} rate: {money(conversionPlanRate)}</span><span>Daily: {money(selectedAlternative.daily)} · Weekly: {money(selectedAlternative.weekly)} · Monthly: {money(selectedAlternative.monthly)}</span></div>}</div>}<label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label><label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label><div className="form-actions wide"><button type="button" onClick={()=>setConversion(null)}>Cancel</button><button className="primary-action" disabled={busy||conversionCapacityLoading||(conversion.reservationType.trim().toLowerCase()==='rental'&&!conversionCapacity?.available&&!conversionClass)}>{busy?'Converting…':'Convert to Reservation'}</button></div></form></section></main> }
   return <main className="content reservations-page">
     <section className="page-heading"><div><p className="eyebrow">OPERATIONS / RESERVATIONS</p><h1>Reservations</h1><p>Create pre-pickup Quotes, Reservations, and Walk-ins from authoritative pricing configuration.</p></div><button type="button" onClick={()=>void load()} disabled={loading}>Refresh</button></section>
     {error && <div className="data-message error-message"><strong>Reservations needs attention</strong><span>{error}</span></div>}
