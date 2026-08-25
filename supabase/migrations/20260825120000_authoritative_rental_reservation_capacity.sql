@@ -232,11 +232,11 @@ begin
     if lower(btrim(v_conversion_class))<>lower(btrim(v_agreement.vehicle_class)) then
       v_rate:=public.resolve_rental_rate_card_state(v_conversion_class,clock_timestamp());
       if v_rate->>'status'<>'rental_rate_card_resolved' then raise exception 'Selected conversion class rate card is not configured' using errcode='P0001'; end if;
-      if case v_agreement.current_rate_plan
+      if (case v_agreement.current_rate_plan
         when 'daily' then v_rate->>'daily_rate'
         when 'weekly' then v_rate->>'weekly_rate'
         when 'monthly' then v_rate->>'monthly_rate'
-        else null end is null then
+        else null end) is null then
         raise exception 'Selected conversion class has no configured % rate',v_agreement.current_rate_plan using errcode='P0001';
       end if;
       update public.rental_pricing_agreements set
