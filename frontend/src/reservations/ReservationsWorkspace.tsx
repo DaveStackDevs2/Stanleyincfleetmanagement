@@ -11,7 +11,7 @@ type Workflow = ReservationsNavigationContext['workflow']
 type Plan = 'daily' | 'weekly' | 'monthly'
 type Json = Record<string, unknown>
 type Customer = { id: string; name: string; number: string | null }
-type PayType = { id: string; name: string }
+type PayType = { id: string; name: string; defaultDailyAmount: string | null }
 type RateCard = { id: string; vehicleModel: string; daily: string | null; weekly: string | null; monthly: string | null }
 type Quote = { id: string; eventId: string; customerId: string; customerName: string; start: string; expectedReturn: string; reservationType: string; vehicleModel: string; payType: string; initialPlan: string; currentPlan: string; daily: string | null; weekly: string | null; monthly: string | null }
 type Intake = { customers: Customer[]; payTypes: PayType[]; rateCards: RateCard[]; quotes: Quote[] }
@@ -31,7 +31,7 @@ function parseIntake(value: unknown): Intake {
     id: string(pick(row!, 'customer_id', 'id')), name: string(pick(row!, 'customer_name', 'name')), number: nullableString(pick(row!, 'tekion_customer_number', 'customer_number')),
   })).filter(item => item.id && item.name)
   const payTypes = array(pick(root, 'active_pay_types', 'pay_types')).map(record).filter(Boolean).map(row => ({
-    id: string(pick(row!, 'pay_type_rule_id', 'id')), name: string(pick(row!, 'pay_type', 'name')),
+    id: string(pick(row!, 'pay_type_rule_id', 'id')), name: string(pick(row!, 'pay_type', 'name')), defaultDailyAmount: nullableString(row!.default_daily_amount),
   })).filter(item => item.id && item.name)
   const rateCards = array(root.rate_cards).map(record).filter(Boolean).map(row => ({
     id: string(pick(row!, 'rental_rate_rule_id', 'rate_card_id', 'id')), vehicleModel: string(row!.vehicle_class), daily: nullableString(pick(row!, 'daily_rate', 'daily_rate_snapshot')), weekly: nullableString(pick(row!, 'weekly_rate', 'weekly_rate_snapshot')), monthly: nullableString(pick(row!, 'monthly_rate', 'monthly_rate_snapshot')),
@@ -119,9 +119,13 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
     : reservationType === 'loaner'
       ? (intake?.payTypes.filter(item => item.name.trim().toLowerCase() !== 'rental') ?? [])
       : [], [intake, rentalPayType, reservationType])
+  const selectedPayType = intake?.payTypes.find(item => item.id === payTypeId) ?? null
+  const isCustomerPayLoaner = reservationType === 'loaner' && selectedPayType?.name.trim().toLowerCase() === 'customer pay'
   const selectedRate = intake?.rateCards.find(card => card.vehicleModel === vehicleModel) ?? null
-  const selectedPlanValue = selectedRate?.[plan] ?? null
+  const selectedPlanValue = isCustomerPayLoaner ? (plan === 'daily' ? selectedPayType?.defaultDailyAmount ?? null : null) : selectedRate?.[plan] ?? null
   const shownCustomers = useMemo(() => intake?.customers.filter(customer => `${customer.name} ${customer.number ?? ''}`.toLowerCase().includes(customerSearch.trim().toLowerCase())) ?? [], [intake, customerSearch])
+
+  useEffect(()=>{if(isCustomerPayLoaner&&plan!=='daily')setPlan('daily')},[isCustomerPayLoaner,plan])
 
   useEffect(()=>{
     setCapacity(null)
@@ -180,6 +184,7 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
     if (reservationType === 'rental' && payTypeId !== rentalPayType?.id) return 'Validation: Rental workflows require the authoritative Rental pay type.'
     if (reservationType !== 'rental' && payTypeId === rentalPayType?.id) return 'Validation: Rental pay type cannot be used for a Loaner workflow.'
     if (!plan) return 'Validation: rate plan is required.'
+    if (isCustomerPayLoaner && plan !== 'daily') return 'Customer Pay Loaner pricing supports only the Daily plan.'
     if (workflow === 'walk_in' && plan !== 'daily') return 'Weekly and monthly pickup billing is not implemented yet.'
     if (workflow === 'walk_in' && reservationType === 'loaner' && !roNumber.trim()) return 'Validation: Loaner Walk-in requires an RO number before continuing to Pickup.'
     if (selectedPlanValue === null) return `Missing configuration: ${plan} pricing is not configured for ${vehicleModel}.`
@@ -230,14 +235,14 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
         <label>Workflow type<select required value={reservationType} onChange={e=>{const next=e.target.value;setReservationType(next);if(next==='rental'){if(rentalPayType){setPayTypeId(rentalPayType.id);setError(null)}else{setPayTypeId('');setError('Missing configuration: the active Rental pay type is required for Rental workflows.')}}else{setPayTypeId('');setError(null)}}}><option value="">Select Loaner or Rental</option><option value="loaner">Loaner</option><option value="rental">Rental</option></select></label>
         <label>Vehicle model<select required value={vehicleModel} onChange={e=>setVehicleModel(e.target.value)}><option value="">Select vehicle model</option>{intake.rateCards.map(card=><option value={card.vehicleModel} key={card.id}>{card.vehicleModel}</option>)}</select></label>
         <label>Pay type<select required disabled={!reservationType || (reservationType==='rental' && !rentalPayType)} value={payTypeId} onChange={e=>setPayTypeId(e.target.value)}><option value="">{reservationType ? 'Select active pay type' : 'Select workflow type first'}</option>{allowedPayTypes.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-        <label>Initial rate plan<select required value={plan} onChange={e=>setPlan(e.target.value as Plan)}><option value="daily" disabled={selectedRate?.daily==null}>Daily</option><option value="weekly" disabled={selectedRate?.weekly==null}>Weekly</option><option value="monthly" disabled={selectedRate?.monthly==null}>Monthly</option></select></label>
+        <label>Initial rate plan<select required disabled={isCustomerPayLoaner} value={plan} onChange={e=>setPlan(e.target.value as Plan)}><option value="daily" disabled={selectedRate?.daily==null}>Daily</option><option value="weekly" disabled={selectedRate?.weekly==null}>Weekly</option><option value="monthly" disabled={selectedRate?.monthly==null}>Monthly</option></select></label>
         <label>Start date/time<input type="datetime-local" required value={start} onChange={e=>setStart(e.target.value)} /></label><label>Expected return date/time<input type="datetime-local" required value={expectedReturn} onChange={e=>setExpectedReturn(e.target.value)} /></label>
         {workflow!=='quote' && <><label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label></>}
         <label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label>
         {reservationType==='rental'&&workflow!=='walk_in'&&capacityLoading&&<div className="rate-preview wide" role="status">Checking authoritative Reservation Capacity…</div>}
         {reservationType==='rental'&&workflow!=='walk_in'&&capacity&&!capacity.available&&<div className="data-message error-message wide" role="alert"><strong>No reservation capacity is available for {vehicleModel} for the selected dates.</strong><span>{capacity.status==='not_configured'?'This model has no Reservation Capacity configuration.':'At least one dealership calendar day is full.'}</span>{capacity.alternatives.length>0&&<div><span>Available alternatives for the complete period:</span>{capacity.alternatives.map(item=><button type="button" key={item.vehicleModel} onClick={()=>setVehicleModel(item.vehicleModel)}>{item.vehicleModel} ({item.minimumRemaining} remaining)</button>)}</div>}</div>}
         {reservationType==='rental'&&workflow!=='walk_in'&&capacity?.available&&<div className="rate-preview wide"><strong>Reservation Capacity available</strong><span>Authoritative availability covers the complete selected period.</span></div>}
-        <div className="rate-preview wide"><strong>Configured pricing — exact Supabase values</strong><span>Daily: {money(selectedRate?.daily??null)}</span><span>Weekly: {money(selectedRate?.weekly??null)}</span><span>Monthly: {money(selectedRate?.monthly??null)}</span>{selectedRate && selectedPlanValue===null && <em>{plan} is not configured. Choose another plan.</em>}</div>
+        <div className="rate-preview wide"><strong>{isCustomerPayLoaner?'Customer Pay Standard RO daily rate — exact Supabase value':'Configured pricing — exact Supabase values'}</strong><span>Daily: {money(isCustomerPayLoaner?selectedPayType?.defaultDailyAmount??null:selectedRate?.daily??null)}</span>{!isCustomerPayLoaner&&<><span>Weekly: {money(selectedRate?.weekly??null)}</span><span>Monthly: {money(selectedRate?.monthly??null)}</span></>}{selectedRate && selectedPlanValue===null && <em>{plan} is not configured. Choose another plan.</em>}</div>
         <div className="form-actions wide"><button className="primary-action" disabled={busy||(workflow!=='walk_in'&&reservationType==='rental'&&(capacityLoading||!capacity?.available))}>{busy?'Submitting…':`Create ${workflow==='walk_in'?'Walk-in':workflow[0].toUpperCase()+workflow.slice(1)}`}</button></div>
       </form>
       <section className="reservation-card quote-list"><div className="section-heading"><div><h2>Active Quotes</h2><p>Authoritative Quotes available for same-event conversion.</p></div><strong>{intake.quotes.length}</strong></div>{intake.quotes.length===0?<p className="empty-state">No active Quotes.</p>:intake.quotes.map(q=><article key={q.id}><div><h3>{q.customerName||'Customer'}</h3><small>Quote ID {q.id}</small><small>Transportation Event ID {q.eventId}</small></div><dl><div><dt>Schedule</dt><dd>{dateTime(q.start)} — {dateTime(q.expectedReturn)}</dd></div><div><dt>Type / model</dt><dd>{q.reservationType} · {q.vehicleModel}</dd></div><div><dt>Pay type / plan</dt><dd>{q.payType} · {q.initialPlan} / {q.currentPlan}</dd></div><div><dt>Pricing snapshots</dt><dd>Daily {money(q.daily)} · Weekly {money(q.weekly)} · Monthly {money(q.monthly)}</dd></div></dl><button className="primary-action" type="button" onClick={()=>{setAdvisor('');setRoNumber('');setNotes('');setConversion(q)}}>Convert to Reservation</button></article>)}</section>
