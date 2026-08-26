@@ -643,3 +643,11 @@ The following remain **OPEN / NOT IMPLEMENTED**: daily/weekly/monthly block rule
 - **One-way fleet rule:** a Loaner-fleet vehicle cannot serve a Rental; a Rental-fleet vehicle may serve a Loaner as a fallback, with native Loaner candidates ordered first.
 - **Assignment boundary:** `public.start_reservation_vehicle_use_state` rejects a null/blank Loaner RO before `public.start_vehicle_use_state` can begin continuity. Rental has no RO requirement.
 - **Still NOT IMPLEMENTED:** Fleet Board click integration, Fleet Board Loaner reservation rendering, and immediate Walk-in activation remain later checkpoints. Nothing in this checkpoint claims those surfaces complete.
+# 2026-08-26 — Rental block pricing A1 (repository only)
+
+- [x] Add a shared exact-numeric backend 28-day Monthly / 7-day Weekly / Daily Rental segment resolver that fails closed for an earned block without its snapshot.
+- [x] Add backend agreement-segment and Extension previews based on `business_contract_days(...)` and stored Daily/Weekly/Monthly snapshots.
+- [x] Make the Rental plan selector non-authoritative while leaving Loaner/Customer Pay plan behavior intact.
+- [x] Add a 28-day renewal / second-period swap-required read foundation and reject intended same-vehicle periods over 56 days.
+- [ ] Apply and validate the migration against real PostgreSQL; verify authenticated browser workflows.
+- [ ] Design the explicit audited whole-Rental adjustment persistence before adding the Admin+Dev-only override; do not rewrite Paid Original/Extension settlement history implicitly.

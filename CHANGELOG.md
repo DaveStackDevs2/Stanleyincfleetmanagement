@@ -143,3 +143,8 @@
 - Reservations now warns for unavailable Rental dates, offers backend-qualified alternatives, and blocks direct Reservation submit while unavailable; Quotes remain non-holding and Walk-ins/Loaners remain unchanged.
 - Added compact Admin Reservation Capacity configuration using active Rental rate-card models and no invented defaults.
 - **NOT VERIFIED LIVE:** No migration was applied and production browser behavior was not tested. Conflict persistence after limit reduction, Lost Rentals, and free upgrades remain unimplemented.
+# 2026-08-26 — Rental block-pricing A1 (repository only)
+
+- Added the data-free shared backend 28/7/Daily Rental segment resolver and authenticated agreement-segment preview using snapshotted rate cards and authoritative tax.
+- Made Rental plan selection non-authoritative in Reservations while preserving Loaner/Customer Pay selection.
+- Added independently priced Extension preview and 28-day renewal/second-period swap status foundations. This migration has not been applied or live-verified.

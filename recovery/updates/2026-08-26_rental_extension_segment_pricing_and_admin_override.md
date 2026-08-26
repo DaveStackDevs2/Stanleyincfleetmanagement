@@ -78,3 +78,8 @@ Checkpoint A must preserve these distinctions:
 4. Admin/Dev retroactive exception → explicit audited whole-Rental repricing; never default behavior.
 
 Any earlier Issue #61 text suggesting that Dev must be excluded from an Admin capability is superseded by the global Dev-superset authorization invariant.
+# A1 repository update — 2026-08-26
+
+Checkpoint A1 adds one shared exact-numeric backend block resolver and prices Extension preview as a new interval from the prior expected-return boundary. Earlier parent lines are not inputs. Reservations no longer offers a Rental money-plan selector. The repository also adds renewal/second-period swap status based on `renewal_sequence`; it does not automate either action. No Supabase apply or live verification is claimed.
+
+The whole-Rental retroactive override remains deferred. Its future narrow permission must include both Admin and Dev and exclude Service Manager/other roles unless separately approved. Persistence still requires a deliberate adjustment-line/audit design that preserves locked/Paid Original and Extension checkpoints and represents Tekion refund/amount-owed handling without rewriting settlement history.
