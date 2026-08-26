@@ -4,6 +4,23 @@
 ALTER TABLE public.billing_lines
   ADD COLUMN IF NOT EXISTS rental_block_pricing_snapshot jsonb;
 
+-- Rental pricing uses completed elapsed days.  Keep this boundary separate from
+-- business_contract_days(), whose inclusive semantics remain authoritative for
+-- Loaner, EW, and legacy Billing workflows.
+CREATE OR REPLACE FUNCTION public.rental_pricing_days(
+  p_segment_start timestamptz,
+  p_segment_end timestamptz
+) RETURNS integer
+LANGUAGE sql STABLE
+SET search_path TO ''
+AS $function$
+  SELECT CASE
+    WHEN p_segment_start IS NULL OR p_segment_end IS NULL THEN NULL
+    WHEN p_segment_end < p_segment_start THEN NULL
+    ELSE greatest(public.business_contract_days(p_segment_start,p_segment_end)-1,0)
+  END
+$function$;
+
 CREATE OR REPLACE FUNCTION public.resolve_rental_block_pricing_state(
   p_segment_days integer,
   p_daily_rate numeric,
@@ -58,7 +75,7 @@ BEGIN
   IF p_segment_start IS NULL OR p_segment_end IS NULL OR p_segment_end <= p_segment_start THEN RAISE EXCEPTION 'A valid Rental segment period is required' USING ERRCODE='22023'; END IF;
   SELECT * INTO v_agreement FROM public.rental_pricing_agreements WHERE id=p_pricing_agreement_id AND is_active=true;
   IF NOT FOUND THEN RAISE EXCEPTION 'Active pricing agreement was not found' USING ERRCODE='P0002'; END IF;
-  v_days:=public.business_contract_days(p_segment_start,p_segment_end);
+  v_days:=public.rental_pricing_days(p_segment_start,p_segment_end);
   IF v_days > 56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
   v_price:=public.resolve_rental_block_pricing_state(v_days,v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
   SELECT pay_type INTO v_pay_type FROM public.pay_type_rules WHERE id=v_agreement.pay_type_rule_id;
@@ -75,7 +92,7 @@ BEGIN
  IF v_actor IS NULL THEN RAISE EXCEPTION 'An active application user is required' USING ERRCODE='42501'; END IF;
  SELECT * INTO v_r FROM public.reservations WHERE id=p_reservation_id;
  IF NOT FOUND OR lower(coalesce(v_r.reservation_type,'')) NOT LIKE '%rental%' THEN RAISE EXCEPTION 'Rental reservation was not found' USING ERRCODE='P0002'; END IF;
- IF public.business_contract_days(v_r.start_date,v_r.expected_return_datetime)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
+ IF public.rental_pricing_days(v_r.start_date,v_r.expected_return_datetime)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
  SELECT cp.* INTO v_cp FROM public.contract_periods cp JOIN public.vehicle_events ve ON ve.id=cp.vehicle_event_id WHERE ve.transportation_event_id=v_r.transportation_event_id AND cp.is_open ORDER BY cp.renewal_sequence DESC LIMIT 1;
  IF NOT FOUND THEN RETURN jsonb_build_object('status','rental_contract_status_unavailable','reservation_id',p_reservation_id); END IF;
  v_days:=public.business_contract_days(v_cp.contract_out_at,p_effective_at); v_due:=v_cp.contract_out_at+interval '28 days';
@@ -97,17 +114,19 @@ BEGIN
  SELECT * INTO v_line FROM public.billing_lines WHERE reservation_id=p_reservation_id AND parent_billing_line_id IS NULL AND line_type IN ('initial_assignment','rental_extension') AND is_open ORDER BY start_time DESC,id DESC LIMIT 1;
  IF v_r.id IS NULL OR v_a.id IS NULL OR v_line.id IS NULL THEN RAISE EXCEPTION 'Rental Extension pricing state is unavailable' USING ERRCODE='P0002'; END IF;
  IF p_new_expected_return_at IS NULL OR p_new_expected_return_at<=v_old THEN RAISE EXCEPTION 'New return must be later than current return' USING ERRCODE='22023'; END IF;
- IF public.business_contract_days(v_r.start_date,p_new_expected_return_at)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
- -- The Extension starts after the shared prior-return boundary.
- v_price:=public.preview_rental_agreement_segment_state(v_a.id,v_old+interval '1 day',p_new_expected_return_at);
+ IF public.rental_pricing_days(v_r.start_date,p_new_expected_return_at)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
+ -- The elapsed interval owns the shared boundary once, so prior segments stay isolated.
+ v_price:=public.preview_rental_agreement_segment_state(v_a.id,v_old,p_new_expected_return_at);
  RETURN jsonb_build_object('status','rental_extension_preview_ready','reservation_id',p_reservation_id,'transportation_event_id',v_r.transportation_event_id,'current_parent_billing_line_id',v_line.id,'previous_expected_return_at',v_old,'proposed_expected_return_at',p_new_expected_return_at,'additional_charge',v_price->>'subtotal','additional_tax',v_price->>'tax_amount','additional_total',v_price->>'total','block_pricing',v_price);
 END;$function$;
 
 ALTER FUNCTION public.resolve_rental_block_pricing_state(integer,numeric,numeric,numeric) OWNER TO postgres;
+ALTER FUNCTION public.rental_pricing_days(timestamptz,timestamptz) OWNER TO postgres;
 ALTER FUNCTION public.preview_rental_agreement_segment_state(uuid,timestamptz,timestamptz) OWNER TO postgres;
 ALTER FUNCTION public.get_rental_contract_status_state(uuid,timestamptz) OWNER TO postgres;
 ALTER FUNCTION public.preview_rental_extension_state(uuid,timestamptz) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.resolve_rental_block_pricing_state(integer,numeric,numeric,numeric) FROM PUBLIC,anon,authenticated;
+REVOKE ALL ON FUNCTION public.rental_pricing_days(timestamptz,timestamptz) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.preview_rental_agreement_segment_state(uuid,timestamptz,timestamptz) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.get_rental_contract_status_state(uuid,timestamptz) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.preview_rental_extension_state(uuid,timestamptz) FROM PUBLIC,anon,authenticated;
@@ -115,6 +134,8 @@ GRANT EXECUTE ON FUNCTION public.preview_rental_agreement_segment_state(uuid,tim
 
 -- Internal resolver is callable only by trusted function owners/service operations.
 GRANT EXECUTE ON FUNCTION public.resolve_rental_block_pricing_state(integer,numeric,numeric,numeric) TO service_role;
+GRANT EXECUTE ON FUNCTION public.rental_pricing_days(timestamptz,timestamptz) TO service_role;
 
 COMMENT ON FUNCTION public.resolve_rental_block_pricing_state(integer,numeric,numeric,numeric) IS 'One shared exact Rental segment resolver: completed 28-day, then 7-day, then Daily blocks.';
+COMMENT ON FUNCTION public.rental_pricing_days(timestamptz,timestamptz) IS 'Authoritative completed-day boundary for Rental pricing only; intentionally excludes the inclusive end boundary.';
 COMMENT ON COLUMN public.billing_lines.rental_block_pricing_snapshot IS 'Immutable explanation of the authoritative segment charge persisted by Rental workflows.';

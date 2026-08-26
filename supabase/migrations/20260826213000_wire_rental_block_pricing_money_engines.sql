@@ -274,11 +274,10 @@ BEGIN
     END IF;
 
     v_is_rental := lower(coalesce(v_reservation.reservation_type, '')) LIKE '%rental%';
-    v_contract_days := public.business_contract_days(v_billing_start, v_preview_end);
-    -- Successor Rental segments share the prior segment boundary and must not bill it twice.
-    IF v_is_rental AND v_current_line.line_type = 'rental_extension' THEN
-        v_contract_days := greatest(v_contract_days - 1, 0);
-    END IF;
+    v_contract_days := CASE WHEN v_is_rental
+        THEN public.rental_pricing_days(v_billing_start, v_preview_end)
+        ELSE public.business_contract_days(v_billing_start, v_preview_end)
+    END;
 
     IF v_current_line.daily_rate_override IS NOT NULL THEN
         v_daily_rate := v_current_line.daily_rate_override;
@@ -649,7 +648,7 @@ begin
  update public.billing_lines set pricing_agreement_id=v_agreement.id,rate_plan_snapshot='daily',rate_amount_snapshot=v_rate_amount,default_daily_rate_snapshot=v_agreement.daily_rate_snapshot where id=v_line_id;
  if not exists(select 1 from public.billing_lines line where line.id=v_line_id and line.start_time is not distinct from v_reservation.start_date) then raise exception 'Billing engine did not use the reservation scheduled start'; end if;
  update public.rental_pricing_agreements set pricing_started_at=v_reservation.start_date,updated_by=v_user,updated_at=clock_timestamp() where id=v_agreement.id returning * into v_agreement;
- v_segment_days:=public.business_contract_days(v_reservation.start_date,v_reservation.expected_return_datetime);
+ v_segment_days:=public.rental_pricing_days(v_reservation.start_date,v_reservation.expected_return_datetime);
  v_block_price:=public.resolve_rental_block_pricing_state(v_segment_days,v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
  v_block_tax:=public.resolve_billing_tax_state(v_pay_type.pay_type,(v_block_price->>'subtotal')::numeric);
  update public.billing_lines set amount=(v_block_price->>'subtotal')::numeric,tax_amount=(v_block_tax->>'tax_amount')::numeric,end_time=v_reservation.expected_return_datetime,rental_block_pricing_snapshot=v_block_price where id=v_line_id;
@@ -681,10 +680,10 @@ BEGIN
  SELECT * INTO v_line FROM public.billing_lines WHERE id=p_current_billing_line_id FOR UPDATE;
  SELECT * INTO v_reservation FROM public.reservations WHERE id=v_line.reservation_id FOR UPDATE;
  IF lower(coalesce(v_reservation.reservation_type,'')) LIKE '%rental%' THEN
-   IF public.business_contract_days(v_reservation.start_date,p_new_expected_return_at)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
+   IF public.rental_pricing_days(v_reservation.start_date,p_new_expected_return_at)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
    SELECT * INTO v_agreement FROM public.rental_pricing_agreements WHERE reservation_id=v_reservation.id AND is_active=true ORDER BY updated_at DESC LIMIT 1;
    IF NOT FOUND THEN RAISE EXCEPTION 'Active Rental pricing agreement was not found' USING ERRCODE='P0002'; END IF;
-   v_block_price:=public.resolve_rental_block_pricing_state(greatest(public.business_contract_days(v_old_expected_return_at,p_new_expected_return_at)-1,0),v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
+   v_block_price:=public.resolve_rental_block_pricing_state(public.rental_pricing_days(v_old_expected_return_at,p_new_expected_return_at),v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
    v_tax:=public.resolve_billing_tax_state(coalesce(v_line.pay_type,v_reservation.pay_type),(v_block_price->>'subtotal')::numeric);
    v_server_amount:=(v_block_price->>'subtotal')::numeric; v_server_tax:=(v_tax->>'tax_amount')::numeric;
    -- Compatibility parameters are assertions only; caller money never becomes authoritative.
@@ -803,20 +802,15 @@ BEGIN
 
         v_previous_charge := coalesce(v_current_billing_line.amount,0);
         v_previous_tax := coalesce(v_current_billing_line.tax_amount,0);
+        -- Billing preview owns both Rental completed-day pricing and the open
+        -- line's historical tax snapshots.  Return must not resolve current tax.
+        v_final_subtotal := (v_final_preview->>'subtotal')::numeric;
+        v_final_tax := (v_final_preview->>'tax_amount')::numeric;
         IF lower(coalesce(v_reservation.reservation_type,'')) LIKE '%rental%' THEN
-            SELECT * INTO v_agreement FROM public.rental_pricing_agreements
-            WHERE reservation_id=p_reservation_id AND is_active=true ORDER BY updated_at DESC LIMIT 1;
-            IF NOT FOUND THEN RAISE EXCEPTION 'Active Rental pricing agreement was not found' USING ERRCODE='P0002'; END IF;
-            v_block_price:=public.resolve_rental_block_pricing_state(
-                greatest(public.business_contract_days(v_current_billing_line.start_time,p_actual_in_at)
-                  - CASE WHEN v_current_billing_line.line_type='rental_extension' THEN 1 ELSE 0 END,0),
-                v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
-            v_tax_state:=public.resolve_billing_tax_state(coalesce(v_current_billing_line.pay_type,v_reservation.pay_type),(v_block_price->>'subtotal')::numeric);
-            v_final_subtotal := (v_block_price->>'subtotal')::numeric;
-            v_final_tax := (v_tax_state->>'tax_amount')::numeric;
-        ELSE
-            v_final_subtotal := (v_final_preview->>'subtotal')::numeric;
-            v_final_tax := (v_final_preview->>'tax_amount')::numeric;
+            v_block_price := v_final_preview->'rental_block_pricing';
+            IF v_block_price IS NULL OR v_block_price = 'null'::jsonb THEN
+                RAISE EXCEPTION 'Final Rental billing preview is missing block pricing';
+            END IF;
         END IF;
         v_charge_delta:=v_final_subtotal-v_previous_charge; v_tax_delta:=v_final_tax-v_previous_tax; v_total_delta:=v_charge_delta+v_tax_delta;
         v_difference_status:=CASE WHEN v_total_delta<0 THEN 'refund_due' WHEN v_total_delta>0 THEN 'customer_owes' ELSE 'no_difference' END;
