@@ -100,14 +100,24 @@ def test_closed_billing_review_remains_stored_and_never_reprices_history():
     sql = body('get_billing_preview_state')
     assert "lower(btrim(v_event.status)) = 'closed'" in sql
     assert "'rate_source','stored_closed_billing_snapshot'" in sql
-    assert "'current_billing_line_id',v_current_line.id" in sql
+    assert "'current_billing_line_id',NULL" in sql
     assert 'historical_tax-child' not in sql  # guard is implemented by stored child count/sum checks
     assert 'stored_tax.child_count > 1' in sql
     for dependency in ('billing_history', 'closed_case_has_open_billing',
                        'historical_tax_line_mismatch'):
         assert f"'missing_dependency','{dependency}'" in sql
-    assert 'contract_period.contract_in_at DESC NULLS LAST' in sql
     closed = sql[sql.index("IF lower(btrim(v_event.status)) = 'closed'"):sql.index("IF (\n        SELECT count(*)", sql.index("IF lower(btrim(v_event.status)) = 'closed'"))]
+    assert 'v_event.closed_at IS NOT NULL AND p_effective_at < v_event.closed_at' in closed
+    assert 'v_event.closed_at IS NULL OR p_effective_at < v_event.closed_at' not in closed
+    vehicle_order = ('ORDER BY vehicle_event.actual_in_at DESC NULLS LAST, '
+                     'vehicle_event.actual_out_at DESC NULLS LAST, vehicle_event.id DESC')
+    contract_order = ('ORDER BY contract_period.renewal_sequence DESC, '
+                      'contract_period.contract_in_at DESC NULLS LAST, '
+                      'contract_period.contract_out_at DESC, contract_period.id DESC')
+    assert vehicle_order in closed
+    assert contract_order in closed
+    assert closed.index('vehicle_event.actual_in_at DESC NULLS LAST') < closed.index('vehicle_event.actual_out_at DESC NULLS LAST')
+    assert closed.index('contract_period.contract_in_at DESC NULLS LAST') < closed.index('contract_period.contract_out_at DESC')
     assert 'resolve_rental_block_pricing_state' not in closed
 
 

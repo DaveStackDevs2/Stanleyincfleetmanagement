@@ -102,7 +102,7 @@ BEGIN
 
     -- VERIFIED CLOSED BILLING SNAPSHOT BRANCH. Keep before open/current continuity assumptions.
     IF lower(btrim(v_event.status)) = 'closed' THEN
-        IF v_event.closed_at IS NULL OR p_effective_at < v_event.closed_at THEN
+        IF v_event.closed_at IS NOT NULL AND p_effective_at < v_event.closed_at THEN
             RAISE EXCEPTION 'Closed billing preview timestamp must be at or after case closure'
                 USING ERRCODE = '22023';
         END IF;
@@ -137,7 +137,7 @@ BEGIN
         IF NOT FOUND THEN
             SELECT vehicle_event.* INTO v_vehicle_event FROM public.vehicle_events vehicle_event
             WHERE vehicle_event.transportation_event_id=p_transportation_event_id
-            ORDER BY vehicle_event.actual_out_at DESC NULLS LAST, vehicle_event.actual_in_at DESC NULLS LAST, vehicle_event.created_at DESC, vehicle_event.id DESC LIMIT 1;
+            ORDER BY vehicle_event.actual_in_at DESC NULLS LAST, vehicle_event.actual_out_at DESC NULLS LAST, vehicle_event.id DESC LIMIT 1;
         END IF;
         IF v_vehicle_event.id IS NULL OR v_vehicle_event.actual_out_at IS NULL THEN
             RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','historical_vehicle_assignment');
@@ -148,7 +148,7 @@ BEGIN
         IF NOT FOUND THEN
             SELECT contract_period.* INTO v_contract_period FROM public.contract_periods contract_period
             WHERE contract_period.vehicle_event_id=v_vehicle_event.id
-            ORDER BY contract_period.renewal_sequence DESC, contract_period.contract_out_at DESC, contract_period.contract_in_at DESC NULLS LAST, contract_period.id DESC LIMIT 1;
+            ORDER BY contract_period.renewal_sequence DESC, contract_period.contract_in_at DESC NULLS LAST, contract_period.contract_out_at DESC, contract_period.id DESC LIMIT 1;
         END IF;
         IF v_contract_period.id IS NULL OR v_contract_period.contract_out_at IS NULL THEN
             RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'vehicle_event_id',v_vehicle_event.id,'effective_at',p_effective_at,'missing_dependency','historical_contract_period');
@@ -209,7 +209,7 @@ BEGIN
           'vehicle_event_id',v_vehicle_event.id,'contract_period_id',v_contract_period.id,'vehicle_out_at',v_vehicle_event.actual_out_at,
           'contract_out_at',v_contract_period.contract_out_at,'expected_return_at',coalesce(v_event.expected_return_at,v_reservation.expected_return_datetime),
           'actual_return_at',coalesce(v_vehicle_event.actual_in_at,v_reservation.actual_return_datetime,v_event.closed_at),
-          'billed_through_at',coalesce(v_current_line.paid_through_at,v_reservation.billed_through_datetime),'current_billing_line_id',v_current_line.id,
+          'billed_through_at',coalesce(v_current_line.paid_through_at,v_reservation.billed_through_datetime),'current_billing_line_id',NULL,
           'line_type',v_current_line.line_type,'pay_type_rule_id',v_current_line.pay_type_rule_id,'pay_type',v_pay_type,
           'vehicle_class',v_reservation.requested_model,'billing_start',v_billing_start,'preview_end',v_preview_end,'effective_at',p_effective_at,
           'contract_days',v_contract_days,'daily_rate',v_daily_rate::text,'rate_source','stored_closed_billing_snapshot',
