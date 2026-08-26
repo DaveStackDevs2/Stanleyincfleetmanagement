@@ -109,6 +109,10 @@ BEGIN
  IF v_actor IS NULL THEN RAISE EXCEPTION 'An active application user is required' USING ERRCODE='42501'; END IF;
  IF coalesce(auth.jwt()->>'aal','')<>'aal2' THEN RAISE EXCEPTION 'AAL2 authentication is required' USING ERRCODE='42501'; END IF;
  SELECT * INTO v_r FROM public.reservations WHERE id=p_reservation_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Rental Extension reservation was not found' USING ERRCODE='P0002'; END IF;
+ IF lower(btrim(coalesce(v_r.reservation_type,''))) <> 'rental' THEN
+   RAISE EXCEPTION 'Rental Extension preview requires a Rental reservation' USING ERRCODE='22023';
+ END IF;
  SELECT * INTO v_a FROM public.rental_pricing_agreements WHERE reservation_id=p_reservation_id AND is_active=true;
  SELECT coalesce(te.expected_return_at,v_r.expected_return_datetime) INTO v_old FROM public.transportation_events te WHERE te.id=v_r.transportation_event_id;
  SELECT * INTO v_line FROM public.billing_lines WHERE reservation_id=p_reservation_id AND parent_billing_line_id IS NULL AND line_type IN ('initial_assignment','rental_extension') AND is_open ORDER BY start_time DESC,id DESC LIMIT 1;
