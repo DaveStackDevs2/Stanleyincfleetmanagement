@@ -24,6 +24,14 @@ recovery/updates/
 
 These contain the newest verified project decisions.
 
+Also read:
+
+- recovery/2026-08-25_ACTIVE_WORKFLOW_CHECKPOINT.md
+- docs/BILLING_BUILD_PUNCHLIST.md
+- docs/FLEET_BOARD_BUILD.md
+
+Treat the newest dated recovery update and the current open implementation issue/PR as the active continuation when older text conflicts.
+
 ---
 
 ## 3. Refresh from the Backend
