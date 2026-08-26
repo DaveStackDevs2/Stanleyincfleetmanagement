@@ -1,3 +1,9 @@
+## 2026-08-26 — Authoritative Rental block-pricing engine correction
+
+- **IMPLEMENTED / NOT APPLIED:** Wired the shared Rental block resolver into existing Pickup, active Billing preview, Extension commit, and Return/Close money paths; prior closed Rental segments remain locked.
+- Rental Extension commits now validate compatibility money parameters against server-calculated snapshots, persist their block decomposition, and enforce the 56-day same-vehicle limit across the whole Rental.
+- Return/Close reprices only the open Rental segment and reports exact charge, tax, and total deltas for downstream Tekion handling without performing collection or refund actions. Loaner, Customer Pay, EW, and late-rule behavior remains on the existing paths.
+
 ## 2026-08-24 — Fleet Board operational routing checkpoint
 
 - **VERIFIED (repository):** Extended the existing `get_fleet_board_state` read engine for actionable Rental and Loaner pre-pickup Reservations while keeping `rental_model_limits` Rental-only.

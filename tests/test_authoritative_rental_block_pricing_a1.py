@@ -43,11 +43,11 @@ def test_snapshots_segments_contract_limit_and_security():
     assert "v_agreement.daily_rate_snapshot" in SQL
     assert "v_agreement.weekly_rate_snapshot" in SQL
     assert "v_agreement.monthly_rate_snapshot" in SQL
-    assert "v_old,p_new_expected_return_at" in SQL
+    assert "v_old+interval '1 day',p_new_expected_return_at" in SQL
     assert "Earlier parent lines never participate" in SQL
     assert "business_contract_days" in SQL
     assert ">56" in SQL.replace(" ", "")
-    assert "renewal_sequence>=2" in SQL.replace(" ", "")
+    assert "renewal_sequence>=1" in SQL.replace(" ", "")
     assert "REVOKE ALL ON FUNCTION public.resolve_rental_block_pricing_state" in SQL
     assert "TO authenticated" in SQL
 
