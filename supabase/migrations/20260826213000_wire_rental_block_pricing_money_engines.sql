@@ -20,6 +20,7 @@ DECLARE
     v_billing_start timestamptz;
     v_preview_end timestamptz;
     v_contract_days integer;
+    v_rental_pricing_days integer;
     v_daily_rate numeric;
     v_rate_source text;
     v_rate_state jsonb;
@@ -56,11 +57,6 @@ BEGIN
 
     IF v_actor_user_id IS NULL THEN
         RAISE EXCEPTION 'An active application user is required'
-            USING ERRCODE = '42501';
-    END IF;
-
-    IF coalesce(auth.jwt() ->> 'aal', '') <> 'aal2' THEN
-        RAISE EXCEPTION 'AAL2 authentication is required'
             USING ERRCODE = '42501';
     END IF;
 
@@ -101,6 +97,127 @@ BEGIN
         RAISE EXCEPTION
             'Transportation event has multiple reservations'
             USING ERRCODE = '21000';
+    END IF;
+
+
+    -- VERIFIED CLOSED BILLING SNAPSHOT BRANCH. Keep before open/current continuity assumptions.
+    IF lower(btrim(v_event.status)) = 'closed' THEN
+        IF v_event.closed_at IS NOT NULL AND p_effective_at < v_event.closed_at THEN
+            RAISE EXCEPTION 'Closed billing preview timestamp must be at or after case closure'
+                USING ERRCODE = '22023';
+        END IF;
+
+        SELECT line.* INTO v_current_line
+        FROM public.billing_lines line
+        WHERE line.transportation_event_id = p_transportation_event_id
+          AND line.parent_billing_line_id IS NULL
+        ORDER BY coalesce(line.end_time, line.paid_through_at, line.start_time) DESC NULLS LAST,
+                 line.created_at DESC, line.id DESC
+        LIMIT 1;
+
+        IF NOT FOUND THEN
+            RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','billing_history');
+        END IF;
+
+        IF EXISTS (SELECT 1 FROM public.billing_lines line WHERE line.transportation_event_id=p_transportation_event_id AND line.is_open) THEN
+            RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','closed_case_has_open_billing');
+        END IF;
+        IF EXISTS (
+                SELECT 1 FROM public.billing_lines parent
+                LEFT JOIN LATERAL (SELECT count(*) AS child_count, coalesce(sum(tax.amount),0) AS child_tax FROM public.billing_lines tax WHERE tax.parent_billing_line_id=parent.id AND tax.line_type='tax') stored_tax ON true
+                WHERE parent.transportation_event_id=p_transportation_event_id AND parent.parent_billing_line_id IS NULL
+                  AND (stored_tax.child_count > 1 OR stored_tax.child_tax <> coalesce(parent.tax_amount,0))
+           ) THEN
+            RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','historical_tax_line_mismatch');
+        END IF;
+
+        SELECT vehicle_event.* INTO v_vehicle_event FROM public.vehicle_events vehicle_event
+        WHERE vehicle_event.id=v_current_line.vehicle_event_id
+        LIMIT 1;
+        IF NOT FOUND THEN
+            SELECT vehicle_event.* INTO v_vehicle_event FROM public.vehicle_events vehicle_event
+            WHERE vehicle_event.transportation_event_id=p_transportation_event_id
+            ORDER BY vehicle_event.actual_in_at DESC NULLS LAST, vehicle_event.actual_out_at DESC NULLS LAST, vehicle_event.id DESC LIMIT 1;
+        END IF;
+        IF v_vehicle_event.id IS NULL OR v_vehicle_event.actual_out_at IS NULL THEN
+            RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','historical_vehicle_assignment');
+        END IF;
+
+        SELECT contract_period.* INTO v_contract_period FROM public.contract_periods contract_period
+        WHERE contract_period.id=v_current_line.contract_period_id LIMIT 1;
+        IF NOT FOUND THEN
+            SELECT contract_period.* INTO v_contract_period FROM public.contract_periods contract_period
+            WHERE contract_period.vehicle_event_id=v_vehicle_event.id
+            ORDER BY contract_period.renewal_sequence DESC, contract_period.contract_in_at DESC NULLS LAST, contract_period.contract_out_at DESC, contract_period.id DESC LIMIT 1;
+        END IF;
+        IF v_contract_period.id IS NULL OR v_contract_period.contract_out_at IS NULL THEN
+            RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'vehicle_event_id',v_vehicle_event.id,'effective_at',p_effective_at,'missing_dependency','historical_contract_period');
+        END IF;
+
+        SELECT customer.* INTO v_customer FROM public.customers customer WHERE customer.id=coalesce(v_reservation.customer_id,v_event.customer_id);
+        SELECT vehicle.* INTO v_vehicle FROM public.vehicles vehicle WHERE vehicle.id=coalesce(v_current_line.vehicle_id,v_vehicle_event.vehicle_id);
+
+        SELECT min(parent.start_time), max(coalesce(parent.end_time,parent.paid_through_at,v_vehicle_event.actual_in_at,v_event.closed_at)),
+               coalesce(sum(parent.amount),0), coalesce(sum(parent.tax_amount),0)
+        INTO v_billing_start,v_preview_end,v_accumulated_subtotal,v_accumulated_tax
+        FROM public.billing_lines parent
+        WHERE parent.transportation_event_id=p_transportation_event_id AND parent.parent_billing_line_id IS NULL;
+        v_accumulated_total := v_accumulated_subtotal + v_accumulated_tax;
+
+        SELECT coalesce(jsonb_agg(jsonb_build_object(
+            'billing_line_id',parent.id,'vehicle_id',parent.vehicle_id,'vehicle_event_id',parent.vehicle_event_id,
+            'contract_period_id',parent.contract_period_id,'pay_type_rule_id',parent.pay_type_rule_id,'pay_type',parent.pay_type,
+            'line_type',parent.line_type,'source_rule',parent.source_rule,'start_time',parent.start_time,'end_time',parent.end_time,
+            'paid_through_at',parent.paid_through_at,'contract_days',CASE WHEN parent.start_time IS NULL THEN NULL WHEN parent.line_type = 'rental_extension' AND parent.extended_from_billing_line_id IS NOT NULL THEN greatest(0,public.business_contract_days(v_reservation.start_date,coalesce(parent.end_time,parent.paid_through_at,v_event.closed_at,p_effective_at))-public.business_contract_days(v_reservation.start_date,parent.start_time)) ELSE public.business_contract_days(parent.start_time,coalesce(parent.end_time,parent.paid_through_at,v_event.closed_at,p_effective_at)) END,
+            'is_open',parent.is_open,'amount',parent.amount::text,'tax_amount',parent.tax_amount::text,
+            'tax_billing_line_id',tax.id,'tax_line_amount',tax.amount::text,'daily_rate_override',parent.daily_rate_override::text,
+            'default_daily_rate_snapshot',parent.default_daily_rate_snapshot::text,'tax_rate_snapshot',parent.tax_rate_snapshot::text,
+            'is_taxable_snapshot',parent.is_taxable_snapshot,'tax_rate_source_snapshot',parent.tax_rate_source_snapshot,
+            'warranty_provider_id',parent.warranty_provider_id,'default_covered_days_snapshot',parent.default_covered_days_snapshot,
+            'covered_days_override',parent.covered_days_override,'extended_from_billing_line_id',parent.extended_from_billing_line_id
+        ) ORDER BY parent.start_time,parent.created_at,parent.id),'[]'::jsonb)
+        INTO v_segments FROM public.billing_lines parent
+        LEFT JOIN public.billing_lines tax ON tax.parent_billing_line_id=parent.id AND tax.line_type='tax'
+        WHERE parent.transportation_event_id=p_transportation_event_id AND parent.parent_billing_line_id IS NULL;
+
+        SELECT jsonb_build_object('case_id',w.id,'provider_id',w.provider_id,'provider_name',w.provider_name,
+          'default_covered_days_snapshot',w.default_covered_days_snapshot,'approved_days',w.approved_days,
+          'effective_covered_days',coalesce(w.approved_days,w.default_covered_days_snapshot),'default_daily_rate_snapshot',w.default_daily_rate_snapshot::text,
+          'coverage_started_at',w.coverage_started_at,'coverage_exhausted_at',w.coverage_exhausted_at,'current_contract_day',w.current_day_count,
+          'post_coverage_pay_type_rule_id',w.post_coverage_pay_type_rule_id,'requires_manual_review',w.requires_manual_review,
+          'can_override',EXISTS(SELECT 1 FROM public.v_user_effective_permissions permission WHERE permission.user_id=v_actor_user_id AND permission.permission_key='billing.extended_warranty_override'))
+        INTO v_extended_warranty FROM public.warranty_cases w WHERE w.transportation_event_id=p_transportation_event_id;
+
+        v_pay_type := coalesce(v_current_line.pay_type, v_reservation.pay_type);
+        v_daily_rate := coalesce(v_current_line.daily_rate_override, v_current_line.default_daily_rate_snapshot, v_current_line.rate_amount_snapshot);
+        v_tax_rate := v_current_line.tax_rate_snapshot;
+        v_is_taxable := v_current_line.is_taxable_snapshot;
+        IF v_current_line.pay_type_rule_id IS NULL OR v_pay_type IS NULL OR v_daily_rate IS NULL
+           OR v_is_taxable IS NULL OR v_tax_rate IS NULL OR v_current_line.amount IS NULL
+           OR v_current_line.tax_amount IS NULL THEN
+            RETURN jsonb_build_object('status','billing_preview_missing_dependency','transportation_event_id',p_transportation_event_id,'reservation_id',v_reservation.id,'effective_at',p_effective_at,'missing_dependency','historical_billing_snapshot');
+        END IF;
+        v_subtotal := v_current_line.amount;
+        v_tax_amount := v_current_line.tax_amount;
+        v_total := v_subtotal + v_tax_amount;
+        v_contract_days := public.business_contract_days(v_billing_start,v_preview_end);
+        RETURN jsonb_build_object(
+          'status','billing_preview_ready','transportation_event_id',p_transportation_event_id,'transportation_event_status',v_event.status,
+          'reservation_id',v_reservation.id,'reservation_status',v_reservation.status,'reservation_type',v_reservation.reservation_type,
+          'customer',jsonb_build_object('customer_id',v_customer.id,'tekion_customer_number',v_customer.tekion_customer_number,'name',v_customer.name,'phone',v_customer.phone,'email',v_customer.email),
+          'vehicle',jsonb_build_object('vehicle_id',v_vehicle.id,'vin',v_vehicle.vin,'vin_last8',v_vehicle.vin_last8,'stock_number',v_vehicle.stock_number,'model_year',v_vehicle.model_year,'model',v_vehicle.model,'trim',v_vehicle.trim,'fleet_type',v_vehicle.fleet_type,'current_tag',v_vehicle.current_tag),
+          'vehicle_event_id',v_vehicle_event.id,'contract_period_id',v_contract_period.id,'vehicle_out_at',v_vehicle_event.actual_out_at,
+          'contract_out_at',v_contract_period.contract_out_at,'expected_return_at',coalesce(v_event.expected_return_at,v_reservation.expected_return_datetime),
+          'actual_return_at',coalesce(v_vehicle_event.actual_in_at,v_reservation.actual_return_datetime,v_event.closed_at),
+          'billed_through_at',coalesce(v_current_line.paid_through_at,v_reservation.billed_through_datetime),'current_billing_line_id',NULL,
+          'line_type',v_current_line.line_type,'pay_type_rule_id',v_current_line.pay_type_rule_id,'pay_type',v_pay_type,
+          'vehicle_class',v_reservation.requested_model,'billing_start',v_billing_start,'preview_end',v_preview_end,'effective_at',p_effective_at,
+          'contract_days',v_contract_days,'daily_rate',v_daily_rate::text,'rate_source','stored_closed_billing_snapshot',
+          'subtotal',v_subtotal::text,'is_taxable',v_is_taxable,'tax_rate',v_tax_rate::text,'tax_amount',v_tax_amount::text,
+          'tax_rate_source',v_current_line.tax_rate_source_snapshot,'tax_explanation','Closed billing uses stored historical line snapshots without recalculation.',
+          'total',v_total::text,'historical_subtotal',v_accumulated_subtotal::text,'historical_tax',v_accumulated_tax::text,
+          'accumulated_subtotal',v_accumulated_subtotal::text,'accumulated_tax',v_accumulated_tax::text,'accumulated_total',v_accumulated_total::text,
+          'segments',v_segments,'extended_warranty',v_extended_warranty);
     END IF;
 
     IF (
@@ -267,17 +384,27 @@ BEGIN
         );
     END IF;
 
+    v_is_rental := lower(btrim(coalesce(v_reservation.reservation_type, ''))) = 'rental';
     IF v_preview_end < v_billing_start THEN
-        RAISE EXCEPTION
-            'Preview timestamp precedes the current billing segment'
-            USING ERRCODE = '22023';
+        IF v_current_line.line_type = 'rental_extension' AND v_current_line.extended_from_billing_line_id IS NOT NULL THEN
+            -- A valid future-start Extension has zero elapsed Extension days.
+            v_preview_end := v_billing_start;
+        ELSE
+            RAISE EXCEPTION
+                'Preview timestamp precedes the current billing segment'
+                USING ERRCODE = '22023';
+        END IF;
     END IF;
 
-    v_is_rental := lower(coalesce(v_reservation.reservation_type, '')) LIKE '%rental%';
-    v_contract_days := CASE WHEN v_is_rental
-        THEN public.rental_pricing_days(v_billing_start, v_preview_end)
-        ELSE public.business_contract_days(v_billing_start, v_preview_end)
+    v_contract_days := CASE
+        WHEN v_current_line.line_type = 'rental_extension'
+         AND v_current_line.extended_from_billing_line_id IS NOT NULL
+        THEN greatest(0, public.business_contract_days(v_reservation.start_date,v_preview_end)-public.business_contract_days(v_reservation.start_date,v_billing_start))
+        ELSE public.business_contract_days(v_billing_start,v_preview_end)
     END;
+    IF v_is_rental THEN
+        v_rental_pricing_days := public.rental_pricing_days(v_billing_start,v_preview_end);
+    END IF;
 
     IF v_current_line.daily_rate_override IS NOT NULL THEN
         v_daily_rate := v_current_line.daily_rate_override;
@@ -330,6 +457,7 @@ BEGIN
                 'start_time', parent.start_time,
                 'end_time', parent.end_time,
                 'paid_through_at', parent.paid_through_at,
+                'contract_days', CASE WHEN parent.start_time IS NULL THEN NULL WHEN parent.line_type = 'rental_extension' AND parent.extended_from_billing_line_id IS NOT NULL THEN greatest(0,public.business_contract_days(v_reservation.start_date,coalesce(parent.end_time,parent.paid_through_at,p_effective_at))-public.business_contract_days(v_reservation.start_date,parent.start_time)) ELSE public.business_contract_days(parent.start_time,coalesce(parent.end_time,parent.paid_through_at,p_effective_at)) END,
                 'is_open', parent.is_open,
                 'amount', parent.amount::text,
                 'tax_amount', parent.tax_amount::text,
@@ -455,7 +583,7 @@ BEGIN
         ORDER BY (agreement.id = v_current_line.pricing_agreement_id) DESC, agreement.updated_at DESC
         LIMIT 1;
         IF NOT FOUND THEN RAISE EXCEPTION 'Rental pricing agreement snapshot is unavailable' USING ERRCODE='P0002'; END IF;
-        v_block_price := public.resolve_rental_block_pricing_state(v_contract_days,v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
+        v_block_price := public.resolve_rental_block_pricing_state(v_rental_pricing_days,v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
         v_subtotal := (v_block_price->>'subtotal')::numeric;
         v_rate_source := 'rental_block_pricing_resolver';
     ELSE
@@ -583,7 +711,7 @@ declare
  v_user uuid; v_agreement public.rental_pricing_agreements%rowtype; v_reservation public.reservations%rowtype; v_vehicle public.vehicles%rowtype;
  v_pay_type public.pay_type_rules%rowtype; v_started jsonb; v_billing_result jsonb; v_vehicle_event uuid; v_contract_period uuid; v_line_id uuid; v_preview jsonb; v_rate_amount numeric;
  v_current_vehicle_id uuid; v_existing_line uuid; v_tax_sync jsonb; v_tax_count integer; v_tax_sum numeric; v_payment jsonb;
- v_block_price jsonb; v_block_tax jsonb; v_segment_days integer;
+ v_block_price jsonb; v_block_tax jsonb; v_segment_days integer; v_reservation_type text;
 begin
  select id into v_user from public.app_users where auth_user_id=auth.uid() and is_active=true;
   if v_user is null then raise exception 'An active application user is required' using errcode='42501'; end if;
@@ -599,10 +727,13 @@ begin
   select * into v_reservation from public.reservations where id=p_reservation_id for update;
   if not found then raise exception 'Reservation was not found' using errcode='P0002'; end if;
   if lower(coalesce(v_reservation.status,''))='cancelled' or v_reservation.actual_return_datetime is not null then raise exception 'Reservation is not eligible for pickup' using errcode='P0001'; end if;
+  v_reservation_type:=lower(btrim(coalesce(v_reservation.reservation_type,'')));
+  if v_reservation_type not in ('rental','loaner') then raise exception 'Unsupported reservation type for pickup' using errcode='22023'; end if;
   if p_actual_out_at<v_reservation.start_date then raise exception 'Actual-out time cannot precede reservation start' using errcode='22023'; end if;
   select * into v_agreement from public.rental_pricing_agreements where reservation_id=v_reservation.id and transportation_event_id=v_reservation.transportation_event_id and is_active=true for update;
   if not found then raise exception 'Active pricing agreement was not found' using errcode='P0002'; end if;
-  -- Rental plan metadata is compatibility-only; the shared resolver owns money.
+  -- Rental plan metadata is compatibility-only; Loaner retains Daily compatibility.
+  if v_reservation_type='loaner' and v_agreement.current_rate_plan<>'daily' then raise exception 'Customer Pay Loaner pricing supports only the Daily plan' using errcode='P0001'; end if;
  v_rate_amount:=v_agreement.daily_rate_snapshot;
   if v_rate_amount is null or v_rate_amount<0 or v_rate_amount::text in ('NaN','Infinity','-Infinity') then raise exception 'Pricing agreement daily-rate snapshot is invalid' using errcode='P0001'; end if;
  select p.* into v_pay_type from public.pay_type_rules p where p.id=v_agreement.pay_type_rule_id;
@@ -623,10 +754,15 @@ begin
    order by bl.start_time desc nulls last,bl.created_at desc,bl.id desc limit 1;
  if v_agreement.pricing_started_at is not null then
   if v_current_vehicle_id=p_vehicle_id and v_existing_line is not null then
-   v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,v_reservation.expected_return_datetime);
+   if v_reservation_type='rental' then
+    v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,v_reservation.expected_return_datetime);
+    v_payment:=public.get_rental_payment_state(v_reservation.transportation_event_id);
+   else
+    v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,clock_timestamp());
+    v_payment:=null;
+   end if;
    if v_preview->>'status'<>'billing_preview_ready' then raise exception 'Activated pickup could not be loaded by Billing' using errcode='P0001'; end if;
-   v_payment:=public.get_rental_payment_state(v_reservation.transportation_event_id);
-   return jsonb_build_object('status','pricing_agreement_pickup_already_active','reservation_id',p_reservation_id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'vehicle_id',p_vehicle_id,'billing_line_id',v_existing_line,'pricing_started_at',v_agreement.pricing_started_at,'billing_preview',v_preview,'rental_payment_state',v_payment);
+   return jsonb_build_object('status','pricing_agreement_pickup_already_active','reservation_type',v_reservation_type,'ro_number',v_reservation.ro_number,'reservation_id',p_reservation_id,'transportation_event_id',v_reservation.transportation_event_id,'pricing_agreement_id',v_agreement.id,'vehicle_id',p_vehicle_id,'billing_line_id',v_existing_line,'pricing_started_at',v_agreement.pricing_started_at,'billing_preview',v_preview,'rental_payment_state',v_payment);
   end if;
    raise exception 'Existing pickup state is inconsistent' using errcode='P0001';
  end if;
@@ -648,21 +784,26 @@ begin
  update public.billing_lines set pricing_agreement_id=v_agreement.id,rate_plan_snapshot='daily',rate_amount_snapshot=v_rate_amount,default_daily_rate_snapshot=v_agreement.daily_rate_snapshot where id=v_line_id;
  if not exists(select 1 from public.billing_lines line where line.id=v_line_id and line.start_time is not distinct from v_reservation.start_date) then raise exception 'Billing engine did not use the reservation scheduled start'; end if;
  update public.rental_pricing_agreements set pricing_started_at=v_reservation.start_date,updated_by=v_user,updated_at=clock_timestamp() where id=v_agreement.id returning * into v_agreement;
- v_segment_days:=public.rental_pricing_days(v_reservation.start_date,v_reservation.expected_return_datetime);
- v_block_price:=public.resolve_rental_block_pricing_state(v_segment_days,v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
- v_block_tax:=public.resolve_billing_tax_state(v_pay_type.pay_type,(v_block_price->>'subtotal')::numeric);
- update public.billing_lines set amount=(v_block_price->>'subtotal')::numeric,tax_amount=(v_block_tax->>'tax_amount')::numeric,end_time=v_reservation.expected_return_datetime,rental_block_pricing_snapshot=v_block_price where id=v_line_id;
- v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,v_reservation.expected_return_datetime);
+ if v_reservation_type='rental' then
+  v_segment_days:=public.rental_pricing_days(v_reservation.start_date,v_reservation.expected_return_datetime);
+  v_block_price:=public.resolve_rental_block_pricing_state(v_segment_days,v_agreement.daily_rate_snapshot,v_agreement.weekly_rate_snapshot,v_agreement.monthly_rate_snapshot);
+  v_block_tax:=public.resolve_billing_tax_state(v_pay_type.pay_type,(v_block_price->>'subtotal')::numeric);
+  update public.billing_lines set amount=(v_block_price->>'subtotal')::numeric,tax_amount=(v_block_tax->>'tax_amount')::numeric,end_time=v_reservation.expected_return_datetime,rental_block_pricing_snapshot=v_block_price where id=v_line_id;
+  v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,v_reservation.expected_return_datetime);
   if v_preview->>'status'='billing_preview_ready' then
-   update public.billing_lines set amount=(v_block_price->>'subtotal')::numeric,tax_amount=(v_block_tax->>'tax_amount')::numeric,end_time=v_reservation.expected_return_datetime,rental_block_pricing_snapshot=v_block_price where id=v_line_id;
    v_tax_sync:=public.ensure_tax_child_line_state(v_line_id);
    select count(*),sum(amount) into v_tax_count,v_tax_sum from public.billing_lines where parent_billing_line_id=v_line_id and line_type='tax';
    if (((v_preview->>'tax_amount')::numeric>0 and (v_tax_count<>1 or v_tax_sum is distinct from (v_preview->>'tax_amount')::numeric)) or ((v_preview->>'tax_amount')::numeric=0 and v_tax_count<>0)) then raise exception 'Pickup tax child does not match authoritative tax'; end if;
    v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,v_reservation.expected_return_datetime);
   end if;
-  if v_preview->>'status'<>'billing_preview_ready' then raise exception 'Activated pickup could not be loaded by Billing' using errcode='P0001'; end if;
- v_payment:=public.get_rental_payment_state(v_reservation.transportation_event_id);
- return jsonb_build_object('rental_payment_state',v_payment,'status','pricing_agreement_pickup_activated','reservation_id',v_reservation.id,'transportation_event_id',v_reservation.transportation_event_id,'vehicle_id',p_vehicle_id,'vehicle_event_id',v_vehicle_event,'contract_period_id',v_contract_period,'pricing_agreement_id',v_agreement.id,'billing_line_id',v_line_id,'rate_plan','daily','rate_amount',v_rate_amount::text,'actual_out_at',p_actual_out_at,'pricing_started_at',v_reservation.start_date,'billing_preview',v_preview);
+  v_payment:=public.get_rental_payment_state(v_reservation.transportation_event_id);
+ else
+  -- Loaners remain on the established inclusive Daily path and never call Rental money/payment resolvers.
+  v_preview:=public.get_billing_preview_state(v_reservation.transportation_event_id,clock_timestamp());
+  v_payment:=null;
+ end if;
+ if v_preview->>'status'<>'billing_preview_ready' then raise exception 'Activated pickup could not be loaded by Billing' using errcode='P0001'; end if;
+ return jsonb_build_object('rental_payment_state',v_payment,'status','pricing_agreement_pickup_activated','reservation_type',v_reservation_type,'ro_number',v_reservation.ro_number,'reservation_id',v_reservation.id,'transportation_event_id',v_reservation.transportation_event_id,'vehicle_id',p_vehicle_id,'vehicle_event_id',v_vehicle_event,'contract_period_id',v_contract_period,'pricing_agreement_id',v_agreement.id,'billing_line_id',v_line_id,'rate_plan','daily','rate_amount',v_rate_amount::text,'actual_out_at',p_actual_out_at,'pricing_started_at',v_reservation.start_date,'billing_preview',v_preview);
 end;$function$;
 CREATE OR REPLACE FUNCTION public.accept_extension_commit_state(p_transportation_event_id uuid,p_current_billing_line_id uuid,p_new_expected_return_at timestamptz,p_extension_amount numeric,p_extension_tax_amount numeric DEFAULT NULL,p_reason_code text DEFAULT NULL,p_optional_note text DEFAULT NULL,p_entered_by_user_id uuid DEFAULT NULL,p_dependency_id_to_escalate uuid DEFAULT NULL) RETURNS jsonb LANGUAGE plpgsql AS $function$
 DECLARE v_old_expected_return_at timestamptz; v_expected_return_result jsonb; v_note_result jsonb; v_close_result jsonb; v_extension_line_result jsonb; v_escalation_result jsonb:=NULL;
@@ -679,7 +820,7 @@ BEGIN
  IF v_old_expected_return_at IS NULL OR p_new_expected_return_at<=v_old_expected_return_at THEN RAISE EXCEPTION 'New expected return must be later'; END IF;
  SELECT * INTO v_line FROM public.billing_lines WHERE id=p_current_billing_line_id FOR UPDATE;
  SELECT * INTO v_reservation FROM public.reservations WHERE id=v_line.reservation_id FOR UPDATE;
- IF lower(coalesce(v_reservation.reservation_type,'')) LIKE '%rental%' THEN
+ IF lower(btrim(coalesce(v_reservation.reservation_type,''))) = 'rental' THEN
    IF public.rental_pricing_days(v_reservation.start_date,p_new_expected_return_at)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
    SELECT * INTO v_agreement FROM public.rental_pricing_agreements WHERE reservation_id=v_reservation.id AND is_active=true ORDER BY updated_at DESC LIMIT 1;
    IF NOT FOUND THEN RAISE EXCEPTION 'Active Rental pricing agreement was not found' USING ERRCODE='P0002'; END IF;
@@ -872,3 +1013,28 @@ BEGIN
     );
 END;
 $function$;
+
+-- Preserve the verified-live pg_proc and browser/service execution boundaries.
+ALTER FUNCTION public.get_billing_preview_state(uuid,timestamptz) OWNER TO postgres;
+ALTER FUNCTION public.get_billing_preview_state(uuid,timestamptz) SECURITY DEFINER;
+ALTER FUNCTION public.get_billing_preview_state(uuid,timestamptz) SET search_path TO '';
+REVOKE ALL ON FUNCTION public.get_billing_preview_state(uuid,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.get_billing_preview_state(uuid,timestamptz) TO authenticated;
+
+ALTER FUNCTION public.activate_pricing_agreement_pickup_state(uuid,uuid,timestamptz,integer) OWNER TO postgres;
+ALTER FUNCTION public.activate_pricing_agreement_pickup_state(uuid,uuid,timestamptz,integer) SECURITY DEFINER;
+ALTER FUNCTION public.activate_pricing_agreement_pickup_state(uuid,uuid,timestamptz,integer) SET search_path TO '';
+REVOKE ALL ON FUNCTION public.activate_pricing_agreement_pickup_state(uuid,uuid,timestamptz,integer) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.activate_pricing_agreement_pickup_state(uuid,uuid,timestamptz,integer) TO authenticated,service_role;
+
+ALTER FUNCTION public.accept_extension_commit_state(uuid,uuid,timestamptz,numeric,numeric,text,text,uuid,uuid) OWNER TO postgres;
+ALTER FUNCTION public.accept_extension_commit_state(uuid,uuid,timestamptz,numeric,numeric,text,text,uuid,uuid) SECURITY INVOKER;
+ALTER FUNCTION public.accept_extension_commit_state(uuid,uuid,timestamptz,numeric,numeric,text,text,uuid,uuid) RESET ALL;
+REVOKE ALL ON FUNCTION public.accept_extension_commit_state(uuid,uuid,timestamptz,numeric,numeric,text,text,uuid,uuid) FROM PUBLIC,anon,authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.accept_extension_commit_state(uuid,uuid,timestamptz,numeric,numeric,text,text,uuid,uuid) TO service_role;
+
+ALTER FUNCTION public.complete_case_return_and_close_state(uuid,timestamptz,integer,boolean,text,uuid) OWNER TO postgres;
+ALTER FUNCTION public.complete_case_return_and_close_state(uuid,timestamptz,integer,boolean,text,uuid) SECURITY INVOKER;
+ALTER FUNCTION public.complete_case_return_and_close_state(uuid,timestamptz,integer,boolean,text,uuid) RESET ALL;
+REVOKE ALL ON FUNCTION public.complete_case_return_and_close_state(uuid,timestamptz,integer,boolean,text,uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.complete_case_return_and_close_state(uuid,timestamptz,integer,boolean,text,uuid) TO service_role;

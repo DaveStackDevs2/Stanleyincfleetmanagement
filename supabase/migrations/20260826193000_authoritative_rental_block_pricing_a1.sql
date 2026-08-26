@@ -103,21 +103,30 @@ END;$function$;
 -- Extension money is the new interval only. Earlier parent lines never participate.
 CREATE OR REPLACE FUNCTION public.preview_rental_extension_state(p_reservation_id uuid,p_new_expected_return_at timestamptz)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '' AS $function$
-DECLARE v_actor uuid; v_r public.reservations%rowtype; v_a public.rental_pricing_agreements%rowtype; v_line public.billing_lines%rowtype; v_old timestamptz; v_price jsonb;
+DECLARE v_actor uuid; v_r public.reservations%rowtype; v_a public.rental_pricing_agreements%rowtype; v_line public.billing_lines%rowtype; v_current_line_id uuid; v_old timestamptz; v_price jsonb; v_billing_preview jsonb;
 BEGIN
  SELECT id INTO v_actor FROM public.app_users WHERE auth_user_id=auth.uid() AND is_active=true;
  IF v_actor IS NULL THEN RAISE EXCEPTION 'An active application user is required' USING ERRCODE='42501'; END IF;
  IF coalesce(auth.jwt()->>'aal','')<>'aal2' THEN RAISE EXCEPTION 'AAL2 authentication is required' USING ERRCODE='42501'; END IF;
  SELECT * INTO v_r FROM public.reservations WHERE id=p_reservation_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Rental Extension reservation was not found' USING ERRCODE='P0002'; END IF;
+ IF lower(btrim(coalesce(v_r.reservation_type,''))) <> 'rental' THEN
+   RAISE EXCEPTION 'Rental Extension preview requires a Rental reservation' USING ERRCODE='22023';
+ END IF;
  SELECT * INTO v_a FROM public.rental_pricing_agreements WHERE reservation_id=p_reservation_id AND is_active=true;
  SELECT coalesce(te.expected_return_at,v_r.expected_return_datetime) INTO v_old FROM public.transportation_events te WHERE te.id=v_r.transportation_event_id;
- SELECT * INTO v_line FROM public.billing_lines WHERE reservation_id=p_reservation_id AND parent_billing_line_id IS NULL AND line_type IN ('initial_assignment','rental_extension') AND is_open ORDER BY start_time DESC,id DESC LIMIT 1;
+ SELECT * INTO v_line FROM public.billing_lines WHERE reservation_id=p_reservation_id AND parent_billing_line_id IS NULL AND line_type IN ('initial_assignment','rental_extension') AND is_open ORDER BY start_time DESC NULLS LAST,created_at DESC,id DESC LIMIT 1 FOR SHARE;
  IF v_r.id IS NULL OR v_a.id IS NULL OR v_line.id IS NULL THEN RAISE EXCEPTION 'Rental Extension pricing state is unavailable' USING ERRCODE='P0002'; END IF;
  IF p_new_expected_return_at IS NULL OR p_new_expected_return_at<=v_old THEN RAISE EXCEPTION 'New return must be later than current return' USING ERRCODE='22023'; END IF;
  IF public.rental_pricing_days(v_r.start_date,p_new_expected_return_at)>56 THEN RAISE EXCEPTION 'Same-vehicle intended Rental period cannot exceed 56 contract days' USING ERRCODE='22023'; END IF;
+ v_billing_preview:=public.get_billing_preview_state(v_r.transportation_event_id,v_old);
+ IF v_billing_preview->>'status' IS DISTINCT FROM 'billing_preview_ready' THEN RAISE EXCEPTION 'Authoritative Rental Extension preview is not ready' USING ERRCODE='P0001'; END IF;
+ IF (v_billing_preview->>'current_billing_line_id')::uuid IS DISTINCT FROM v_line.id THEN RAISE EXCEPTION 'Rental Extension preview current line changed' USING ERRCODE='40001'; END IF;
  -- The elapsed interval owns the shared boundary once, so prior segments stay isolated.
  v_price:=public.preview_rental_agreement_segment_state(v_a.id,v_old,p_new_expected_return_at);
- RETURN jsonb_build_object('status','rental_extension_preview_ready','reservation_id',p_reservation_id,'transportation_event_id',v_r.transportation_event_id,'current_parent_billing_line_id',v_line.id,'previous_expected_return_at',v_old,'proposed_expected_return_at',p_new_expected_return_at,'additional_charge',v_price->>'subtotal','additional_tax',v_price->>'tax_amount','additional_total',v_price->>'total','block_pricing',v_price);
+ SELECT line.id INTO v_current_line_id FROM public.billing_lines line WHERE line.reservation_id=p_reservation_id AND line.parent_billing_line_id IS NULL AND line.line_type IN ('initial_assignment','rental_extension') AND line.is_open ORDER BY line.start_time DESC NULLS LAST,line.created_at DESC,line.id DESC LIMIT 1 FOR SHARE;
+ IF v_current_line_id IS DISTINCT FROM v_line.id THEN RAISE EXCEPTION 'Rental Extension preview current line changed' USING ERRCODE='40001'; END IF;
+ RETURN jsonb_build_object('status','rental_extension_preview_ready','reservation_id',p_reservation_id,'transportation_event_id',v_r.transportation_event_id,'current_parent_billing_line_id',v_line.id,'previous_expected_return_at',v_old,'proposed_expected_return_at',p_new_expected_return_at,'additional_charge',v_price->>'subtotal','additional_tax',v_price->>'tax_amount','additional_total',v_price->>'total','billing_preview',v_billing_preview,'block_pricing',v_price);
 END;$function$;
 
 ALTER FUNCTION public.resolve_rental_block_pricing_state(integer,numeric,numeric,numeric) OWNER TO postgres;
