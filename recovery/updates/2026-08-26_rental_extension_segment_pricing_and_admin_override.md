@@ -1,8 +1,14 @@
-# 2026-08-26 — Rental Extension segment pricing and Admin-only retroactive override
+# 2026-08-26 — Rental Extension segment pricing and Admin/Dev retroactive override
 
 ## Binding owner correction
 
 This file supersedes any prior assumption that a Rental Extension automatically reprices the entire continuous Rental.
+
+### Global authorization invariant
+
+**Hard rule: Dev is a superset of Admin. Anything an Admin can see or do in the application, a Dev must also be able to see and do. Never create an Admin capability that excludes Dev.**
+
+This invariant applies to the retroactive-pricing exception below and to all future application permissions/workflows. Other roles do not inherit Admin/Dev capability merely because Dev does.
 
 ### Admin rate cards are authoritative
 
@@ -41,17 +47,16 @@ Early-return repricing applies to the currently affected agreed pricing segment 
 - If an earlier Original/Extension segment is already closed and a later Extension is active, preserve the prior locked segment(s) and recalculate the active Extension from its own segment start through actual return.
 - Surface Refund due / Customer owes / No difference for the affected segment through the existing Return/Complete workflow and Tekion reconciliation. Stanley TMS does not cashier.
 
-### Admin-only retroactive pricing override
+### Admin/Dev retroactive pricing override
 
-An Admin may explicitly override the normal no-retroactive-repricing rule for exceptional circumstances and request whole-Rental retroactive block repricing.
+An Admin or Dev may explicitly override the normal no-retroactive-repricing rule for exceptional circumstances and request whole-Rental retroactive block repricing.
 
 Requirements:
 
-- The control is visible only to users authorized for this specific Admin-only capability.
+- The control is visible to Admin and Dev-authorized users only.
 - Backend enforcement is mandatory; hiding the button is not sufficient.
-- Do **not** reuse `user_admin.manage` as the authorization boundary because the live Dev role also has that permission.
-- Create/reuse a narrow permission specifically for Rental retroactive-pricing override and map it to the **Admin** role only unless the owner later changes that policy.
-- Service Manager and Dev must not receive the capability merely because they hold other Billing/Admin permissions.
+- Create/reuse a narrow permission specifically for Rental retroactive-pricing override and map it to **both Admin and Dev** unless the owner later changes policy.
+- Service Manager and other roles must not receive the capability merely because they hold other Billing permissions.
 - The action must be explicit, audited, actor-stamped, and display the before/after authoritative charge and tax difference before/after commit as appropriate.
 - It must reuse the same shared block-pricing and tax engines; no frontend money math.
 
@@ -70,6 +75,6 @@ Checkpoint A must preserve these distinctions:
 1. Initial agreed Rental period → one block-priced segment using Admin-configured/snapshotted rates.
 2. Mandatory 28-day contract renewal inside that already-agreed period → no pricing reset.
 3. Customer-requested Extension beyond the prior agreed period → new independently block-priced Rental Extension segment.
-4. Admin-only retroactive exception → explicit audited whole-Rental repricing; never default behavior.
+4. Admin/Dev retroactive exception → explicit audited whole-Rental repricing; never default behavior.
 
-Any earlier Issue #61 comment suggesting that every Extension must continuously reprice the whole Rental is superseded by this owner decision.
+Any earlier Issue #61 text suggesting that Dev must be excluded from an Admin capability is superseded by the global Dev-superset authorization invariant.
