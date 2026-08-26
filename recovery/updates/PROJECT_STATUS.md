@@ -220,3 +220,5 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 
 ## Bulk Updating (Issue #59)
 Implemented locally: dense active-case Bulk grid, controlled future target and New York Sunday shortcut, partial-success apply, persisted/recallable Tekion checkoffs, and audited safe Undo. The new migration still requires lead-engineer preflight in real PostgreSQL before merge/apply.
+
+- PR #60 correction: unified checkpointing, fixed EW boundary ordering and post-write helpers, expanded fail-closed Undo snapshots, secured persistence, normalized Bulk input, and added PiP/recall/failure UX. Real PostgreSQL validation remains required after push; this migration was not applied here.

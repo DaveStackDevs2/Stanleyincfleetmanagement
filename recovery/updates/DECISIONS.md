@@ -130,3 +130,5 @@
 
 ## Bulk Updating engine boundary (2026-08-26)
 Bulk Updating stores historical before/after and helper evidence only. Live amounts remain owned by the existing preview, Extended Warranty reconciliation, billed-through, and tax-child engines. Apply uses per-RO subtransactions; Undo requires an exact post-state match and fails closed after later work.
+
+- PR #60 correction: unified checkpointing, fixed EW boundary ordering and post-write helpers, expanded fail-closed Undo snapshots, secured persistence, normalized Bulk input, and added PiP/recall/failure UX. Real PostgreSQL validation remains required after push; this migration was not applied here.
