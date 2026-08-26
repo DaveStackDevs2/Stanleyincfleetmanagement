@@ -94,3 +94,60 @@ def test_non_rental_paths_and_permissions_remain_in_existing_engines():
     pickup = body('activate_pricing_agreement_pickup_state')
     assert "permission_key='billing.case_start'" in pickup
     assert "permission_key='billing.pricing_agreement_manage'" in pickup
+
+
+def test_closed_billing_review_remains_stored_and_never_reprices_history():
+    sql = body('get_billing_preview_state')
+    assert "lower(btrim(v_event.status)) = 'closed'" in sql
+    assert "'rate_source','stored_closed_billing_snapshot'" in sql
+    assert "'current_billing_line_id',NULL" in sql
+    assert 'historical_tax-child' not in sql  # guard is implemented by stored child count/sum checks
+    assert 'stored_tax.child_count > 1' in sql
+    closed = sql[sql.index("IF lower(btrim(v_event.status)) = 'closed'"):sql.index("IF (\n        SELECT count(*)", sql.index("IF lower(btrim(v_event.status)) = 'closed'"))]
+    assert 'resolve_rental_block_pricing_state' not in closed
+
+
+def test_segments_keep_contract_days_and_future_extension_is_zero_elapsed():
+    sql = body('get_billing_preview_state')
+    assert sql.count("'contract_days'") >= 3
+    assert "lower(coalesce(v_current_line.line_type, '')) = 'rental_extension'" in sql
+    assert 'v_preview_end := v_billing_start' in sql
+
+
+def test_pickup_preserves_shared_rental_loaner_contract():
+    sql = body('activate_pricing_agreement_pickup_state')
+    assert "v_reservation_type not in ('rental','loaner')" in sql
+    assert "'reservation_type',v_reservation_type" in sql
+    assert "'ro_number',v_reservation.ro_number" in sql
+    assert "v_reservation_type='loaner' and v_agreement.current_rate_plan<>'daily'" in sql
+    loaner = sql[sql.rindex("else\n  -- Loaners"):]
+    assert 'clock_timestamp()' in loaner
+    assert 'resolve_rental_block_pricing_state' not in loaner
+    assert 'get_rental_payment_state' not in loaner
+
+
+def test_extension_preview_is_rental_only_and_uses_completed_day_helper():
+    sql = A1[A1.index('FUNCTION public.preview_rental_extension_state'):]
+    assert "lower(btrim(coalesce(v_r.reservation_type,''))) <> 'rental'" in sql
+    assert 'preview_rental_agreement_segment_state(v_a.id,v_old,p_new_expected_return_at)' in sql
+    for days, expected in ((1, (0, 0, 1)), (7, (0, 1, 0)), (10, (0, 1, 3))):
+        assert (days // 28, (days % 28) // 7, days % 7) == expected
+
+
+def test_extension_commit_keeps_non_rental_caller_money_and_helper_order():
+    sql = body('accept_extension_commit_state')
+    assert "lower(btrim(coalesce(v_reservation.reservation_type,''))) = 'rental'" in sql
+    assert 'ELSE v_server_amount:=p_extension_amount; v_server_tax:=p_extension_tax_amount; END IF;' in sql
+    helpers = ['set_expected_return_state', 'add_estimated_return_change_note_state',
+               'close_billing_line_state', 'create_extension_billing_line_state']
+    assert [sql.index(name) for name in helpers] == sorted(sql.index(name) for name in helpers)
+
+
+def test_wire_migration_preserves_function_security_and_grants():
+    assert 'ALTER FUNCTION public.get_billing_preview_state(uuid,timestamptz) SECURITY DEFINER;' in WIRE
+    assert 'GRANT EXECUTE ON FUNCTION public.get_billing_preview_state(uuid,timestamptz) TO authenticated;' in WIRE
+    assert 'ALTER FUNCTION public.activate_pricing_agreement_pickup_state(uuid,uuid,timestamptz,integer) SECURITY DEFINER;' in WIRE
+    assert 'TO authenticated,service_role;' in WIRE
+    assert WIRE.count('SECURITY INVOKER;') >= 2
+    assert 'GRANT EXECUTE ON FUNCTION public.accept_extension_commit_state(uuid,uuid,timestamptz,numeric,numeric,text,text,uuid,uuid) TO service_role;' in WIRE
+    assert 'GRANT EXECUTE ON FUNCTION public.complete_case_return_and_close_state(uuid,timestamptz,integer,boolean,text,uuid) TO service_role;' in WIRE
