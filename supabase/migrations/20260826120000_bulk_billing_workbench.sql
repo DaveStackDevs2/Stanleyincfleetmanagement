@@ -25,10 +25,24 @@ revoke all on table public.billing_bulk_batches,public.billing_bulk_items,public
 
 create or replace function public.bulk_billing_actor_state() returns uuid language plpgsql security definer set search_path='' as $f$ declare v uuid;begin select u.id into v from public.app_users u where u.auth_user_id=auth.uid() and u.is_active; if v is null then raise exception 'Billing action access denied' using errcode='42501';end if;if coalesce(auth.jwt()->>'aal','')<>'aal2' then raise exception 'Billing action requires AAL2' using errcode='42501';end if;if not exists(select 1 from public.v_user_effective_permissions p where p.user_id=v and p.permission_key='billing.mark_billed_through') then raise exception 'Billing permission is required' using errcode='42501';end if;return v;end;$f$;
 
+create or replace function public.bulk_preview_one_state(p_event_id uuid,p_target_at timestamptz) returns jsonb language plpgsql security definer set search_path='' as $f$
+declare p jsonb;w public.warranty_cases%rowtype;boundary timestamptz;effective_at timestamptz;begin
+ begin
+  select * into w from public.warranty_cases where transportation_event_id=p_event_id;
+  if found and w.coverage_started_at is not null and coalesce(w.approved_days,w.default_covered_days_snapshot) is not null and w.coverage_exhausted_at is null then boundary:=w.coverage_started_at+make_interval(days=>coalesce(w.approved_days,w.default_covered_days_snapshot));end if;
+  effective_at:=case when boundary is not null and p_target_at>=boundary then boundary-interval '1 microsecond' else p_target_at end;
+  p:=public.get_billing_preview_state(p_event_id,effective_at);
+  if boundary is not null and p_target_at>=boundary and p->>'status'='billing_preview_ready' then p:=p||jsonb_build_object('bulk_ew_split_pending',true,'bulk_preview_reason','Extended Warranty ends at the coverage cap; Apply will checkpoint EW, then Customer Pay from the boundary.');end if;
+  return p;
+ exception when sqlstate '21000' or sqlstate 'P0002' or sqlstate 'P0001' or data_exception or integrity_constraint_violation then
+  return jsonb_build_object('status','bulk_preview_failed','bulk_preview_error',sqlerrm);
+ end;
+end;$f$;
+
 create or replace function public.get_bulk_billing_workspace_state(p_target_at timestamptz) returns jsonb language plpgsql security definer set search_path='' as $f$
 declare v_actor uuid;v_items jsonb;begin v_actor:=public.bulk_billing_actor_state();if p_target_at is null then raise exception 'Bulk Billing Through is required' using errcode='22023';end if;
- select coalesce(jsonb_agg(jsonb_build_object('transportation_event_id',r.transportation_event_id,'reservation_id',r.id,'identifier',case when lower(btrim(r.reservation_type))='rental' then 'Rental '||left(r.id::text,8) else 'RO '||coalesce(r.ro_number,'unavailable') end,'reservation_type',r.reservation_type,'contract_out_at',p->>'contract_out_at','expected_return_at',r.expected_return_datetime,'billed_through_at',r.billed_through_datetime,'pay_type',p->>'pay_type','daily_rate',p->>'daily_rate','contract_days',case when p->>'contract_days'~'^\d+$' then (p->>'contract_days')::int end,'amount',p->>'subtotal','tax',p->>'tax_amount','state',case when lower(btrim(r.reservation_type))='rental' then 'rental' when p->>'status'<>'billing_preview_ready' then 'attention' when r.billed_through_datetime>p_target_at then 'later' when r.billed_through_datetime=p_target_at then 'exact' else 'eligible' end,'reason',case when lower(btrim(r.reservation_type))='rental' then 'Rental — separate payment / Extension workflow' when p->>'status'<>'billing_preview_ready' then coalesce(p->>'missing_dependency',p->>'missing_configuration','Authoritative preview unavailable') when r.billed_through_datetime>p_target_at then 'Already billed beyond target' when r.billed_through_datetime=p_target_at then 'Already at target' else 'Ready' end,'selectable',lower(btrim(r.reservation_type))<>'rental' and p->>'status'='billing_preview_ready' and (r.billed_through_datetime is null or r.billed_through_datetime<p_target_at)) order by coalesce(r.ro_number,r.id::text)),'[]'::jsonb) into v_items
- from public.reservations r cross join lateral public.get_billing_preview_state(r.transportation_event_id,p_target_at) p where lower(r.status)='active';
+ select coalesce(jsonb_agg(jsonb_build_object('transportation_event_id',r.transportation_event_id,'reservation_id',r.id,'identifier',case when lower(btrim(r.reservation_type))='rental' then 'Rental '||left(r.id::text,8) else 'RO '||coalesce(r.ro_number,'unavailable') end,'reservation_type',r.reservation_type,'contract_out_at',p->>'contract_out_at','expected_return_at',r.expected_return_datetime,'expected_return_overdue',r.expected_return_datetime is not null and r.expected_return_datetime<clock_timestamp(),'billed_through_at',r.billed_through_datetime,'pay_type',p->>'pay_type','daily_rate',p->>'daily_rate','contract_days',case when p->>'contract_days'~'^\d+$' then (p->>'contract_days')::int end,'amount',p->>'subtotal','tax',p->>'tax_amount','state',case when lower(btrim(r.reservation_type))='rental' then 'rental' when p->>'status'<>'billing_preview_ready' then 'attention' when r.billed_through_datetime>p_target_at then 'later' when r.billed_through_datetime=p_target_at then 'exact' else 'eligible' end,'reason',case when p->>'status'<>'billing_preview_ready' then coalesce(p->>'bulk_preview_error',p->>'missing_dependency',p->>'missing_configuration','Authoritative preview unavailable') when lower(btrim(r.reservation_type))='rental' then 'Rental — separate payment / Extension workflow'||case when r.expected_return_datetime<clock_timestamp() then '; Expected Return overdue' else '' end when coalesce((p->>'bulk_ew_split_pending')::boolean,false) then p->>'bulk_preview_reason' when r.billed_through_datetime>p_target_at then 'Already billed beyond target' when r.billed_through_datetime=p_target_at then 'Already at target' when r.expected_return_datetime<clock_timestamp() then 'Ready — Expected Return overdue (does not cap Billing)' else 'Ready' end,'selectable',lower(btrim(r.reservation_type))<>'rental' and p->>'status'='billing_preview_ready' and (r.billed_through_datetime is null or r.billed_through_datetime<p_target_at)) order by coalesce(r.ro_number,r.id::text)),'[]'::jsonb) into v_items
+ from public.reservations r cross join lateral public.bulk_preview_one_state(r.transportation_event_id,p_target_at) p where lower(r.status)='active';
  return jsonb_build_object('status','bulk_billing_workspace_ready','target_at',p_target_at,'items',v_items);end;$f$;
 
 -- One canonical checkpoint engine.  The public single-case wrapper and Bulk both
@@ -58,7 +72,7 @@ begin
  update public.billing_lines set paid_through_at=p_target_at,updated_at=clock_timestamp() where parent_billing_line_id=l.id and line_type='tax';
  get diagnostics tax_count=row_count;
  if (p->>'tax_amount')::numeric>0 and tax_count<>1 then raise exception 'Positive checkpoint tax requires exactly one synchronized tax child';end if;
- return jsonb_build_object('status','billing_checkpoint_recorded','reservation_id',r.id,'transportation_event_id',r.transportation_event_id,'billing_line_id',l.id,'billed_through_at',p_target_at,'checkpoint_subtotal',p->>'subtotal','checkpoint_tax',p->>'tax_amount','checkpoint_total',p->>'total','tax_child_result',t);
+ return jsonb_build_object('status','billing_checkpoint_recorded','reservation_id',r.id,'transportation_event_id',r.transportation_event_id,'billing_line_id',l.id,'billed_through_at',p_target_at,'checkpoint_days',(p->>'contract_days')::integer,'checkpoint_subtotal',p->>'subtotal','checkpoint_tax',p->>'tax_amount','checkpoint_total',p->>'total','tax_child_result',t);
 end;$f$;
 
 create or replace function public.mark_case_billed_through_and_get_preview_state(p_reservation_id uuid,p_billed_through_at timestamptz,p_note text default null) returns jsonb language plpgsql security definer set search_path='' as $f$
@@ -73,7 +87,7 @@ declare actor uuid;result jsonb;current_preview jsonb;begin
 end;$f$;
 
 create or replace function public.bulk_checkpoint_one_state(p_reservation_id uuid,p_target_at timestamptz,p_batch_id uuid) returns jsonb language plpgsql security definer set search_path='' as $f$
-declare r public.reservations%rowtype;w public.warranty_cases%rowtype;boundary timestamptz;first_result jsonb;second_result jsonb;split_result jsonb;line_ids jsonb:='[]';crossed boolean:=false;begin
+declare r public.reservations%rowtype;w public.warranty_cases%rowtype;boundary timestamptz;ew_effective_at timestamptz;first_result jsonb;second_result jsonb;split_result jsonb;checkpoints jsonb:='[]';crossed boolean:=false;begin
  select * into r from public.reservations where id=p_reservation_id for update;
  if not found then raise exception 'Reservation was not found';end if;
  if lower(btrim(r.reservation_type))='rental' then raise exception 'Rentals cannot be Bulk Updated';end if;
@@ -84,22 +98,23 @@ declare r public.reservations%rowtype;w public.warranty_cases%rowtype;boundary t
  end if;
  if boundary is not null and p_target_at>=boundary and w.coverage_exhausted_at is null then
   -- Finalize authoritative EW dollars/tax before the existing split engine closes it.
-  first_result:=public.checkpoint_case_internal_state(r.id,boundary,'Bulk Updating batch '||p_batch_id,true);
-  line_ids:=line_ids||jsonb_build_array(first_result->>'billing_line_id');
+  ew_effective_at:=boundary-interval '1 microsecond';
+  first_result:=public.checkpoint_case_internal_state(r.id,ew_effective_at,'Bulk Updating batch '||p_batch_id,true);
+  checkpoints:=checkpoints||jsonb_build_array(first_result||jsonb_build_object('segment_kind','extended_warranty'));
   split_result:=public.reconcile_extended_warranty_coverage_state(r.transportation_event_id,p_target_at);
   if split_result->>'status' not in ('extended_warranty_coverage_split','extended_warranty_coverage_already_split') then raise exception 'Extended Warranty cap split was not completed: %',split_result->>'status';end if;
   second_result:=public.checkpoint_case_internal_state(r.id,p_target_at,'Bulk Updating EW cap split batch '||p_batch_id,true);
-  line_ids:=line_ids||jsonb_build_array(second_result->>'billing_line_id');crossed:=true;
+  checkpoints:=checkpoints||jsonb_build_array(second_result||jsonb_build_object('segment_kind','customer_pay_after_ew_cap'));crossed:=true;
  else
   split_result:=public.reconcile_extended_warranty_coverage_state(r.transportation_event_id,p_target_at);
   first_result:=public.checkpoint_case_internal_state(r.id,p_target_at,'Bulk Updating batch '||p_batch_id,true);
-  line_ids:=line_ids||jsonb_build_array(first_result->>'billing_line_id');
+  checkpoints:=checkpoints||jsonb_build_array(first_result||jsonb_build_object('segment_kind','normal'));
  end if;
- return jsonb_build_object('billing_line_ids',line_ids,'ew_cap_crossed',crossed,'split_result',split_result);
+ return jsonb_build_object('checkpoints',checkpoints,'ew_cap_crossed',crossed,'split_result',split_result);
 end;$f$;
 
 create or replace function public.apply_bulk_billing_batch_state(p_target_at timestamptz,p_transportation_event_ids uuid[]) returns jsonb language plpgsql security definer set search_path='' as $f$
-declare actor uuid;b uuid:=gen_random_uuid();te uuid;r public.reservations%rowtype;i uuid;before_r jsonb;before_l jsonb;before_w jsonb;after_r jsonb;after_l jsonb;after_w jsonb;result jsonb;reason text;successes jsonb:='[]';failures jsonb:='[]';helpers jsonb:='[]';line_id_text text;n int;line public.billing_lines%rowtype;normalized uuid[];begin
+declare actor uuid;b uuid:=gen_random_uuid();te uuid;r public.reservations%rowtype;i uuid;before_r jsonb;before_l jsonb;before_w jsonb;after_r jsonb;after_l jsonb;after_w jsonb;result jsonb;reason text;successes jsonb:='[]';failures jsonb:='[]';helpers jsonb:='[]';checkpoint jsonb;n int;line public.billing_lines%rowtype;normalized uuid[];begin
  actor:=public.bulk_billing_actor_state();if p_target_at is null then raise exception 'Bulk Billing Through is required';end if;
  select array_agg(distinct x order by x) into normalized from unnest(p_transportation_event_ids)x where x is not null;
  if coalesce(array_length(normalized,1),0)=0 then raise exception 'Select at least one valid RO to update.';end if;
@@ -111,10 +126,11 @@ declare actor uuid;b uuid:=gen_random_uuid();te uuid;r public.reservations%rowty
   select to_jsonb(x) into after_r from public.reservations x where x.id=r.id;select coalesce(jsonb_agg(to_jsonb(l) order by l.created_at,l.id),'[]') into after_l from public.billing_lines l where l.transportation_event_id=te;select to_jsonb(w) into after_w from public.warranty_cases w where w.transportation_event_id=te;
   insert into public.billing_bulk_items(batch_id,transportation_event_id,reservation_id,identifier,succeeded,before_reservation,before_lines,before_warranty,after_reservation,after_lines,after_warranty) values(b,te,r.id,coalesce(r.ro_number,r.id::text),true,before_r,before_l,before_w,after_r,after_l,after_w) returning id into i;
   successes:=successes||jsonb_build_array(jsonb_build_object('transportation_event_id',te,'identifier',coalesce(r.ro_number,r.id::text)));n:=0;
-  -- IDs describe semantic writes (EW then CP), not incidental row ordering.
-  for line_id_text in select value #>> '{}' from jsonb_array_elements(result->'billing_line_ids') loop
-   select * into strict line from public.billing_lines where id=line_id_text::uuid;n:=n+1;
-   insert into public.billing_bulk_helper_lines(batch_item_id,line_order,ro_number,billing_line_id,days,amount,tax,note) values(i,n,coalesce(r.ro_number,r.id::text),line.id,public.business_contract_days(line.start_time,coalesce(line.paid_through_at,line.end_time)),line.amount,line.tax_amount,case when (result->>'ew_cap_crossed')::boolean and line.id=(result->'billing_line_ids'->>1)::uuid then 'New Customer Pay line required after Extended Warranty coverage cap' end);
+  -- Persist the authoritative checkpoint results. EW helper days must not be
+  -- recomputed from its exact closed boundary by the inclusive contract-day API.
+  for checkpoint in select value from jsonb_array_elements(result->'checkpoints') loop
+   select * into strict line from public.billing_lines where id=(checkpoint->>'billing_line_id')::uuid;n:=n+1;
+   insert into public.billing_bulk_helper_lines(batch_item_id,line_order,ro_number,billing_line_id,days,amount,tax,note) values(i,n,coalesce(r.ro_number,r.id::text),line.id,(checkpoint->>'checkpoint_days')::integer,(checkpoint->>'checkpoint_subtotal')::numeric,(checkpoint->>'checkpoint_tax')::numeric,case when checkpoint->>'segment_kind'='customer_pay_after_ew_cap' then 'New Customer Pay line required after Extended Warranty coverage cap' end);
   end loop;
  exception when others then
   reason:=sqlerrm;insert into public.billing_bulk_items(batch_id,transportation_event_id,reservation_id,identifier,succeeded,failure_reason) values(b,te,r.id,coalesce(r.ro_number,te::text),false,reason);failures:=failures||jsonb_build_array(jsonb_build_object('transportation_event_id',te,'identifier',coalesce(r.ro_number,te::text),'reason',reason));
@@ -145,8 +161,8 @@ declare actor uuid;b public.billing_bulk_batches%rowtype;i public.billing_bulk_i
  return jsonb_build_object('status','bulk_billing_batch_undone','batch_id',b.id);
 end;$f$;
 
-alter function public.bulk_billing_actor_state() owner to postgres;alter function public.checkpoint_case_internal_state(uuid,timestamptz,text,boolean) owner to postgres;alter function public.mark_case_billed_through_and_get_preview_state(uuid,timestamptz,text) owner to postgres;alter function public.get_bulk_billing_workspace_state(timestamptz) owner to postgres;alter function public.bulk_checkpoint_one_state(uuid,timestamptz,uuid) owner to postgres;alter function public.apply_bulk_billing_batch_state(timestamptz,uuid[]) owner to postgres;alter function public.get_recent_bulk_billing_batches_state() owner to postgres;alter function public.set_bulk_helper_line_checked_state(uuid,boolean) owner to postgres;alter function public.undo_latest_bulk_billing_batch_state() owner to postgres;
-revoke all on function public.bulk_billing_actor_state(),public.checkpoint_case_internal_state(uuid,timestamptz,text,boolean),public.get_bulk_billing_workspace_state(timestamptz),public.bulk_checkpoint_one_state(uuid,timestamptz,uuid),public.apply_bulk_billing_batch_state(timestamptz,uuid[]),public.get_recent_bulk_billing_batches_state(),public.set_bulk_helper_line_checked_state(uuid,boolean),public.undo_latest_bulk_billing_batch_state() from public,anon,authenticated;
+alter function public.bulk_billing_actor_state() owner to postgres;alter function public.bulk_preview_one_state(uuid,timestamptz) owner to postgres;alter function public.checkpoint_case_internal_state(uuid,timestamptz,text,boolean) owner to postgres;alter function public.mark_case_billed_through_and_get_preview_state(uuid,timestamptz,text) owner to postgres;alter function public.get_bulk_billing_workspace_state(timestamptz) owner to postgres;alter function public.bulk_checkpoint_one_state(uuid,timestamptz,uuid) owner to postgres;alter function public.apply_bulk_billing_batch_state(timestamptz,uuid[]) owner to postgres;alter function public.get_recent_bulk_billing_batches_state() owner to postgres;alter function public.set_bulk_helper_line_checked_state(uuid,boolean) owner to postgres;alter function public.undo_latest_bulk_billing_batch_state() owner to postgres;
+revoke all on function public.bulk_billing_actor_state(),public.bulk_preview_one_state(uuid,timestamptz),public.checkpoint_case_internal_state(uuid,timestamptz,text,boolean),public.get_bulk_billing_workspace_state(timestamptz),public.bulk_checkpoint_one_state(uuid,timestamptz,uuid),public.apply_bulk_billing_batch_state(timestamptz,uuid[]),public.get_recent_bulk_billing_batches_state(),public.set_bulk_helper_line_checked_state(uuid,boolean),public.undo_latest_bulk_billing_batch_state() from public,anon,authenticated;
 grant execute on function public.get_bulk_billing_workspace_state(timestamptz),public.apply_bulk_billing_batch_state(timestamptz,uuid[]),public.get_recent_bulk_billing_batches_state(),public.set_bulk_helper_line_checked_state(uuid,boolean),public.undo_latest_bulk_billing_batch_state() to authenticated;
 grant execute on function public.bulk_billing_actor_state(),public.bulk_checkpoint_one_state(uuid,timestamptz,uuid) to service_role;
 

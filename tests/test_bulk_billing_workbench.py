@@ -1,4 +1,5 @@
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 SQL=Path('supabase/migrations/20260826120000_bulk_billing_workbench.sql').read_text().lower()
 UI=Path('frontend/src/billing/BulkUpdating.tsx').read_text()
 BILLING=Path('frontend/src/billing/BillingWorkspace.tsx').read_text()
@@ -27,8 +28,37 @@ def test_one_canonical_checkpoint_and_ew_boundary_order():
  assert "checkpoint_case_internal_state" in SQL
  assert "multiple open parent billing segments were found" in SQL
  assert "p_allow_future" in SQL and "p_target_at>clock_timestamp()" in SQL.replace(" ", "")
- assert SQL.index("checkpoint_case_internal_state(r.id,boundary") < SQL.index("reconcile_extended_warranty_coverage_state(r.transportation_event_id,p_target_at)")
+ assert "ew_effective_at:=boundary-interval '1 microsecond'" in SQL
+ assert SQL.index("checkpoint_case_internal_state(r.id,ew_effective_at") < SQL.index("reconcile_extended_warranty_coverage_state(r.transportation_event_id,p_target_at)")
+ assert "'checkpoint_days',(p->>'contract_days')::integer" in SQL
+ assert "(checkpoint->>'checkpoint_days')::integer" in SQL
+ assert "business_contract_days(line.start_time" not in SQL
  assert "new customer pay line required after extended warranty coverage cap" in SQL
+
+def test_ew_three_day_inclusive_boundary_and_preview_are_exclusive():
+ # The live day engine is inclusive, so both Apply and read-only preview must use
+ # the final microsecond before the first post-coverage day for the EW segment.
+ assert SQL.count("boundary-interval '1 microsecond'") >= 2
+ assert "effective_at:=case when boundary is not null and p_target_at>=boundary" in SQL
+ assert "bulk_ew_split_pending" in SQL and "extended warranty ends at the coverage cap" in SQL
+ assert "'segment_kind','extended_warranty'" in SQL
+ assert "'segment_kind','customer_pay_after_ew_cap'" in SQL
+ start=datetime(2026,8,1,17,tzinfo=timezone.utc)
+ boundary=start+timedelta(days=3)
+ target=start+timedelta(days=4)
+ inclusive_days=lambda out,through:int((through-out).total_seconds()//86400)+1
+ assert inclusive_days(start,boundary-timedelta(microseconds=1)) == 3
+ assert inclusive_days(boundary,target) == 2
+ assert inclusive_days(start,boundary-timedelta(microseconds=1))+inclusive_days(boundary,target) == 5
+
+def test_preview_failures_are_isolated_per_row_and_overdue_is_attention_only():
+ assert "bulk_preview_one_state" in SQL
+ assert "exception when sqlstate '21000'" in SQL
+ assert "'bulk_preview_error',sqlerrm" in SQL
+ assert "cross join lateral public.bulk_preview_one_state" in SQL
+ assert "'expected_return_overdue'" in SQL
+ assert "expected return overdue (does not cap billing)" in SQL
+ assert "expected_return_datetime<p_target_at" not in SQL
 
 def test_secure_persistence_and_normalized_input():
  assert "grant select on table public.billing_bulk" not in SQL
@@ -44,6 +74,16 @@ def test_post_write_helpers_and_browser_workflows():
  for token in ("documentPictureInPicture", "Open always-on-top", "bulk-failure-dialog", "missingFailures", "Recent batch", "chooseBatch"):
   assert token in UI
  assert "set_bulk_helper_line_checked_state" in UI
+
+def test_apply_gesture_sunday_undo_refresh_and_visual_edges():
+ compact=''.join(UI.split())
+ assert compact.index("voidopenPip(true)") < compact.index("supabase.rpc('apply_bulk_billing_batch_state'")
+ assert "if(!pip.current||pip.current.closed)" in compact and "catch{" in compact
+ assert "afterSundayCutoff" in UI and "(afterSundayCutoff?7:0)" in UI
+ assert "awaitpreview(target);awaitrecall();" in compact
+ assert "expected_return_overdue" in UI and "overdue-badge" in UI
+ css=Path('frontend/src/billing/BillingWorkspace.css').read_text()
+ assert "tbody tr:nth-child(even)" in css and ".bulk-overdue" in css
 
 def test_actor_owned_undo_and_helper_checkoff():
  compact=''.join(SQL.split())
