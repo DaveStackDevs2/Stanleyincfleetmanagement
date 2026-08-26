@@ -60,3 +60,9 @@ Top-level browser-callable wrappers are `SECURITY DEFINER`, owned by `postgres`,
 **Decision:** `rental_model_limits` is the sole model-level capacity store for future Rentals. Missing and zero limits are unavailable. `get_rental_reservation_capacity_state` counts active, unpicked-up Rental Reservations over America/New_York calendar days with `[start,end)` semantics and provides only complete-period, active-rate-card alternatives. Authoritative Reservation writes serialize by model and recheck; Quotes do not hold capacity, while Loaners and immediate Walk-ins do not use this authority.
 
 **Deferred:** Admin limit reductions do not create or refresh persisted conflicts and never cancel/reassign existing Reservations. That is the immediate capacity follow-up. Lost Rentals and free upgrades remain separate later checkpoints.
+# 2026-08-26 — Rental pricing segments and authorization parity
+
+- Rental money is resolved in the backend from completed 28-day Monthly blocks, then 7-day Weekly blocks, then Daily remainder, using agreement snapshots and exact numeric arithmetic.
+- A customer-requested Extension is a new segment; earlier Original/Extension segments remain locked.
+- Mandatory contract renewal does not reset an already-agreed pricing segment. Same-vehicle intended duration is capped at 56 contract days.
+- Dev is a superset of Admin. Any later whole-Rental retroactive-pricing capability must be granted to both Admin and Dev and must exclude other roles unless separately approved.

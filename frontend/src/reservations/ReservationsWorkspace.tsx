@@ -122,7 +122,11 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   const selectedPayType = intake?.payTypes.find(item => item.id === payTypeId) ?? null
   const isCustomerPayLoaner = reservationType === 'loaner' && selectedPayType?.name.trim().toLowerCase() === 'customer pay'
   const selectedRate = intake?.rateCards.find(card => card.vehicleModel === vehicleModel) ?? null
-  const selectedPlanValue = isCustomerPayLoaner ? (plan === 'daily' ? selectedPayType?.defaultDailyAmount ?? null : null) : selectedRate?.[plan] ?? null
+  // Rental money is never selected in React: `daily` is compatibility metadata only;
+  // the backend decomposes the agreed duration against all three snapshots.
+  const effectivePlan: Plan = reservationType === 'rental' ? 'daily' : plan
+  const legacySelectedRate = selectedRate?.[plan] // Loaner compatibility; never authoritative for Rental money.
+  const selectedPlanValue = reservationType === 'rental' ? selectedRate?.daily ?? null : isCustomerPayLoaner ? (plan === 'daily' ? selectedPayType?.defaultDailyAmount ?? null : null) : legacySelectedRate ?? null
   const shownCustomers = useMemo(() => intake?.customers.filter(customer => `${customer.name} ${customer.number ?? ''}`.toLowerCase().includes(customerSearch.trim().toLowerCase())) ?? [], [intake, customerSearch])
 
   useEffect(()=>{if(isCustomerPayLoaner&&plan!=='daily')setPlan('daily')},[isCustomerPayLoaner,plan])
@@ -183,9 +187,9 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
     if (!payTypeId) return 'Validation: pay type is required.'
     if (reservationType === 'rental' && payTypeId !== rentalPayType?.id) return 'Validation: Rental workflows require the authoritative Rental pay type.'
     if (reservationType !== 'rental' && payTypeId === rentalPayType?.id) return 'Validation: Rental pay type cannot be used for a Loaner workflow.'
-    if (!plan) return 'Validation: rate plan is required.'
+    if (reservationType !== 'rental' && !plan) return 'Validation: rate plan is required.'
     if (isCustomerPayLoaner && plan !== 'daily') return 'Customer Pay Loaner pricing supports only the Daily plan.'
-    if (workflow === 'walk_in' && plan !== 'daily') return 'Weekly and monthly pickup billing is not implemented yet.'
+    if (workflow === 'walk_in' && plan !== 'daily' && reservationType !== 'rental') return 'Weekly and monthly pickup billing is not implemented yet.'
     if (workflow === 'walk_in' && reservationType === 'loaner' && !roNumber.trim()) return 'Validation: Loaner Walk-in requires an RO number before continuing to Pickup.'
     if (selectedPlanValue === null) return `Missing configuration: ${plan} pricing is not configured for ${vehicleModel}.`
     if (reservationType==='rental'&&workflow!=='walk_in'&&(capacityLoading||!capacity?.available)) return 'No authoritative Rental reservation capacity is available for the selected model and dates.'
@@ -194,7 +198,7 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
   const submit = async (event: FormEvent) => {
     event.preventDefault(); const validation = validate(); if (validation) { setError(validation); return }
     setBusy(true); setError(null)
-    const common = { p_customer_id:customerId, p_vehicle_class:vehicleModel.trim(), p_start_date:new Date(start).toISOString(), p_expected_return_datetime:new Date(expectedReturn).toISOString(), p_reservation_type:reservationType, p_pay_type_rule_id:payTypeId, p_initial_rate_plan:plan }
+    const common = { p_customer_id:customerId, p_vehicle_class:vehicleModel.trim(), p_start_date:new Date(start).toISOString(), p_expected_return_datetime:new Date(expectedReturn).toISOString(), p_reservation_type:reservationType, p_pay_type_rule_id:payTypeId, p_initial_rate_plan:effectivePlan }
     const call = workflow === 'quote'
       ? supabase.rpc('create_quote_with_pricing_agreement_state', { ...common, p_notes:optional(notes) })
       : supabase.rpc(workflow === 'reservation' ? 'create_reservation_with_pricing_agreement_state' : 'create_walk_in_with_pricing_agreement_state', { ...common, p_service_advisor:optional(advisor), p_ro_number:optional(roNumber), p_notes:optional(notes) })
@@ -235,7 +239,7 @@ export function ReservationsWorkspace({ navigationContext = null, onNavigationCo
         <label>Workflow type<select required value={reservationType} onChange={e=>{const next=e.target.value;setReservationType(next);if(next==='rental'){if(rentalPayType){setPayTypeId(rentalPayType.id);setError(null)}else{setPayTypeId('');setError('Missing configuration: the active Rental pay type is required for Rental workflows.')}}else{setPayTypeId('');setError(null)}}}><option value="">Select Loaner or Rental</option><option value="loaner">Loaner</option><option value="rental">Rental</option></select></label>
         <label>Vehicle model<select required value={vehicleModel} onChange={e=>setVehicleModel(e.target.value)}><option value="">Select vehicle model</option>{intake.rateCards.map(card=><option value={card.vehicleModel} key={card.id}>{card.vehicleModel}</option>)}</select></label>
         <label>Pay type<select required disabled={!reservationType || (reservationType==='rental' && !rentalPayType)} value={payTypeId} onChange={e=>setPayTypeId(e.target.value)}><option value="">{reservationType ? 'Select active pay type' : 'Select workflow type first'}</option>{allowedPayTypes.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-        <label>Initial rate plan<select required disabled={isCustomerPayLoaner} value={plan} onChange={e=>setPlan(e.target.value as Plan)}><option value="daily" disabled={selectedRate?.daily==null}>Daily</option><option value="weekly" disabled={selectedRate?.weekly==null}>Weekly</option><option value="monthly" disabled={selectedRate?.monthly==null}>Monthly</option></select></label>
+        {reservationType==='rental'?<div className="rate-preview"><strong>Automatic Rental block pricing</strong><span>Duration earns completed Monthly, then Weekly, then Daily blocks. Supabase calculates all money.</span></div>:<label>Initial rate plan<select required disabled={isCustomerPayLoaner} value={plan} onChange={e=>setPlan(e.target.value as Plan)}><option value="daily" disabled={selectedRate?.daily==null}>Daily</option><option value="weekly" disabled={selectedRate?.weekly==null}>Weekly</option><option value="monthly" disabled={selectedRate?.monthly==null}>Monthly</option></select></label>}
         <label>Start date/time<input type="datetime-local" required value={start} onChange={e=>setStart(e.target.value)} /></label><label>Expected return date/time<input type="datetime-local" required value={expectedReturn} onChange={e=>setExpectedReturn(e.target.value)} /></label>
         {workflow!=='quote' && <><label>Service advisor<input value={advisor} onChange={e=>setAdvisor(e.target.value)} /></label><label>Repair-order number<input value={roNumber} onChange={e=>setRoNumber(e.target.value)} /></label></>}
         <label className="wide">Notes<textarea value={notes} onChange={e=>setNotes(e.target.value)} /></label>

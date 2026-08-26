@@ -1,3 +1,10 @@
+## 2026-08-26 — Authoritative Rental block-pricing engine correction
+
+- **CORRECTED / NOT APPLIED:** Added one Rental-only completed-day boundary and routed intended preview, Pickup, active Billing, Extension, Return, and the same-vehicle 56-day guard through it; exact 7/28/56-day spans no longer inherit `business_contract_days(...)` inclusive-end inflation.
+- **IMPLEMENTED / NOT APPLIED:** Wired the shared Rental block resolver into existing Pickup, active Billing preview, Extension commit, and Return/Close money paths; prior closed Rental segments remain locked.
+- Rental Extension commits now validate compatibility money parameters against server-calculated snapshots, persist their block decomposition, and enforce the 56-day same-vehicle limit across the whole Rental.
+- Return/Close reprices only the open Rental segment and reports exact charge, tax, and total deltas for downstream Tekion handling without performing collection or refund actions. Loaner, Customer Pay, EW, and late-rule behavior remains on the existing paths.
+
 ## 2026-08-24 — Fleet Board operational routing checkpoint
 
 - **VERIFIED (repository):** Extended the existing `get_fleet_board_state` read engine for actionable Rental and Loaner pre-pickup Reservations while keeping `rental_model_limits` Rental-only.
@@ -143,3 +150,8 @@
 - Reservations now warns for unavailable Rental dates, offers backend-qualified alternatives, and blocks direct Reservation submit while unavailable; Quotes remain non-holding and Walk-ins/Loaners remain unchanged.
 - Added compact Admin Reservation Capacity configuration using active Rental rate-card models and no invented defaults.
 - **NOT VERIFIED LIVE:** No migration was applied and production browser behavior was not tested. Conflict persistence after limit reduction, Lost Rentals, and free upgrades remain unimplemented.
+# 2026-08-26 — Rental block-pricing A1 (repository only)
+
+- Added the data-free shared backend 28/7/Daily Rental segment resolver and authenticated agreement-segment preview using snapshotted rate cards and authoritative tax.
+- Made Rental plan selection non-authoritative in Reservations while preserving Loaner/Customer Pay selection.
+- Added independently priced Extension preview and 28-day renewal/second-period swap status foundations. This migration has not been applied or live-verified.

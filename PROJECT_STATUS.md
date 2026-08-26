@@ -153,3 +153,6 @@ Repository baseline for this checkpoint: GitHub `main` at `0cb1ec43d50512500bbbe
 - **VERIFIED (repository):** Fleet Board reads authoritative daily counts, and Admin users with active app-user, AAL2, and `user_admin.manage` may read/save/remove nonnegative capacity configuration without direct browser table writes. No capacity values are seeded.
 - **NOT VERIFIED:** Migration application and production browser behavior. Existing over-capacity records are not modified; persisted conflict refresh after an Admin limit reduction is the immediate Fleet Board capacity follow-up.
 - **NOT IMPLEMENTED / OUT OF SCOPE:** Lost Rental writes/classification, alternative accepted/free upgrade, cross-model Pickup, Bulk Billing, and weekly/monthly billing.
+# 2026-08-26 — Checkpoint A1 repository implementation
+
+The repository now contains a data-free Rental block resolver, agreement-segment/Extension previews, contract-status foundation, and non-authoritative Rental plan UI. Deployment, live PostgreSQL preflight, and browser verification are not claimed. Capacity outcomes and the explicit Admin+Dev whole-Rental retroactive override remain deferred.
