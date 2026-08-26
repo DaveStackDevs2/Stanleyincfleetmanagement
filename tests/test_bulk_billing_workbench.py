@@ -35,7 +35,7 @@ def test_secure_persistence_and_normalized_input():
  assert "array_agg(distinct x order by x)" in SQL and "where x is not null" in SQL
 
 def test_complete_fail_closed_undo_snapshot():
- for token in ("before_warranty", "after_warranty", "current_w is distinct", "notes=i.before_reservation->>'notes'", "bulk_billing_undo"):
+ for token in ("before_warranty", "after_warranty", "current_w-'current_day_count'", "notes=i.before_reservation->>'notes'", "bulk_billing_undo"):
   assert token in SQL
  assert "delete from public.billing_lines" in SQL
 
@@ -44,3 +44,31 @@ def test_post_write_helpers_and_browser_workflows():
  for token in ("documentPictureInPicture", "Open always-on-top", "bulk-failure-dialog", "missingFailures", "Recent batch", "chooseBatch"):
   assert token in UI
  assert "set_bulk_helper_line_checked_state" in UI
+
+def test_actor_owned_undo_and_helper_checkoff():
+ compact=''.join(SQL.split())
+ assert "whereactor_user_id=actorandstatusin('applied','partially_applied')" in compact
+ assert "joinpublic.billing_bulk_batchesbonb.id=i.batch_id" in compact
+ assert "i.id=h.batch_item_idandb.actor_user_id=actor" in compact
+
+def test_warranty_undo_ignores_only_reconciliation_housekeeping():
+ compact=''.join(SQL.split())
+ material="current_w-'current_day_count'-'last_checked_at'-'updated_at'"
+ snapshot="i.after_warranty-'current_day_count'-'last_checked_at'-'updated_at'"
+ assert material in compact and snapshot in compact
+ assert "current_risdistinctfromi.after_reservation" in compact
+ assert "current_lisdistinctfromi.after_lines" in compact
+ # Full snapshots remain available for evidence and exact restoration.
+ assert "old_w:=jsonb_populate_record(null::public.warranty_cases,i.before_warranty)" in compact
+
+def test_retry_batch_sync_and_empty_target_guards():
+ compact=''.join(UI.split())
+ assert "disabled={!row.selectable}" in compact
+ assert "disabled={!row.selectable||!!failure}" not in compact
+ assert "setBatches(old=>old.map(batch=>" in compact
+ assert "setHelper(selected.helper_lines??[])" in compact
+ assert "recall(typeofresult.data.batch_id==='string'?result.data.batch_id:undefined)" in compact
+ required=compact.index("if(!target){setMessage('BulkBillingThroughisrequired.');return}")
+ conversion=compact.index("p_target_at:dealershipWallTimeToIso(target)")
+ assert required < conversion
+ assert "if(!event.target.value)setSelected([])" in compact
