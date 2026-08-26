@@ -83,7 +83,7 @@ declare actor uuid;result jsonb;current_preview jsonb;begin
  result:=public.checkpoint_case_internal_state(p_reservation_id,p_billed_through_at,p_note,false);
  current_preview:=public.get_billing_preview_state((result->>'transportation_event_id')::uuid,clock_timestamp());
  if current_preview->>'status'<>'billing_preview_ready' then raise exception 'Current authoritative billing preview is not ready';end if;
- return result||jsonb_build_object('billing_preview',current_preview);
+ return (result-'checkpoint_days')||jsonb_build_object('billing_preview',current_preview);
 end;$f$;
 
 create or replace function public.bulk_checkpoint_one_state(p_reservation_id uuid,p_target_at timestamptz,p_batch_id uuid) returns jsonb language plpgsql security definer set search_path='' as $f$

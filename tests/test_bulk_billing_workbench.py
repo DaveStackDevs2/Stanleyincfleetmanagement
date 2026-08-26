@@ -35,6 +35,14 @@ def test_one_canonical_checkpoint_and_ew_boundary_order():
  assert "business_contract_days(line.start_time" not in SQL
  assert "new customer pay line required after extended warranty coverage cap" in SQL
 
+def test_internal_checkpoint_days_do_not_leak_through_public_wrapper():
+ internal=SQL.split("create or replace function public.checkpoint_case_internal_state",1)[1].split("create or replace function public.mark_case_billed_through_and_get_preview_state",1)[0]
+ public_wrapper=SQL.split("create or replace function public.mark_case_billed_through_and_get_preview_state",1)[1].split("create or replace function public.bulk_checkpoint_one_state",1)[0]
+ assert "'checkpoint_days',(p->>'contract_days')::integer" in internal
+ assert "(result-'checkpoint_days')||jsonb_build_object('billing_preview',current_preview)" in ''.join(public_wrapper.split())
+ checkpoint_validator=BILLING.split("const checkpointKeys=",1)[1].split("const localNow=",1)[0]
+ assert "'checkpoint_days'" not in checkpoint_validator
+
 def test_ew_three_day_inclusive_boundary_and_preview_are_exclusive():
  # The live day engine is inclusive, so both Apply and read-only preview must use
  # the final microsecond before the first post-coverage day for the EW segment.
