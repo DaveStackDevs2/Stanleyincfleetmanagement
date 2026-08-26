@@ -222,6 +222,7 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
   const [view, setView] = useState<ViewMode>('day')
   const [date, setDate] = useState(() => startOfDay(new Date()))
   const [filter, setFilter] = useState<FleetFilter>('all')
+  const [hideZeroCapacity, setHideZeroCapacity] = useState(false)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [reservations, setReservations] = useState<Reservation[]>([])
@@ -277,6 +278,7 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
   }, [])
 
   const visibleVehicles = useMemo(() => vehicles.filter(vehicle => filter === 'all' || vehicle.fleetType.toLowerCase().includes(filter)), [filter, vehicles])
+  const visibleCapacities = useMemo(() => hideZeroCapacity ? capacities.filter(capacity => capacity.dailyLimit > 0) : capacities, [capacities, hideZeroCapacity])
   const vehicleGroups = useMemo(() => {
     const groups = new Map<string, Vehicle[]>()
     visibleVehicles.forEach(vehicle => {
@@ -326,6 +328,7 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
     <section className="fleet-board-toolbar" aria-label="Fleet Board controls">
       <div className="board-segmented">{(['all', 'rental', 'loaner'] as FleetFilter[]).map(item => <button type="button" className={filter === item ? 'active' : ''} onClick={() => setFilter(item)} key={item}>{item === 'all' ? 'All vehicles' : `${item[0].toUpperCase()}${item.slice(1)}s`}</button>)}</div>
       <div className="board-segmented"><button type="button" className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>Day</button><button type="button" className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Week</button></div>
+      <div className="board-segmented"><button type="button" className={hideZeroCapacity ? 'active' : ''} aria-pressed={hideZeroCapacity} onClick={() => setHideZeroCapacity(value => !value)}>Hide 0 capacity</button></div>
       <button type="button" aria-label="Previous period" onClick={() => setDate(addDays(date, view === 'day' ? -1 : -7))}>‹</button>
       <input aria-label="Jump to date" type="date" value={dayKey(date)} onChange={event => { const selectedDate = dateFromInput(event.target.value); if (selectedDate) setDate(selectedDate) }} />
       <button type="button" aria-label="Next period" onClick={() => setDate(addDays(date, view === 'day' ? 1 : 7))}>›</button>
@@ -341,11 +344,11 @@ export function FleetBoard({ onOpenReservation, onCreateIntake, onOpenBilling }:
           {timelineHoverIndicator('header')}
         </div> : <div className="board-day-head">{days.map(day => <button type="button" key={dayKey(day)} onClick={() => { setDate(day); setView('day') }}>{day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</button>)}</div>}
         <div className="board-group-title">Reservation Capacity</div>
-        {capacities.map(capacity => <div className="board-row capacity-row" key={capacity.model}>
+        {visibleCapacities.map(capacity => <div className="board-row capacity-row" key={capacity.model}>
           <div className="board-resource"><strong>{capacity.model}</strong><small>Daily limit {capacity.dailyLimit}</small></div>
           <div className={isDayView ? 'day-capacity' : 'board-days'}>{days.map(day => { const authoritative=capacity.days.find(item=>item.date===dayKey(day)); return <div className="board-day" key={dayKey(day)}><strong>{authoritative?`${authoritative.booked} / ${authoritative.dailyLimit}`:'—'}</strong></div> })}</div>
         </div>)}
-        {capacities.length === 0 && <div className="board-empty">No reservation capacity records are available.</div>}
+        {visibleCapacities.length === 0 && <div className="board-empty">No reservation capacity records are visible.</div>}
         <div className="board-group-title">Pre-pickup Reservations</div>
         <div className="board-row pre-pickup-row" style={isDayView ? { '--reservation-lanes': reservationLaneLayout?.laneCount } as CSSProperties : undefined}>
           <div className="board-resource"><strong>Model-level</strong><small>No VIN assigned</small></div>
