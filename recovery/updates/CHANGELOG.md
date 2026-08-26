@@ -276,3 +276,9 @@
 - Consolidated current Rental pricing, fixed Reservation Capacity, and backend-derived impact warnings into **Rates, Fees & Billing Rules**.
 - Removed the standalone Reservation Capacity Admin destination while preserving the existing rate-card and capacity RPC engines.
 - Kept inactive and previous Rental rate cards in a separate manageable history area.
+
+## 2026-08-26 — Bulk Updating
+- Added the Billing Bulk Updating grid, future checkpoint preview, persisted partial-success batches, immutable Tekion helper/checkoff snapshots, and fail-closed Undo.
+- Corrected Rental/Loaner workflow classification to use Reservation type only.
+
+- PR #60 correction: unified checkpointing, fixed EW boundary ordering and post-write helpers, expanded fail-closed Undo snapshots, secured persistence, normalized Bulk input, and added PiP/recall/failure UX. Real PostgreSQL validation remains required after push; this migration was not applied here.

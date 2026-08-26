@@ -217,3 +217,8 @@ Late fees, warranty-specific calculation, excess-mile billing, and broader repor
 - Rental model pricing and fixed Reservation Capacity now appear together in Rates, Fees & Billing Rules.
 - Capacity-only, rate-only, and future-referenced models remain visible; historical rate cards remain separately manageable.
 - The standalone Reservation Capacity Admin card and page have been removed.
+
+## Bulk Updating (Issue #59)
+Implemented locally: dense active-case Bulk grid, controlled future target and New York Sunday shortcut, partial-success apply, persisted/recallable Tekion checkoffs, and audited safe Undo. The new migration still requires lead-engineer preflight in real PostgreSQL before merge/apply.
+
+- PR #60 correction: unified checkpointing, fixed EW boundary ordering and post-write helpers, expanded fail-closed Undo snapshots, secured persistence, normalized Bulk input, and added PiP/recall/failure UX. Real PostgreSQL validation remains required after push; this migration was not applied here.
