@@ -4,6 +4,8 @@
 
 This checkpoint records binding owner decisions made immediately after Bulk Updating (PR #60 / Issue #59) went live. These rules close the prior weekly/monthly Rental Pickup/Billing business-rule blocker and define the previously deferred Lost Rental, paid alternative-model, and free-upgrade revenue outcomes.
 
+**Active continuation punchlist:** GitHub Issue #61, `PUNCHLIST: Complete Rental block pricing, 28-day renewal, early-return repricing & capacity outcomes`.
+
 A successor AI/developer MUST read this file together with `docs/BILLING_BUILD_PUNCHLIST.md`, `recovery/2026-08-25_ACTIVE_WORKFLOW_CHECKPOINT.md`, `recovery/updates/2026-08-25_capacity_lost_rental_workflow.md`, and `recovery/updates/2026-08-25_booking_vs_pickup_upgrade_rule.md` before changing Rental pricing, capacity outcomes, Pickup, or Billing.
 
 ENGINE-FIRST remains binding: inspect live Supabase before implementation, reuse existing pricing-agreement, rate-card, Billing preview, Return/Complete, renewal, swap, capacity, Quote/Reservation, Pickup, tax, and audit engines. Do not create frontend monetary calculations or a parallel lifecycle engine.
@@ -14,6 +16,8 @@ ENGINE-FIRST remains binding: inspect live Supabase before implementation, reuse
 
 Weekly and monthly discounts are earned only by completing the applicable block.
 
+**The configured Daily, Weekly, and Monthly values are per-day rates.** Weekly is not a whole 7-day block price and Monthly is not a whole 28-day block price. A completed Weekly block is 7 days multiplied by the snapshotted Weekly per-day rate; a completed Monthly block is 28 days multiplied by the snapshotted Monthly per-day rate.
+
 Pricing decomposition uses the largest completed block first:
 
 1. 28-day Monthly blocks
@@ -23,16 +27,19 @@ Pricing decomposition uses the largest completed block first:
 Examples:
 
 - 1–6 days: Daily only.
-- 7 days: one Weekly block.
+- 7 days: one Weekly block = 7 × Weekly per-day rate.
 - 10 days: one Weekly block + 3 Daily days.
 - 14 days: two Weekly blocks.
 - 27 days: three Weekly blocks + 6 Daily days; it does NOT qualify for Monthly.
-- 28 days: one Monthly block.
+- 28 days: one Monthly block = 28 × Monthly per-day rate.
 - 30 days: one Monthly block + 2 Daily days.
 - 35 days: one Monthly block + one Weekly block.
 - 38 days: one Monthly block + one Weekly block + 3 Daily days.
+- 56 days: two Monthly blocks, with the required contract renewal boundary at day 28.
 
-The configured model/class rate card remains authoritative for Daily, Weekly, and Monthly rates. No rates may be hardcoded in frontend or SQL.
+The configured model/class rate card remains authoritative for Daily, Weekly, and Monthly per-day rates. No rates may be hardcoded in frontend or SQL.
+
+The existing `business_contract_days(...)` convention remains the authoritative day-count source in this checkpoint. Do not add exact-clock lateness/grace logic here.
 
 ---
 
@@ -109,7 +116,7 @@ Do not classify an accepted alternate model as a Lost Rental.
 
 If the requested model/class has no capacity at Quote or Reservation time but the customer accepts a different available model/class, the booking proceeds at the accepted model's normal authoritative rate.
 
-Track both requested and accepted model/class and the revenue difference for the same requested period:
+Track both requested and accepted model/class and the revenue difference for the same requested period using the same authoritative completed-block pricing resolver for each model:
 
 - accepted lower-priced model -> `Downsize Lost Revenue`
 - accepted higher-priced model -> `Upgrade Gained Revenue`
@@ -133,7 +140,7 @@ It applies when:
 
 The original agreed pricing snapshots remain authoritative for what the customer pays.
 
-Track the normal authoritative value of the actual upgraded model for the same period and record the difference as `Free Upgrade Lost Revenue`.
+Track the normal authoritative value of the actual upgraded model for the same period using the shared completed-block pricing resolver and record the difference as `Free Upgrade Lost Revenue`.
 
 Preserve both:
 
@@ -182,8 +189,8 @@ The next implementation workstream should proceed engine-first in this order unl
 
 These rules are owner-approved and no longer `TBD`:
 
-- Weekly Rental qualification: DEFINED.
-- Monthly Rental qualification: DEFINED as 28 days.
+- Weekly Rental qualification: DEFINED as completed 7-day blocks at the configured Weekly per-day rate.
+- Monthly Rental qualification: DEFINED as completed 28-day blocks at the configured Monthly per-day rate.
 - Mixed Monthly/Weekly/Daily decomposition: DEFINED.
 - Early-return repricing: DEFINED and REQUIRED.
 - 28-day renewal requirement: DEFINED.
