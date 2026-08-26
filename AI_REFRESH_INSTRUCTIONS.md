@@ -73,5 +73,6 @@ Treat them as the approved UI specification.
 - Preserve business intent.
 - Do not invent workflows that already exist.
 - Ask one clarifying question only if absolutely necessary.
+- **Hard authorization invariant: Dev is a superset of Admin. Anything an Admin can see or do in the application, a Dev must also be able to see and do. Never create an Admin capability that excludes Dev. This does not mean other roles inherit Admin/Dev capabilities.**
 
 Only begin development after completing this refresh.
