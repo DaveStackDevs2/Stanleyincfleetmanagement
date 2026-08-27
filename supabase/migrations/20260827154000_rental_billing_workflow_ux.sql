@@ -347,7 +347,8 @@ BEGIN
 END
 $function$;
 
-CREATE OR REPLACE VIEW public.v_warning_center_warning_items AS
+CREATE OR REPLACE VIEW public.v_warning_center_warning_items
+WITH (security_invoker = true) AS
  SELECT 'dependency_warning'::text AS item_type,
     d.id AS source_id,
     d.reservation_id,
