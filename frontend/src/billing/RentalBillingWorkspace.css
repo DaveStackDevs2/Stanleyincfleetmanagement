@@ -20,8 +20,15 @@
 .rental-case-heading p{margin:.2rem 0 0;color:var(--muted)}
 .rental-case-heading .primary-action{white-space:nowrap}
 .rental-timeline{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;padding:9px 10px;border:1px solid var(--border);border-radius:7px;background:#f8fafc}
-.rental-timeline span{display:flex;gap:7px;align-items:baseline;min-width:0}
+.rental-timeline.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+.rental-timeline span{display:flex;gap:7px;align-items:baseline;min-width:0;flex-wrap:wrap}
 .rental-timeline b{font-size:11px;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.time-link{border:0;background:transparent;padding:0;color:inherit;text-decoration:underline;text-underline-offset:2px;font:inherit;cursor:pointer}
+.billing-start-editor{display:flex;gap:7px;align-items:end;flex-wrap:wrap;margin-top:7px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:var(--surface)}
+.billing-start-editor label{display:grid;gap:3px;margin:0!important;font-size:11px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+.billing-start-editor input{min-height:34px;padding:.38rem .5rem;border:1px solid var(--border);border-radius:5px;font:inherit;color:var(--heading)}
+.billing-start-editor button{min-height:34px;padding:.38rem .65rem}
+.billing-start-editor>span{width:100%;font-size:12px;color:#991b1b}
 .overdue-callout{margin-top:8px;padding:7px 10px;border-left:4px solid #b91c1c;background:#fef2f2;color:#7f1d1d;font-weight:700;font-size:13px}
 .rental-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:10px}
 .rental-summary>div{padding:9px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface)}
@@ -34,6 +41,14 @@
 .section-title-row h3,.rental-extension-panel h3{margin:0;color:var(--heading);font-size:16px}
 .section-title-row p{margin:.15rem 0 0;color:var(--muted);font-size:12px}
 .charge-totals{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;white-space:nowrap}
+.current-charge-lines{display:grid;margin-top:8px;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+.current-charge-line{display:grid;grid-template-columns:minmax(210px,1fr) minmax(250px,1.4fr) auto;gap:12px;align-items:center;padding:7px 9px;border-bottom:1px solid var(--border);font-size:12px;background:var(--surface)}
+.current-charge-line:last-child{border-bottom:0}
+.current-charge-line.active{background:#f8fafc}
+.current-charge-line>div:first-child{display:grid;gap:2px}
+.current-charge-line>div:first-child span{color:var(--muted)}
+.current-charge-line>.rate-blocks{margin-top:0}
+.current-charge-line>b{font-size:14px;white-space:nowrap}
 .rate-blocks{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
 .rate-block{padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:#f8fafc;font-size:12px;color:var(--heading)}
 .rate-blocks.compact{margin-top:5px}
@@ -44,6 +59,7 @@
 .rental-payment-row{padding:8px 10px;background:var(--surface);border-bottom:1px solid var(--border)}
 .rental-payment-row:last-child{border-bottom:0}
 .rental-payment-row.reference-missing{box-shadow:inset 4px 0 #b45309}
+.rental-payment-row.no-charge-row{background:#f8fafc}
 .payment-row-main{display:grid;grid-template-columns:minmax(240px,1.3fr) minmax(300px,1.5fr) auto;gap:12px;align-items:center}
 .payment-row-main>div:first-child{display:grid;gap:2px}
 .payment-row-main>div:first-child>span{color:var(--muted);font-size:12px}
@@ -51,6 +67,7 @@
 .payment-status{font-size:11px;font-weight:900;letter-spacing:.04em;white-space:nowrap}
 .payment-status.paid{color:#166534}
 .payment-status.unpaid{color:#991b1b}
+.payment-status.no-charge{color:var(--muted)}
 .payment-proof{margin-top:5px;color:var(--muted);font-size:12px}
 .payment-entry{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
 .payment-entry .reference-toggle{min-width:48px;padding:.38rem .55rem;font-weight:800}
@@ -70,18 +87,20 @@
 .extension-total{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:12px}
 .extension-total .primary-action{margin-left:auto;padding:.45rem .8rem}
 
+@media(max-width:1200px){.rental-timeline.five{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1100px){
  .compact-case-line{grid-template-columns:minmax(150px,1fr) auto minmax(160px,1fr) auto auto}.compact-case-line>span:nth-of-type(3){display:none}
  .rental-summary{grid-template-columns:repeat(3,1fr)}
  .payment-row-main{grid-template-columns:1fr auto}.payment-money{grid-column:1/-1}
+ .current-charge-line{grid-template-columns:1fr auto}.current-charge-line>.rate-blocks{grid-column:1/-1}
  .extension-fields{grid-template-columns:1fr 1fr}.extension-fields>button{justify-self:start}
 }
 @media(max-width:760px){
- .billing-workspace .compact-metrics,.rental-summary,.rental-timeline{grid-template-columns:1fr}
+ .billing-workspace .compact-metrics,.rental-summary,.rental-timeline,.rental-timeline.five{grid-template-columns:1fr}
  .compact-case-line{display:flex;flex-wrap:wrap}.compact-case-line>span{white-space:normal}.compact-case-line>button{margin-left:auto}
  .rental-case-heading,.section-title-row{display:block!important}.rental-case-heading .primary-action{margin-top:8px}
  .charge-totals{margin-top:6px}
- .payment-row-main,.extension-fields{grid-template-columns:1fr}
- .payment-money{grid-column:auto}
+ .payment-row-main,.extension-fields,.current-charge-line{grid-template-columns:1fr}
+ .payment-money,.current-charge-line>.rate-blocks{grid-column:auto}
  .extension-total .primary-action{margin-left:0}
 }
