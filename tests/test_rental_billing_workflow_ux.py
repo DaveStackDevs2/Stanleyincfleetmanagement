@@ -72,7 +72,11 @@ def test_rental_ui_is_compact_and_uses_days_payment_proof_and_real_extensions():
         assert f"['{label}'" in tsx
     assert "OVERDUE — NOT EXTENDED" in tsx
     assert "Only actual customer-approved Extensions appear here" in tsx
-    assert "record_rental_billing_line_payment_state" in tsx
+    assert "record_rental_payment_entry_state" in tsx
+    assert "preview_rental_payment_amount_state" in tsx
+    assert "preview_rental_payment_through_state" in tsx
+    assert "set_rental_payment_reference_state" in tsx
+    assert "record_rental_billing_line_payment_state" not in tsx
     assert "Reference missing · Warning Center" in tsx
     assert "Confirm Extension" in tsx
     assert "Extend &amp; Mark Paid in Full" not in tsx
