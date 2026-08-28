@@ -163,3 +163,37 @@
 .payment-preview-grid b{font-size:15px}
 .compact-extension-preview>div:first-child span{font-size:15px;font-weight:700}
 .extension-total{font-size:15px}
+
+
+/* Rental detail unified operational typography pass. */
+.rental-detail-view{--rental-op-value-size:19px;--rental-op-money-size:19px;--rental-op-support-size:16px}
+.rental-case-heading p{font-size:var(--rental-op-support-size);font-weight:600}
+.rental-timeline span{font-size:var(--rental-op-value-size);font-weight:800;line-height:1.3}
+.rental-timeline b{font-size:13px}
+.overdue-callout{font-size:16px}
+.current-charge-panel .section-title-row h3{font-size:19px}
+.current-charge-panel .section-title-row p{font-size:15px}
+.charge-totals{gap:22px;font-size:var(--rental-op-support-size)}
+.charge-totals b{font-size:var(--rental-op-money-size)}
+.current-charge-line{font-size:var(--rental-op-support-size)}
+.current-charge-line>div:first-child>strong{font-size:17px}
+.current-charge-line>div:first-child span{color:var(--heading);font-size:var(--rental-op-value-size);font-weight:800;line-height:1.3}
+.current-charge-line>b{font-size:var(--rental-op-money-size)}
+.current-charge-line .rate-block{font-size:15px}
+.charged-days-total{color:var(--heading);font-size:var(--rental-op-support-size);font-weight:700}
+.charged-days-total b{font-size:var(--rental-op-value-size)}
+.rental-period-row .payment-row-main>div:first-child>strong{font-size:17px}
+.rental-period-row .payment-row-main>div:first-child>span{font-size:var(--rental-op-value-size);font-weight:800}
+.rental-period-row .payment-money{font-size:var(--rental-op-support-size)}
+.rental-period-row .payment-money b{font-size:var(--rental-op-money-size)}
+.rental-period-row .payment-status{font-size:13px}
+.payment-control-heading{font-size:var(--rental-op-support-size)}
+.payment-control-heading h4,.payment-history-panel h4{font-size:18px}
+.payment-preview-grid{font-size:var(--rental-op-support-size)}
+.payment-preview-grid b{font-size:var(--rental-op-value-size)}
+.payment-history-main{font-size:var(--rental-op-support-size)}
+.payment-history-main>div:first-child>span{font-size:var(--rental-op-value-size);font-weight:800}
+.payment-history-main b{font-size:var(--rental-op-money-size)}
+.compact-extension-preview>div:first-child span{font-size:var(--rental-op-value-size);font-weight:800}
+.extension-total{font-size:var(--rental-op-support-size)}
+.extension-total b{font-size:var(--rental-op-money-size)}
