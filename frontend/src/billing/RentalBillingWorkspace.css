@@ -136,3 +136,30 @@
  .rental-period-row .payment-row-main>div:first-child>span{white-space:normal}
  .rental-period-row .payment-money{grid-column:auto;flex-wrap:wrap;gap:10px 16px}
 }
+
+
+/* Rental detail typography readability pass. */
+.rental-case-heading p{font-size:15px}
+.rental-timeline span{font-size:15px;font-weight:700}
+.rental-timeline b{font-size:12px}
+.overdue-callout{font-size:15px}
+.current-charge-panel .section-title-row h3{font-size:18px}
+.current-charge-panel .section-title-row p{font-size:14px}
+.charge-totals{gap:20px;font-size:16px}
+.charge-totals b{font-size:17px}
+.current-charge-line{font-size:15px}
+.current-charge-line>div:first-child>strong{font-size:16px}
+.current-charge-line>div:first-child span{color:var(--heading);font-size:15px;font-weight:800}
+.current-charge-line>b{font-size:17px}
+.current-charge-line .rate-block{font-size:14px}
+.charged-days-total{color:var(--heading);font-size:15px}
+.charged-days-total b{font-size:16px}
+.rental-period-row .payment-row-main>div:first-child>strong{font-size:16px}
+.rental-period-row .payment-row-main>div:first-child>span{font-size:17px}
+.rental-period-row .payment-money{font-size:16px}
+.rental-period-row .payment-money b{font-size:17px}
+.payment-history-main>div:first-child>span{font-size:15px;font-weight:700}
+.payment-preview-grid{font-size:14px}
+.payment-preview-grid b{font-size:15px}
+.compact-extension-preview>div:first-child span{font-size:15px;font-weight:700}
+.extension-total{font-size:15px}
