@@ -107,3 +107,32 @@
 
 /* Rental case-level payment progress */
 .rental-period-list,.payment-history-list{display:grid;gap:8px}.rental-period-row{border:1px solid #d5dde6;border-radius:5px;padding:8px 10px}.rental-payment-control,.payment-history-panel{border-top:1px solid #d5dde6;margin-top:10px;padding-top:10px}.payment-control-heading,.payment-control-heading>div,.payment-history-main,.payment-history-main>div{display:flex;gap:10px;align-items:center;justify-content:space-between}.payment-control-heading p{margin:2px 0 0}.payment-driver-tabs{display:flex;gap:6px;margin:8px 0}.payment-driver-tabs button.active{font-weight:700;border-width:2px}.payment-driver-fields,.payment-capture-fields,.payment-reference-edit{display:flex;gap:6px;align-items:end;flex-wrap:wrap}.payment-driver-fields label{display:flex;gap:5px;align-items:end}.payment-preview{margin-top:8px;padding:9px;border:1px solid #c9d3df;border-radius:5px}.payment-preview-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}.payment-preview-grid span,.payment-history-main span{display:flex;flex-direction:column;gap:2px}.payment-history-row{border:1px solid #d5dde6;border-radius:5px;padding:8px 10px}.payment-history-main>div:last-child{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));flex:1}.partial-credit-note{margin:6px 0;padding:6px 8px;border-left:3px solid currentColor}.payment-reference-edit{margin-top:7px}.payment-history-panel h4,.rental-payment-control h4{margin:0 0 5px}.paid-current{display:flex;justify-content:space-between;align-items:center}@media(max-width:900px){.payment-preview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.payment-history-main{align-items:flex-start;flex-direction:column}.payment-history-main>div:last-child{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Rental billing density and preview-close pass. */
+.rental-period-list{gap:0;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+.rental-period-row{border:0;border-bottom:1px solid var(--border);border-radius:0;padding:6px 10px}
+.rental-period-row:last-child{border-bottom:0}
+.rental-period-row .payment-row-main{grid-template-columns:minmax(390px,1.35fr) auto auto;gap:28px;align-items:center}
+.rental-period-row .payment-row-main>div:first-child{display:flex;align-items:baseline;gap:14px;min-width:0}
+.rental-period-row .payment-row-main>div:first-child>strong{font-size:15px;line-height:1.25;white-space:nowrap}
+.rental-period-row .payment-row-main>div:first-child>span{color:var(--heading);font-size:14px;font-weight:800;line-height:1.25;white-space:nowrap}
+.rental-period-row .payment-money{gap:22px;flex-wrap:nowrap;font-size:14px;line-height:1.25}
+.rental-period-row .payment-money span{white-space:nowrap}
+.rental-period-row .payment-money b{font-size:15px}
+.rental-period-row .payment-status{font-size:12px}
+.rental-period-row>.rate-blocks.compact{margin-top:4px}
+.rental-period-row>.rate-blocks.compact .rate-block{padding:2px 6px;font-size:12px}
+.rental-period-row .payment-proof{margin-top:3px;font-size:12px}
+.payment-capture-fields{margin-top:8px}
+.payment-preview-close{margin-left:4px}
+@media(max-width:1100px){
+ .rental-period-row .payment-row-main{grid-template-columns:1fr auto;gap:7px 18px}
+ .rental-period-row .payment-money{grid-column:1/-1;justify-content:flex-start}
+}
+@media(max-width:760px){
+ .rental-period-row .payment-row-main{grid-template-columns:1fr}
+ .rental-period-row .payment-row-main>div:first-child{align-items:flex-start;flex-direction:column;gap:2px}
+ .rental-period-row .payment-row-main>div:first-child>span{white-space:normal}
+ .rental-period-row .payment-money{grid-column:auto;flex-wrap:wrap;gap:10px 16px}
+}
